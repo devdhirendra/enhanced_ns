@@ -865,7 +865,7 @@ async addOperator(data: {
       documents?: string[]
     },
   ): Promise<ApiResponse> {
-    return this.request(`/leave/requests/${technicianId}`, {
+    return this.request(`/admin/leave/requests/${technicianId}`, {
       method: "POST",
       body: JSON.stringify(data),
     })
