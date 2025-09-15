@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import type React from "react"
-
+import { useAuth } from "@/contexts/AuthContext"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -85,11 +85,11 @@ interface Vendor {
   profileDetail: {
     name: string
     phone: string
-    companyName: string
-    address: {
-      state: string
-      district: string
-      area: string
+    companyName?: string
+    address?: {
+      state?: string
+      district?: string
+      area?: string
     }
   }
   createdAt: string
@@ -207,6 +207,8 @@ export default function MarketplacePage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [showCreateOrderDialog, setShowCreateOrderDialog] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
+  const [showEditVendorDialog, setShowEditVendorDialog] = useState(false)
 
   const [orders, setOrders] = useState<Order[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -340,11 +342,29 @@ export default function MarketplacePage() {
       description: `Viewing details for ${product.name}`,
     })
   }
-
+  const handleViewVendor = (vendor: Vendor) => {
+  toast({
+    title: "Vendor Details",
+    description: `Viewing details for ${vendor.profileDetail.companyName || vendor.profileDetail.name}`,
+  })
+}
+const handleEditVendor = (vendor: Vendor) => {
+  setEditingVendor(vendor)
+  setShowEditVendorDialog(true)
+}
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product)
     setShowEditProductDialog(true)
   }
+  const handleEditVendorSuccess = () => {
+  setShowEditVendorDialog(false)
+  setEditingVendor(null)
+  fetchMarketplaceData()
+  toast({
+    title: "Vendor Updated",
+    description: "Vendor information has been updated successfully!",
+  })
+}
 
   const handleDeleteProduct = async (product: Product) => {
     try {
@@ -560,11 +580,11 @@ export default function MarketplacePage() {
               </Dialog>
               <Dialog open={showCreateOrderDialog} onOpenChange={setShowCreateOrderDialog}>
                 <DialogTrigger asChild>
-                  <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-xs sm:text-sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    Create Order
-                  </Button>
-                </DialogTrigger>
+      <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-xs sm:text-sm">
+        {/* <Plus className="h-4 w-4 mr-1" /> */}
+        <span className="xs:inline">Order</span>
+      </Button>
+    </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Create New Order</DialogTitle>
@@ -806,61 +826,65 @@ export default function MarketplacePage() {
               <CardContent>
                 <div className="max-h-[600px] overflow-y-auto">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                    {loading ? (
-                      Array.from({ length: 6 }).map((_, i) => <VendorCardSkeleton key={i} />)
-                    ) : (
-                      vendors.map((vendor) => (
-                        <Card key={vendor.user_id} className="border hover:shadow-lg transition-shadow">
-                          <CardHeader>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-2 rounded-lg">
-                                  <Users className="h-5 w-5 text-white" />
-                                </div>
-                                <div>
-                                  <h4 className="font-semibold text-gray-900 text-sm md:text-base">
-                                    {vendor.profileDetail.companyName || vendor.profileDetail.name}
-                                  </h4>
-                                  <p className="text-xs md:text-sm text-gray-600">{vendor.profileDetail.name}</p>
-                                </div>
-                              </div>
-                              <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            <div className="text-xs md:text-sm">
-                              <p className="text-gray-600">Contact:</p>
-                              <p className="text-gray-900">{vendor.profileDetail.phone}</p>
-                              <p className="text-gray-900">{vendor.email}</p>
-                            </div>
-                            <div className="text-xs md:text-sm">
-                              <p className="text-gray-600">Location:</p>
-                              <p className="text-gray-900">
-                                {vendor.profileDetail.address
-                                  ? `${vendor.profileDetail.address.area}, ${vendor.profileDetail.address.district}, ${vendor.profileDetail.address.state}`
-                                  : "N/A"}
-                              </p>
-                            </div>
-                            <div className="text-xs md:text-sm">
-                              <p className="text-gray-600">Joined:</p>
-                              <p className="text-gray-900">{formatDate(vendor.createdAt)}</p>
-                            </div>
-                            <div className="flex space-x-2 pt-2">
-                              <Button variant="outline" size="sm" className="flex-1 bg-transparent text-xs">
-                                <Eye className="h-4 w-4 mr-1" />
-                                View
-                              </Button>
-                              <Button variant="outline" size="sm" className="text-xs">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    )}
-                    {!loading && vendors.length === 0 && (
-                      <div className="col-span-full text-center text-gray-500 py-8">No vendors found.</div>
-                    )}
+{vendors.map((vendor) => (
+  <Card key={vendor.user_id} className="border hover:shadow-lg transition-shadow">
+    <CardHeader>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-2 rounded-lg">
+            <Users className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h4 className="font-semibold text-gray-900 text-sm md:text-base">
+              {vendor.profileDetail.companyName || vendor.profileDetail.name}
+            </h4>
+            <p className="text-xs md:text-sm text-gray-600">{vendor.profileDetail.name}</p>
+          </div>
+        </div>
+        <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-3">
+      <div className="text-xs md:text-sm">
+        <p className="text-gray-600">Contact:</p>
+        <p className="text-gray-900">{vendor.profileDetail.phone}</p>
+        <p className="text-gray-900">{vendor.email}</p>
+      </div>
+      <div className="text-xs md:text-sm">
+        <p className="text-gray-600">Location:</p>
+        <p className="text-gray-900">
+          {vendor.profileDetail.address
+            ? `${vendor.profileDetail.address.area || ''}, ${vendor.profileDetail.address.district || ''}, ${vendor.profileDetail.address.state || ''}`
+            : "N/A"}
+        </p>
+      </div>
+      <div className="text-xs md:text-sm">
+        <p className="text-gray-600">Joined:</p>
+        <p className="text-gray-900">{formatDate(vendor.createdAt)}</p>
+      </div>
+      <div className="flex space-x-2 pt-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="flex-1 bg-transparent text-xs"
+          onClick={() => handleViewVendor(vendor)}
+        >
+          <Eye className="h-4 w-4 mr-1" />
+          View
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="text-xs"
+          onClick={() => handleEditVendor(vendor)}
+        >
+          <Edit className="h-4 w-4" />
+        </Button>
+      </div>
+    </CardContent>
+  </Card>
+))}
+
                   </div>
                 </div>
               </CardContent>
@@ -868,22 +892,21 @@ export default function MarketplacePage() {
           </TabsContent>
         </Tabs>
 
-        <Dialog open={showEditProductDialog} onOpenChange={setShowEditProductDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Product</DialogTitle>
-              <DialogDescription>Update product information</DialogDescription>
-            </DialogHeader>
-            {editingProduct && (
-              <EditProductForm
-                product={editingProduct}
-                onClose={() => setShowEditProductDialog(false)}
-                onSuccess={handleEditProductSuccess}
-                vendors={vendors}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
+<Dialog open={showEditVendorDialog} onOpenChange={setShowEditVendorDialog}>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Edit Vendor</DialogTitle>
+      <DialogDescription>Update vendor information</DialogDescription>
+    </DialogHeader>
+    {editingVendor && (
+      <EditVendorForm
+        vendor={editingVendor}
+        onClose={() => setShowEditVendorDialog(false)}
+        onSuccess={handleEditVendorSuccess}
+      />
+    )}
+  </DialogContent>
+</Dialog>
       </div>
     </DashboardLayout>
   )
@@ -1360,6 +1383,157 @@ function EditProductForm({
         </Button>
         <Button type="submit" disabled={loading}>
           {loading ? "Updating..." : "Update Product"}
+        </Button>
+      </div>
+    </form>
+  )
+}
+function EditVendorForm({
+  vendor,
+  onClose,
+  onSuccess,
+}: {
+  vendor: Vendor
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [formData, setFormData] = useState({
+    name: vendor.profileDetail.name || "",
+    phone: vendor.profileDetail.phone || "",
+    companyName: vendor.profileDetail.companyName || "",
+    email: vendor.email || "",
+    state: vendor.profileDetail.address?.state || "",
+    district: vendor.profileDetail.address?.district || "",
+    area: vendor.profileDetail.address?.area || "",
+  })
+  const [loading, setLoading] = useState(false)
+  const { toast } = useToast()
+  const { user } = useAuth()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      setLoading(true)
+      
+      await vendorApi.update(vendor.user_id, {
+        profileDetail: {
+          name: formData.name,
+          phone: formData.phone,
+          companyName: formData.companyName,
+          address: {
+            state: formData.state,
+            district: formData.district,
+            area: formData.area,
+          }
+        },
+        email: formData.email,
+        updatedBy: user?.user_id
+      })
+
+      toast({
+        title: "Vendor Updated",
+        description: "Vendor information has been updated successfully!",
+      })
+      
+      onSuccess()
+    } catch (error) {
+      console.error("Error updating vendor:", error)
+      toast({
+        title: "Update Failed",
+        description: "Failed to update vendor. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="name">Contact Name *</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="companyName">Company Name *</Label>
+          <Input
+            id="companyName"
+            value={formData.companyName}
+            onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+            required
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="phone">Phone *</Label>
+          <Input
+            id="phone"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            required
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="email">Email *</Label>
+          <Input
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <Label htmlFor="state">State</Label>
+          <Input
+            id="state"
+            value={formData.state}
+            onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="district">District</Label>
+          <Input
+            id="district"
+            value={formData.district}
+            onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="area">Area</Label>
+          <Input
+            id="area"
+            value={formData.area}
+            onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end space-x-4 pt-4">
+        <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Updating..." : "Update Vendor"}
         </Button>
       </div>
     </form>

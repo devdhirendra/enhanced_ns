@@ -470,7 +470,7 @@ async addOperator(data: {
   }
 
   async updateVendor(userId: string, data: any): Promise<ApiResponse> {
-    return this.request(`/admin/vendor/${userId}`, {
+    return this.request(`/admin/vendor/profile/${userId}`, {
       method: "PUT",
       body: JSON.stringify(data),
     })
@@ -1883,17 +1883,17 @@ export const staffApi = {
 }
 
 export const vendorApi = {
-  getAll: () => apiClient.getAllVendors(),
-  add: (data: any) => apiClient.addVendor(data),
-  get: (id: string) => apiClient.getVendor(id),
-  update: (id: string, data: any) => apiClient.updateVendor(id, data),
-  delete: (id: string) => apiClient.deleteVendor(id),
+  getAll: () => apiClient.getAllVendors(),  // only admin can access
+  add: (data: any) => apiClient.addVendor(data), /// only admin can access
+  get: (id: string) => apiClient.getVendor(id), /// only admin can access
+  update: (id: string, data: any) => apiClient.updateVendor(id, data), // only admin can access
+  delete: (id: string) => apiClient.deleteVendor(id), // only admin can access
   getProfile: (id: string) => apiClient.getVendorProfile(id),
-  getProducts: () => apiClient.getVendorProducts(),
+  getProducts: (id: string) => apiClient.getVendorProducts(id),
   addProduct: (data: any) => apiClient.addVendorProduct(data),
   updateProduct: (id: string, data: any) => apiClient.updateVendorProduct(id, data),
   deleteProduct: (id: string) => apiClient.deleteVendorProduct(id),
-  getOrders: () => apiClient.getVendorOrders(),
+  getOrders: (id: string) => apiClient.getVendorOrders(id),
   updateOrderStatus: (orderId: string, status: string, trackingId?: string) =>
     apiClient.updateOrderStatusVendor(orderId, status, trackingId),
 }
@@ -1918,14 +1918,14 @@ export const complaintApi = {
 }
 
 export const vendorProductApi = {
-  getAll: () => apiClient.getVendorProducts(),
+  getAll: (id: string) => apiClient.getVendorProducts(id),
   add: (data: any) => apiClient.addVendorProduct(data),
   update: (id: string, data: any) => apiClient.updateVendorProduct(id, data),
   delete: (id: string) => apiClient.deleteVendorProduct(id),
 }
 
 export const vendorOrderApi = {
-  getAll: () => apiClient.getVendorOrders(),
+  getAll: (id: string) => apiClient.getVendorOrders(id),
   updateStatus: (orderId: string, status: string, trackingId?: string) =>
     apiClient.updateOrderStatusVendor(orderId, status, trackingId),
 }
