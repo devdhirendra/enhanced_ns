@@ -153,6 +153,10 @@ export default function StaffPage() {
   const [activeTab, setActiveTab] = useState("staff")
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
+  // NEW STATE VARIABLES FOR VIEW DIALOG
+  const [showViewStaffDialog, setShowViewStaffDialog] = useState(false)
+  const [viewingStaff, setViewingStaff] = useState<Staff | null>(null)
+  
   const { toast } = useToast()
 
   const fetchStaffData = async () => {
@@ -206,11 +210,13 @@ export default function StaffPage() {
     })
   }
 
+  // UPDATED VIEW STAFF FUNCTION
   const handleViewStaff = (staffId: string) => {
-    toast({
-      title: "View Staff",
-      description: `Viewing staff details for ID: ${staffId}`,
-    })
+    const staffMember = staff.find((s) => s.user_id === staffId)
+    if (staffMember) {
+      setViewingStaff(staffMember)
+      setShowViewStaffDialog(true)
+    }
   }
 
   const handleEditStaff = (staffId: string) => {
@@ -399,6 +405,27 @@ export default function StaffPage() {
                               description: "Staff member has been updated successfully!",
                             })
                           }}
+                        />
+                      )}
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* NEW VIEW STAFF DIALOG */}
+                  <Dialog open={showViewStaffDialog} onOpenChange={setShowViewStaffDialog}>
+                    <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto mx-auto">
+                      <DialogHeader>
+                        <DialogTitle className="text-lg sm:text-xl flex items-center space-x-2">
+                          <Users className="h-5 w-5" />
+                          <span>Staff Details</span>
+                        </DialogTitle>
+                        <DialogDescription className="text-sm">
+                          View detailed information for {viewingStaff?.profileDetail.name}
+                        </DialogDescription>
+                      </DialogHeader>
+                      {viewingStaff && (
+                        <ViewStaffDialog
+                          staff={viewingStaff}
+                          onClose={() => setShowViewStaffDialog(false)}
                         />
                       )}
                     </DialogContent>
@@ -843,5 +870,135 @@ function EditStaffForm({ staff, onClose, onSuccess }: { staff: Staff; onClose: (
         </Button>
       </div>
     </form>
+  )
+}
+
+// NEW VIEW STAFF DIALOG COMPONENT
+function ViewStaffDialog({ staff, onClose }: { staff: Staff; onClose: () => void }) {
+  const [showEditStaffDialog, setShowEditStaffDialog] = useState(false)
+  const [editingStaff, setEditingStaff] = useState<Staff | null>(null)
+
+  return (
+    <div className="space-y-6">
+      {/* Personal Information */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Personal Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Full Name</Label>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <p className="text-sm text-gray-900">{staff.profileDetail.name || "N/A"}</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">User ID</Label>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <p className="text-sm text-gray-900 font-mono">{staff.user_id}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Contact Information */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Contact Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Email Address</Label>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center space-x-2">
+                <Mail className="h-4 w-4 text-gray-500" />
+                <p className="text-sm text-gray-900">{staff.email}</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Phone Number</Label>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center space-x-2">
+                <Phone className="h-4 w-4 text-gray-500" />
+                <p className="text-sm text-gray-900">{staff.profileDetail.phone || "N/A"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Role & Assignment Information */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Role & Assignment</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Role</Label>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center space-x-2">
+                <Shield className="h-4 w-4 text-gray-500" />
+                <Badge variant="outline" className="capitalize">
+                  {staff.role}
+                </Badge>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Assigned To</Label>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center space-x-2">
+                <Users className="h-4 w-4 text-gray-500" />
+                <p className="text-sm text-gray-900">{staff.profileDetail.assignedTo || "Unassigned"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* System Information */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">System Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Created Date</Label>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <p className="text-sm text-gray-900">{formatDate(staff.createdAt)}</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700">Last Updated</Label>
+            <div className="p-3 bg-gray-50 rounded-lg border">
+              <p className="text-sm text-gray-900">{formatDate(staff.updatedAt)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Status */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Status</h3>
+        <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+          <div className="flex items-center space-x-2">
+            <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+            <Badge className="bg-green-100 text-green-800">Active</Badge>
+            <span className="text-sm text-green-700">Staff member is currently active</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4 pt-6 border-t">
+        <Button variant="outline" onClick={onClose} className="h-10">
+          Close
+        </Button>
+        <Button 
+          onClick={() => {
+            onClose()
+            setEditingStaff(staff)
+            setShowEditStaffDialog(true)
+          }}
+          className="h-10"
+        >
+          <Edit className="h-4 w-4 mr-2" />
+          Edit Staff
+        </Button>
+      </div>
+    </div>
   )
 }
