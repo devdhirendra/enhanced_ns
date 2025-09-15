@@ -1797,6 +1797,7 @@ export const operatorApi = {
 
 export const technicianApi = {
   // Profile
+
   getProfile: (id: string) => apiClient.getTechnicianProfile(id),
   updateProfile: (id: string, data: any) => apiClient.updateTechnicianProfile(id, data),
 
@@ -1881,6 +1882,16 @@ export const staffApi = {
   delete: (id: string) => apiClient.deleteStaff(id),
   getProfile: (id: string) => apiClient.getStaffProfile(id),
 }
+
+export const admintechnicianApi = {
+  getAll: () => apiClient.getAllTechnicians(),
+  add: (data: any) => apiClient.addTechnician(data),
+  get: (id: string) => apiClient.getTechnician(id),
+  update: (id: string, data: any) => apiClient.updateTechnician(id, data),
+  delete: (id: string) => apiClient.deleteTechnician(id),
+  getProfile: (id: string) => apiClient.getTechnicianProfile(id),
+}
+
 
 export const vendorApi = {
   getAll: () => apiClient.getAllVendors(),  // only admin can access
@@ -2034,6 +2045,7 @@ export const api = {
   ...adminApi,
   ...staffApi,
   ...vendorApi,
+  ...admintechnicianApi,
   ...customerApi,
   ...complaintApi,
   ...marketplaceApi,

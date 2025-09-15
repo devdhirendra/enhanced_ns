@@ -1093,71 +1093,92 @@ function AddProductForm({
   vendors: Vendor[]
 }) {
   const [formData, setFormData] = useState({
-    name: "",
+    itemName: "",
+    quantity: 1,
+    supplier: "",
+    unitPrice: 0,
     category: "",
-    price: 0,
+    brand: "",
+    phoneNumber: "",
+    status: "Available",
     description: "",
-    specifications: "",
-    vendorId: "",
+    specification: "",
+    ModelNumber: "",
+    costPrice: 0,
+    sellingPrice: 0,
+    ProductImage: "",
+    warantyInfo: "",
+    discount: "",
+    rating: 0,
+    unitType: "piece",
   })
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
+  const { user } = useAuth()
 
-// Update the handleSubmit in AddProductForm
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  if (!formData.name || !formData.category || formData.price <= 0 || !formData.vendorId) {
-    toast({
-      title: "Invalid Data",
-      description: "Please fill in all required fields with valid data.",
-      variant: "destructive",
-    });
-    return;
-  }
+    if (!formData.itemName || !formData.category || formData.unitPrice <= 0 || !formData.supplier) {
+      toast({
+        title: "Invalid Data",
+        description: "Please fill in all required fields with valid data.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  try {
-    setLoading(true);
-    
-    // Find the selected vendor to get company name
-    const selectedVendor = vendors.find(v => v.user_id === formData.vendorId);
-    
-    await productApi.add({
-      itemName: formData.name,
-      quantity: 100, // Default stock quantity
-      supplier: selectedVendor?.profileDetail.companyName || selectedVendor?.profileDetail.name || "Unknown",
-      unitPrice: formData.price,
-      category: formData.category,
-      brand: selectedVendor?.profileDetail.companyName || selectedVendor?.profileDetail.name || "Unknown",
-      description: formData.description,
-      specification: formData.specifications,
-      ModelNumber: "N/A",
-      costPrice: formData.price * 0.8, // 20% margin
-      sellingPrice: formData.price,
-      role: "admin", // or get from user context
-    });
+    try {
+      setLoading(true);
+      
+      // Find the selected vendor to get company name and phone
+      const selectedVendor = vendors.find(v => v.user_id === formData.supplier);
+      
+      await productApi.add({
+        itemName: formData.itemName,
+        quantity: formData.quantity,
+        supplier: selectedVendor?.profileDetail.companyName || selectedVendor?.profileDetail.name || "Unknown",
+        unitPrice: formData.unitPrice,
+        category: formData.category,
+        brand: formData.brand || selectedVendor?.profileDetail.companyName || "Unknown",
+        phoneNumber: selectedVendor?.profileDetail.phone || "",
+        status: formData.status,
+        description: formData.description,
+        specification: formData.specification,
+        ModelNumber: formData.ModelNumber || "N/A",
+        costPrice: formData.costPrice || formData.unitPrice * 0.8, // 20% margin if not provided
+        sellingPrice: formData.sellingPrice || formData.unitPrice,
+        ProductImage: formData.ProductImage || "/placeholder-product.jpg",
+        warantyInfo: formData.warantyInfo || "No warranty information",
+        discount: formData.discount || "0%",
+        rating: formData.rating || 0,
+        unitType: formData.unitType,
+        sold: 0,
+        createID: user?.user_id || "admin-user"
+      });
 
-    onSuccess();
-  } catch (error) {
-    console.error("Error adding product:", error);
-    toast({
-      title: "Add Failed",
-      description: "Failed to add product. Please try again.",
-      variant: "destructive",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+      onSuccess();
+    } catch (error) {
+      console.error("Error adding product:", error);
+      toast({
+        title: "Add Failed",
+        description: "Failed to add product. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="name">Product Name *</Label>
+          <Label htmlFor="itemName">Product Name *</Label>
           <Input
-            id="name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            id="itemName"
+            value={formData.itemName}
+            onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
             required
             disabled={loading}
           />
@@ -1176,20 +1197,38 @@ const handleSubmit = async (e: React.FormEvent) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="price">Price *</Label>
+          <Label htmlFor="unitPrice">Price *</Label>
           <Input
-            id="price"
+            id="unitPrice"
             type="number"
             step="0.01"
-            value={formData.price}
-            onChange={(e) => setFormData({ ...formData, price: Number.parseFloat(e.target.value) || 0 })}
+            value={formData.unitPrice}
+            onChange={(e) => setFormData({ ...formData, unitPrice: Number.parseFloat(e.target.value) || 0 })}
             required
             disabled={loading}
           />
         </div>
         <div>
-          <Label htmlFor="vendorId">Vendor *</Label>
-          <Select value={formData.vendorId} onValueChange={(value) => setFormData({ ...formData, vendorId: value })}>
+          <Label htmlFor="quantity">Quantity *</Label>
+          <Input
+            id="quantity"
+            type="number"
+            value={formData.quantity}
+            onChange={(e) => setFormData({ ...formData, quantity: Number.parseInt(e.target.value) || 1 })}
+            required
+            disabled={loading}
+            min="1"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="supplier">Vendor *</Label>
+          <Select 
+            value={formData.supplier} 
+            onValueChange={(value) => setFormData({ ...formData, supplier: value })}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select vendor" />
             </SelectTrigger>
@@ -1199,6 +1238,68 @@ const handleSubmit = async (e: React.FormEvent) => {
                   {vendor.profileDetail.companyName || vendor.profileDetail.name}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="brand">Brand</Label>
+          <Input
+            id="brand"
+            value={formData.brand}
+            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="costPrice">Cost Price</Label>
+          <Input
+            id="costPrice"
+            type="number"
+            step="0.01"
+            value={formData.costPrice}
+            onChange={(e) => setFormData({ ...formData, costPrice: Number.parseFloat(e.target.value) || 0 })}
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="sellingPrice">Selling Price</Label>
+          <Input
+            id="sellingPrice"
+            type="number"
+            step="0.01"
+            value={formData.sellingPrice}
+            onChange={(e) => setFormData({ ...formData, sellingPrice: Number.parseFloat(e.target.value) || 0 })}
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="ModelNumber">Model Number</Label>
+          <Input
+            id="ModelNumber"
+            value={formData.ModelNumber}
+            onChange={(e) => setFormData({ ...formData, ModelNumber: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="status">Status</Label>
+          <Select 
+            value={formData.status} 
+            onValueChange={(value) => setFormData({ ...formData, status: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Available">Available</SelectItem>
+              <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+              <SelectItem value="Discontinued">Discontinued</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1216,15 +1317,39 @@ const handleSubmit = async (e: React.FormEvent) => {
       </div>
 
       <div>
-        <Label htmlFor="specifications">Specifications (JSON format)</Label>
+        <Label htmlFor="specification">Specifications</Label>
         <Textarea
-          id="specifications"
-          value={formData.specifications}
-          onChange={(e) => setFormData({ ...formData, specifications: e.target.value })}
-          placeholder='{"weight": "2kg", "dimensions": "30x20x10cm"}'
+          id="specification"
+          value={formData.specification}
+          onChange={(e) => setFormData({ ...formData, specification: e.target.value })}
           rows={3}
           disabled={loading}
+          placeholder="55 inch, 4K, Android TV, Smart Features"
         />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="ProductImage">Product Image URL</Label>
+          <Input
+            id="ProductImage"
+            type="url"
+            value={formData.ProductImage}
+            onChange={(e) => setFormData({ ...formData, ProductImage: e.target.value })}
+            disabled={loading}
+            placeholder="https://example.com/product-image.jpg"
+          />
+        </div>
+        <div>
+          <Label htmlFor="warantyInfo">Warranty Information</Label>
+          <Input
+            id="warantyInfo"
+            value={formData.warantyInfo}
+            onChange={(e) => setFormData({ ...formData, warantyInfo: e.target.value })}
+            disabled={loading}
+            placeholder="1 year manufacturer warranty"
+          />
+        </div>
       </div>
 
       <div className="flex justify-end space-x-4 pt-4">

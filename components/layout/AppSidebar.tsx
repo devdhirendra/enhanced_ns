@@ -57,6 +57,7 @@ import {
   Gift,
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { userAgent } from "next/server"
 
 interface AppSidebarProps {
   user: User
@@ -74,11 +75,14 @@ const adminNavItems = [
   {
     title: "Operations Management",
     items: [
-      { title: "Operators", url: "/admin/operators", icon: Building2 },
+      { title: "Operator Management", url: "/admin/operators", icon: Building2 },
+      { title: "Customer Management", url: "/admin/customers", icon: UserCog },
+      { title: "Technician Management", url: "/admin/technician", icon: UserCog },
       { title: "Staff Management", url: "/admin/staff", icon: UserCog },
-      { title: "Inventory", url: "/admin/inventory", icon: Package },
-      { title: "Marketplace", url: "/admin/marketplace", icon: ShoppingCart },
+      { title: "Inventory Management", url: "/admin/inventory", icon: Package },
+      { title: "Marketplace Management", url: "/admin/marketplace", icon: ShoppingCart },
       { title: "Leave Management", url: "/admin/leave", icon: Calendar },
+      { title: "Complaint Management", url: "/admin/complaints", icon: UserCog },
     ],
   },
   {

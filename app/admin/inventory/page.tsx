@@ -845,7 +845,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     warantyInfo: "",
     discount: "",
     rating: 0,
-    unitType: "pcs",
+    unitType: "piece",
     sold: 0,
     status: "Available",
   })
@@ -861,7 +861,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
       await inventoryApi.addProduct({
         ...formData,
-        role: "Admin",
+        createID: "Admin", // This should be replaced with actual user ID if available
       })
 
       console.log("[v0] Stock item added successfully")
@@ -950,6 +950,20 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           />
         </div>
         <div>
+          <Label htmlFor="costPrice">Cost Price</Label>
+          <Input
+            id="costPrice"
+            type="number"
+            step="0.01"
+            value={formData.costPrice}
+            onChange={(e) => setFormData({ ...formData, costPrice: Number.parseFloat(e.target.value) || 0 })}
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
           <Label htmlFor="sellingPrice">Selling Price</Label>
           <Input
             id="sellingPrice"
@@ -957,6 +971,37 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             step="0.01"
             value={formData.sellingPrice}
             onChange={(e) => setFormData({ ...formData, sellingPrice: Number.parseFloat(e.target.value) || 0 })}
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="unitType">Unit Type</Label>
+          <Select 
+            value={formData.unitType} 
+            onValueChange={(value) => setFormData({ ...formData, unitType: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select unit type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="piece">Piece</SelectItem>
+              <SelectItem value="box">Box</SelectItem>
+              <SelectItem value="pack">Pack</SelectItem>
+              <SelectItem value="set">Set</SelectItem>
+              <SelectItem value="unit">Unit</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="rating">Rating</Label>
+          <Input
+            id="rating"
+            type="number"
+            step="0.1"
+            min="0"
+            max="5"
+            value={formData.rating}
+            onChange={(e) => setFormData({ ...formData, rating: Number.parseFloat(e.target.value) || 0 })}
             disabled={loading}
           />
         </div>
@@ -974,6 +1019,18 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           />
         </div>
         <div>
+          <Label htmlFor="phoneNumber">Phone Number</Label>
+          <Input
+            id="phoneNumber"
+            value={formData.phoneNumber}
+            onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
           <Label htmlFor="warantyInfo">Warranty Info</Label>
           <Input
             id="warantyInfo"
@@ -982,6 +1039,27 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             disabled={loading}
           />
         </div>
+        <div>
+          <Label htmlFor="discount">Discount</Label>
+          <Input
+            id="discount"
+            value={formData.discount}
+            onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="ProductImage">Product Image URL</Label>
+        <Input
+          id="ProductImage"
+          type="url"
+          value={formData.ProductImage}
+          onChange={(e) => setFormData({ ...formData, ProductImage: e.target.value })}
+          disabled={loading}
+          placeholder="https://example.com/image.jpg"
+        />
       </div>
 
       <div>
@@ -993,6 +1071,34 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           rows={3}
           disabled={loading}
         />
+      </div>
+
+      <div>
+        <Label htmlFor="specification">Specification</Label>
+        <Textarea
+          id="specification"
+          value={formData.specification}
+          onChange={(e) => setFormData({ ...formData, specification: e.target.value })}
+          rows={2}
+          disabled={loading}
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="status">Status *</Label>
+        <Select 
+          value={formData.status} 
+          onValueChange={(value) => setFormData({ ...formData, status: value })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Available">Available</SelectItem>
+            <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+            <SelectItem value="Discontinued">Discontinued</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex justify-end space-x-4 pt-4">
