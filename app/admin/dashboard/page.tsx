@@ -177,10 +177,10 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [vendorsLoading, setVendorsLoading] = useState(true)
   const [vendorFilters, setVendorFilters] = useState({
-    revenueRange: [0, 1000000],
-    ratingRange: [0, 5],
-    commissionRange: [5, 30],
-  })
+  status: "",
+  sortBy: "newest",
+})
+  
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])
   const [vendorFormOpen, setVendorFormOpen] = useState(false)
@@ -325,6 +325,37 @@ export default function AdminDashboardPage() {
       })
     }
   }
+  // Add this filtering logic before rendering the vendors table
+const filteredVendors = vendors
+  .filter(vendor => {
+    // Status filter
+    if (vendorFilters.status && vendor.status !== vendorFilters.status) {
+      return false
+    }
+    
+    // Search term filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      return (
+        vendor.name.toLowerCase().includes(searchLower) ||
+        vendor.email.toLowerCase().includes(searchLower) ||
+        vendor.phone.toLowerCase().includes(searchLower)
+      )
+    }
+    
+    return true
+  })
+  .sort((a, b) => {
+    // Sort logic
+    if (vendorFilters.sortBy === "newest") {
+      return new Date(b.joinDate).getTime() - new Date(a.joinDate).getTime()
+    } else if (vendorFilters.sortBy === "revenue") {
+      return b.revenue - a.revenue
+    } else if (vendorFilters.sortBy === "rating") {
+      return b.rating - a.rating
+    }
+    return 0
+  })
 
   const handleVendorSuspension = async (vendorId: string) => {
     try {
@@ -662,83 +693,118 @@ export default function AdminDashboardPage() {
             {vendorsLoading ? (
               <VendorFiltersSkeleton />
             ) : (
-              <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader>
-                  <CardTitle className="text-lg sm:text-xl">Vendor Filters</CardTitle>
-                  <CardDescription>Filter vendors by revenue, rating, and commission</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">
-                        Revenue Range: ₹{vendorFilters.revenueRange[0].toLocaleString()} - ₹
-                        {vendorFilters.revenueRange[1].toLocaleString()}
-                      </Label>
-                      <Slider
-                        value={vendorFilters.revenueRange}
-                        onValueChange={(value) => setVendorFilters((prev) => ({ ...prev, revenueRange: value }))}
-                        max={1000000}
-                        step={10000}
-                        className="w-full"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">
-                        Rating Range: {vendorFilters.ratingRange[0]} - {vendorFilters.ratingRange[1]} stars
-                      </Label>
-                      <Slider
-                        value={vendorFilters.ratingRange}
-                        onValueChange={(value) => setVendorFilters((prev) => ({ ...prev, ratingRange: value }))}
-                        max={5}
-                        step={0.1}
-                        className="w-full"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">
-                        Commission Range: {vendorFilters.commissionRange[0]}% - {vendorFilters.commissionRange[1]}%
-                      </Label>
-                      <Slider
-                        value={vendorFilters.commissionRange}
-                        onValueChange={(value) => setVendorFilters((prev) => ({ ...prev, commissionRange: value }))}
-                        max={30}
-                        step={1}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Search vendors..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full h-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                      />
-                    </div>
-                    <Button variant="outline" className="h-10 hover:bg-blue-50 hover:border-blue-300 transition-colors duration-200">
-                      <Search className="h-4 w-4 mr-2" />
-                      Search
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-10 hover:bg-gray-50 transition-colors duration-200"
-                      onClick={() => {
-                        setVendorFilters({
-                          revenueRange: [0, 1000000],
-                          ratingRange: [0, 5],
-                          commissionRange: [5, 30],
-                        })
-                        setSearchTerm("")
-                      }}
-                    >
-                      <Filter className="h-4 w-4 mr-2" />
-                      Reset Filters
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+              // Replace the Vendor Filters section with this code
+<Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+  <CardHeader>
+    <CardTitle className="text-lg sm:text-xl">Vendor Filters</CardTitle>
+    <CardDescription>Filter vendors by status or search by name/email</CardDescription>
+  </CardHeader>
+  <CardContent className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Filter by Status</Label>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={!vendorFilters.status ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVendorFilters({ ...vendorFilters, status: "" })}
+            className="h-8 text-xs"
+          >
+            All Vendors
+          </Button>
+          <Button
+            variant={vendorFilters.status === "active" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVendorFilters({ ...vendorFilters, status: "active" })}
+            className="h-8 text-xs bg-green-100 text-green-800 hover:bg-green-200 hover:text-green-900 data-[state=active]:bg-green-500 data-[state=active]:text-white"
+          >
+            Active
+          </Button>
+          <Button
+            variant={vendorFilters.status === "pending" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVendorFilters({ ...vendorFilters, status: "pending" })}
+            className="h-8 text-xs bg-yellow-100 text-yellow-800 hover:bg-yellow-200 hover:text-yellow-900 data-[state=active]:bg-yellow-500 data-[state=active]:text-white"
+          >
+            Pending
+          </Button>
+          <Button
+            variant={vendorFilters.status === "suspended" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVendorFilters({ ...vendorFilters, status: "suspended" })}
+            className="h-8 text-xs bg-red-100 text-red-800 hover:bg-red-200 hover:text-red-900 data-[state=active]:bg-red-500 data-[state=active]:text-white"
+          >
+            Suspended
+          </Button>
+          <Button
+            variant={vendorFilters.status === "rejected" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVendorFilters({ ...vendorFilters, status: "rejected" })}
+            className="h-8 text-xs bg-gray-100 text-gray-800 hover:bg-gray-200 hover:text-gray-900 data-[state=active]:bg-gray-500 data-[state=active]:text-white"
+          >
+            Rejected
+          </Button>
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Sort By</Label>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={vendorFilters.sortBy === "newest" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVendorFilters({ ...vendorFilters, sortBy: "newest" })}
+            className="h-8 text-xs"
+          >
+            Newest
+          </Button>
+          <Button
+            variant={vendorFilters.sortBy === "revenue" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVendorFilters({ ...vendorFilters, sortBy: "revenue" })}
+            className="h-8 text-xs"
+          >
+            Highest Revenue
+          </Button>
+          <Button
+            variant={vendorFilters.sortBy === "rating" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVendorFilters({ ...vendorFilters, sortBy: "rating" })}
+            className="h-8 text-xs"
+          >
+            Highest Rating
+          </Button>
+        </div>
+      </div>
+    </div>
+    
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+      <div className="flex-1 relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Input
+          placeholder="Search vendors by name or email..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full h-10 pl-10 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+      <Button 
+        variant="outline" 
+        className="h-10 hover:bg-gray-50 transition-colors duration-200"
+        onClick={() => {
+          setVendorFilters({
+            status: "",
+            sortBy: "newest",
+          })
+          setSearchTerm("")
+        }}
+      >
+        <Filter className="h-4 w-4 mr-2" />
+        Reset Filters
+      </Button>
+    </div>
+  </CardContent>
+</Card>            )}
 
             {/* Vendor Management Table */}
             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -776,7 +842,7 @@ export default function AdminDashboardPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {vendors.map((vendor) => (
+                          {filteredVendors.map((vendor) => (
                             <TableRow key={vendor.id} className="hover:bg-gray-50 transition-colors duration-200">
                               <TableCell>
                                 <div>
