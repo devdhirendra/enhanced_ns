@@ -38,6 +38,7 @@ import {
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils"
 import { apiClient } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { VendorForm } from "@/components/vendor/VendorForm"
 
 interface DashboardStats {
   totalOperators: number
@@ -182,7 +183,9 @@ export default function AdminDashboardPage() {
   })
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])
-  const { toast } = useToast()
+  const [vendorFormOpen, setVendorFormOpen] = useState(false)
+  const [editingVendor, setEditingVendor] = useState<any>(null)
+  const { toast } = useToast()  
 
   const fetchDashboardData = async () => {
     try {
@@ -302,7 +305,7 @@ export default function AdminDashboardPage() {
     fetchDashboardData()
   }, [])
 
-  const handleVendorApproval = async (vendorId: string, approved: boolean) => {
+ const handleVendorApproval = async (vendorId: string, approved: boolean) => {
     try {
       await apiClient.updateVendor(vendorId, {
         Permissions: { status: approved ? "active" : "rejected" },
@@ -332,7 +335,6 @@ export default function AdminDashboardPage() {
       toast({
         title: "Vendor Suspended",
         description: "Vendor account has been suspended.",
-        variant: "destructive",
       })
 
       fetchDashboardData()
@@ -344,13 +346,23 @@ export default function AdminDashboardPage() {
       })
     }
   }
+  const handleEditVendor = (vendor: any) => {
+    setEditingVendor(vendor)
+    setVendorFormOpen(true)
+  }
 
+  
+
+  const handleVendorFormSuccess = () => {
+    fetchDashboardData()
+  }
   const handleAddOperator = () => {
     window.location.href = "/admin/operators"
   }
 
   const handleAddVendor = () => {
-    window.location.href = "/admin/vendors"
+    setEditingVendor(null)
+    setVendorFormOpen(true)
   }
 
   return (
@@ -827,18 +839,20 @@ export default function AdminDashboardPage() {
                                     size="sm"
                                     variant="outline"
                                     className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors duration-200"
-                                    onClick={() => (window.location.href = `/admin/vendors/${vendor.id}`)}
+                                    onClick={() => handleEditVendor(vendor)}
                                   >
                                     <Edit className="h-3 w-3" />
                                   </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    className="hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-colors duration-200"
-                                    onClick={() => handleVendorSuspension(vendor.id)}
-                                  >
-                                    <Ban className="h-3 w-3" />
-                                  </Button>
+                                  {vendor.status !== "suspended" && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-colors duration-200"
+                                      onClick={() => handleVendorSuspension(vendor.id)}
+                                    >
+                                      <Ban className="h-3 w-3" />
+                                    </Button>
+                                  )}
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -862,6 +876,12 @@ export default function AdminDashboardPage() {
             </Card>
           </TabsContent>
         </Tabs>
+        <VendorForm
+          open={vendorFormOpen}
+          onOpenChange={setVendorFormOpen}
+          onSuccess={handleVendorFormSuccess}
+          editData={editingVendor}
+        />
       </div>
     </DashboardLayout>
   )
