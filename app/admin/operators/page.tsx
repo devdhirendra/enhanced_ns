@@ -392,7 +392,7 @@ const fetchOperators = useCallback(async () => {
 
   return (
     <DashboardLayout title="Operator Management" description="Manage all network operators and their subscriptions">
-      <div className="min-h-screen bg-gray-50 overflow-hidden">
+      <div className="min-h-screen bg-gray-50 overflow-y">
         <div className="grid grid-cols-1">
           <main className="h-[calc(100vh-4rem)]">
             <div className="max-w-7xl mx-auto">
