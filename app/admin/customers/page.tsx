@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,9 @@ import {
   AlertTriangle,
   CreditCard,
   Wifi,
+  AlertCircle,
+  Upload,
+  DollarSign,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
@@ -78,6 +82,7 @@ export default function CustomersPage() {
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' })
   const { toast } = useToast()
   const { user } = useAuth()
@@ -85,6 +90,7 @@ export default function CustomersPage() {
   const fetchCustomers = async () => {
     try {
       setLoading(true)
+      setError(null)
       const response = await customerApi.getAll()
       
       const transformedCustomers = response.map((apiUser: any) => ({
@@ -107,11 +113,7 @@ export default function CustomersPage() {
       setCustomers(transformedCustomers)
     } catch (error) {
       console.error("Error fetching customers:", error)
-      toast({
-        title: "Error Loading Customers",
-        description: "Failed to load customers. Please try again.",
-        variant: "destructive",
-      })
+      setError("Failed to load customers. Please try again.")
       setCustomers([])
     } finally {
       setLoading(false)
@@ -233,6 +235,14 @@ export default function CustomersPage() {
     toast({
       title: "Export Successful",
       description: "Customers data exported successfully!",
+    })
+  }
+
+  const handleImport = () => {
+    // Import functionality placeholder
+    toast({
+      title: "Import Feature",
+      description: "Import functionality will be implemented soon.",
     })
   }
 
@@ -363,220 +373,268 @@ export default function CustomersPage() {
 
   return (
     <DashboardLayout title="Customer Management" description="Manage customer accounts and service connections">
-      {/* Main container with proper sidebar spacing */}
-      <div className="flex-1 w-full min-h-screen">
-        {/* Content wrapper with responsive padding that accounts for sidebar */}
-        <div className="w-full max-w-none mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6">
-          <div className="space-y-4 md:space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-              {[
-                {
-                  title: "Total Customers",
-                  value: totalCustomers,
-                  description: "Registered customers",
-                  icon: Users,
-                  gradient: "from-blue-50 to-blue-100",
-                  iconBg: "bg-blue-500"
-                },
-                {
-                  title: "Active",
-                  value: activeCustomers,
-                  description: "Active connections",
-                  icon: UserCheck,
-                  gradient: "from-green-50 to-green-100",
-                  iconBg: "bg-green-500"
-                },
-                {
-                  title: "Monthly Revenue",
-                  value: `₹${totalRevenue.toLocaleString()}`,
-                  description: "Total monthly billing",
-                  icon: CreditCard,
-                  gradient: "from-purple-50 to-purple-100",
-                  iconBg: "bg-purple-500"
-                },
-                {
-                  title: "Outstanding",
-                  value: `₹${outstandingAmount.toLocaleString()}`,
-                  description: "Pending payments",
-                  icon: AlertTriangle,
-                  gradient: "from-red-50 to-red-100",
-                  iconBg: "bg-red-500"
-                }
-              ].map((stat, index) => (
-                <Card key={`stat-${index}`} className={`border-0 shadow-lg bg-gradient-to-br ${stat.gradient}`}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
-                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">{stat.title}</CardTitle>
-                    <div className={`p-2 ${stat.iconBg} rounded-lg flex-shrink-0`}>
-                      <stat.icon className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+      <div className="min-h-screen bg-gray-50 overflow-hidden">
+        <div className="grid grid-cols-1">
+          <main className="h-[calc(100vh-4rem)]">
+            <div className="max-w-7xl mx-auto">
+              <div className="space-y-4">
+                {/* Error Alert */}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                      <p className="text-red-800">{error}</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={fetchCustomers}
+                        className="ml-auto"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                  {[
+                    {
+                      title: "Total Customers",
+                      value: totalCustomers,
+                      description: "Registered customers",
+                      icon: Users,
+                      gradient: "from-blue-50 to-blue-100",
+                      iconBg: "bg-blue-500"
+                    },
+                    {
+                      title: "Active",
+                      value: activeCustomers,
+                      description: "Active connections",
+                      icon: UserCheck,
+                      gradient: "from-green-50 to-green-100",
+                      iconBg: "bg-green-500"
+                    },
+                    {
+                      title: "Monthly Revenue",
+                      value: `₹${totalRevenue.toLocaleString()}`,
+                      description: "Total monthly billing",
+                      icon: CreditCard,
+                      gradient: "from-purple-50 to-purple-100",
+                      iconBg: "bg-purple-500"
+                    },
+                    {
+                      title: "Outstanding",
+                      value: `₹${outstandingAmount.toLocaleString()}`,
+                      description: "Pending payments",
+                      icon: AlertTriangle,
+                      gradient: "from-red-50 to-red-100",
+                      iconBg: "bg-red-500"
+                    }
+                  ].map((stat, index) => (
+                    <Card key={`stat-${index}`} className={`border-0 shadow-lg bg-gradient-to-br ${stat.gradient}`}>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">{stat.title}</CardTitle>
+                        <div className={`p-2 ${stat.iconBg} rounded-lg flex-shrink-0`}>
+                          <stat.icon className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 lg:px-6">
+                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{stat.value}</div>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">{stat.description}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Header Section */}
+                <div className="flex flex-col space-y-4">
+                  {/* Search and Filter Section */}
+                  <Card className="shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex flex-col lg:flex-row gap-4">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                          <Input
+                            placeholder="Search by name, email, phone, or ID..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 h-10"
+                          />
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <Select value={planFilter} onValueChange={setPlanFilter}>
+                            <SelectTrigger className="w-full sm:w-48 h-10">
+                              <Filter className="h-4 w-4 mr-2" />
+                              <SelectValue placeholder="Filter by Plan" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Plans</SelectItem>
+                              <SelectItem value="basic">Basic</SelectItem>
+                              <SelectItem value="standard">Standard</SelectItem>
+                              <SelectItem value="premium">Premium</SelectItem>
+                              <SelectItem value="enterprise">Enterprise</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-full sm:w-48 h-10">
+                              <Filter className="h-4 w-4 mr-2" />
+                              <SelectValue placeholder="Filter by Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Status</SelectItem>
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="inactive">Inactive</SelectItem>
+                              <SelectItem value="suspended">Suspended</SelectItem>
+                              <SelectItem value="pending">Pending</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Action Buttons Section */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchCustomers}
+                        disabled={loading}
+                        className="h-9"
+                      >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                        Refresh ({filteredCustomers.length})
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleExport} 
+                        className="h-9"
+                        disabled={filteredCustomers.length === 0}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Export CSV
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleImport} className="h-9">
+                        <Upload className="h-4 w-4 mr-2" />
+                        Import CSV
+                      </Button>
+                    </div>
+                    
+                    <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+                      <DialogTrigger asChild>
+                        <Button className="h-9">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add New Customer
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>Add New Customer</DialogTitle>
+                          <DialogDescription>
+                            Create a new customer account with service details
+                          </DialogDescription>
+                        </DialogHeader>
+                        <AddCustomerForm 
+                          onClose={() => setShowAddDialog(false)} 
+                          onSuccess={handleAddSuccess} 
+                        />
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </div>
+
+                {/* Main Content Card */}
+                <Card className="border-0 shadow-lg">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-xl font-semibold text-gray-900">
+                          All Customers ({filteredCustomers.length})
+                        </CardTitle>
+                        <CardDescription className="text-gray-600 mt-1">
+                          Complete list of customers and their service status
+                          {searchTerm && ` • Filtered by: "${searchTerm}"`}
+                        </CardDescription>
+                      </div>
+                      {loading && (
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      )}
                     </div>
                   </CardHeader>
-                  <CardContent className="px-4 lg:px-6">
-                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{stat.value}</div>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">{stat.description}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
 
-            {/* Controls Section */}
-            <div className="flex flex-col gap-4">
-              {/* Search and Filter Row */}
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <div className="relative flex-1 max-w-md sm:max-w-none">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search customers..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:w-auto">
-                  <Select value={planFilter} onValueChange={setPlanFilter}>
-                    <SelectTrigger className="w-full sm:w-40 lg:w-48">
-                      <Filter className="h-4 w-4 mr-2" />
-                      <SelectValue placeholder="Plan" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["all", "basic", "standard", "premium", "enterprise"].map((plan) => (
-                        <SelectItem key={`plan-${plan}`} value={plan}>
-                          {plan === "all" ? "All Plans" : plan.charAt(0).toUpperCase() + plan.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-40 lg:w-48">
-                      <Filter className="h-4 w-4 mr-2" />
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["all", "active", "inactive", "suspended", "pending"].map((status) => (
-                        <SelectItem key={`status-${status}`} value={status}>
-                          {status === "all" ? "All Status" : status.charAt(0).toUpperCase() + status.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Action Buttons Row */}
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={fetchCustomers}
-                  disabled={loading}
-                  className="w-full sm:w-auto bg-transparent"
-                >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                  Refresh
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleExport} className="w-full sm:w-auto bg-transparent">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-                <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full sm:w-auto">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Customer
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Add New Customer</DialogTitle>
-                      <DialogDescription>Create a new customer account with service details</DialogDescription>
-                    </DialogHeader>
-                    <AddCustomerForm onClose={() => setShowAddDialog(false)} onSuccess={handleAddSuccess} />
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-
-            {/* Main Content Card */}
-            <Card className="border-0 shadow-lg">
-              <CardHeader className="px-4 sm:px-6">
-                <CardTitle className="text-lg md:text-xl">All Customers ({filteredCustomers.length})</CardTitle>
-                <CardDescription>Complete list of customers and their service status</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-2 text-gray-600">Loading customers...</span>
-                  </div>
-                ) : (
-                  <>
-                    {/* Desktop Table View */}
-                    <div className="hidden lg:block">
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[1100px]">
+                  <CardContent className="p-0">
+                    {/* Desktop/Tablet Table View with Horizontal Scroll */}
+                    <div className="hidden md:block">
+                      <ScrollArea className="w-full">
+                        <div className="min-w-[1200px]">
                           <Table>
                             <TableHeader>
-                              <TableRow>
-                                {[
-                                  { key: 'name', label: 'Customer', sortable: true, width: 'w-[220px]' },
-                                  { key: null, label: 'Contact', sortable: false, width: 'w-[200px]' },
-                                  { key: 'plan', label: 'Service Plan', sortable: true, width: 'w-[180px]' },
-                                  { key: 'monthlyCharges', label: 'Billing', sortable: true, width: 'w-[140px]' },
-                                  { key: null, label: 'Address', sortable: false, width: 'w-[180px]' },
-                                  { key: 'connectionStatus', label: 'Status', sortable: true, width: 'w-[100px]' },
-                                  { key: null, label: 'Actions', sortable: false, width: 'w-[80px]' }
-                                ].map((col, index) => (
-                                  <TableHead 
-                                    key={`col-${index}`}
-                                    className={`${col.width} ${col.sortable ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                                    onClick={col.sortable && col.key ? () => handleSort(col.key as keyof Customer) : undefined}
-                                  >
-                                    {col.label}
-                                    {col.sortable && col.key && sortConfig.key === col.key && (
-                                      <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                                    )}
-                                  </TableHead>
-                                ))}
+                              <TableRow className="bg-gray-50/50">
+                                <TableHead className="w-[220px] font-semibold">Customer</TableHead>
+                                <TableHead className="w-[200px] font-semibold">Contact</TableHead>
+                                <TableHead className="w-[180px] font-semibold">Service Plan</TableHead>
+                                <TableHead className="w-[140px] font-semibold">Billing</TableHead>
+                                <TableHead className="w-[180px] font-semibold">Address</TableHead>
+                                <TableHead className="w-[100px] font-semibold">Status</TableHead>
+                                <TableHead className="w-[100px] font-semibold">Actions</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {filteredCustomers.map((customer) => (
-                                <TableRow key={customer.id} className="hover:bg-gray-50/50">
-                                  <TableCell className="p-4">
+                                <TableRow 
+                                  key={customer.id} 
+                                  className="hover:bg-gray-50/50 transition-colors"
+                                >
+                                  <TableCell className="py-4">
                                     <div className="flex items-center space-x-3">
-                                      <div className="bg-blue-100 p-2 rounded-lg flex-shrink-0">
+                                      <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
                                         <User className="h-4 w-4 text-blue-600" />
                                       </div>
-                                      <div className="min-w-0 flex-1">
-                                        <div className="font-medium text-gray-900 truncate">{customer.name}</div>
-                                        <div className="text-sm text-gray-500 truncate">ID: {customer.customerId}</div>
+                                      <div className="min-w-0">
+                                        <div className="font-medium text-gray-900 truncate">
+                                          {customer.name}
+                                        </div>
+                                        <div className="text-sm text-gray-500 truncate">
+                                          ID: {customer.customerId}
+                                        </div>
                                       </div>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="p-4">
+                                  
+                                  <TableCell className="py-4">
                                     <div className="space-y-1">
                                       <div className="flex items-center text-sm text-gray-600">
-                                        <Phone className="h-3 w-3 mr-2 flex-shrink-0" />
-                                        <span className="truncate">{customer.phone}</span>
+                                        <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
+                                        <span className="truncate">{customer.phone || "N/A"}</span>
                                       </div>
                                       <div className="flex items-center text-sm text-gray-600">
-                                        <Mail className="h-3 w-3 mr-2 flex-shrink-0" />
+                                        <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
                                         <span className="truncate">{customer.email}</span>
                                       </div>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="p-4">
+                                  
+                                  <TableCell className="py-4">
                                     <div className="flex items-center space-x-2">
                                       {getConnectionTypeIcon(customer.connectionType)}
                                       <div className="min-w-0 flex-1">
-                                        <div className="font-medium text-gray-900 text-sm truncate">{getPlanLabel(customer.plan)}</div>
-                                        <div className="text-sm text-gray-500 capitalize">{customer.connectionType}</div>
+                                        <div className="font-medium text-gray-900 text-sm truncate">
+                                          {getPlanLabel(customer.plan)}
+                                        </div>
+                                        <div className="text-sm text-gray-500 capitalize">
+                                          {customer.connectionType}
+                                        </div>
                                       </div>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="p-4">
+                                  
+                                  <TableCell className="py-4">
                                     <div>
-                                      <div className="font-medium text-gray-900">
+                                      <div className="font-medium text-gray-900 flex items-center">
+                                        <DollarSign className="h-3 w-3 mr-1 text-green-600" />
                                         ₹{customer.monthlyCharges.toLocaleString()}
                                       </div>
                                       {customer.outstandingAmount > 0 && (
@@ -586,14 +644,19 @@ export default function CustomersPage() {
                                       )}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="p-4">
+                                  
+                                  <TableCell className="py-4">
                                     <div className="flex items-center text-sm text-gray-600">
-                                      <MapPin className="h-3 w-3 mr-2 flex-shrink-0" />
-                                      <span className="truncate">{customer.address}</span>
+                                      <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
+                                      <span className="truncate">{customer.address || "N/A"}</span>
                                     </div>
                                   </TableCell>
-                                  <TableCell className="p-4">{getStatusBadge(customer.connectionStatus)}</TableCell>
-                                  <TableCell className="p-4">
+                                  
+                                  <TableCell className="py-4">
+                                    {getStatusBadge(customer.connectionStatus)}
+                                  </TableCell>
+                                  
+                                  <TableCell className="py-4">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
                                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -601,189 +664,225 @@ export default function CustomersPage() {
                                         </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent className="w-64" align="end">
-                                        <DropdownMenuItem key={`view-${customer.id}`} onClick={() => handleViewDetails(customer)}>
+                                        <DropdownMenuItem onClick={() => handleViewDetails(customer)}>
                                           <Eye className="h-4 w-4 mr-2" />
                                           View Details
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem key={`edit-${customer.id}`} onClick={() => handleEdit(customer)}>
+                                        <DropdownMenuItem onClick={() => handleEdit(customer)}>
                                           <Edit className="h-4 w-4 mr-2" />
-                                          Edit
+                                          Edit Customer
                                         </DropdownMenuItem>
                                         {customer.connectionStatus === "active" ? (
-                                          <DropdownMenuItem key={`suspend-${customer.id}`} onClick={() => handleSuspend(customer)} className="text-orange-600">
+                                          <DropdownMenuItem onClick={() => handleSuspend(customer)}>
                                             <UserX className="h-4 w-4 mr-2" />
-                                            Suspend
+                                            Suspend Service
                                           </DropdownMenuItem>
                                         ) : (
-                                          <DropdownMenuItem key={`activate-${customer.id}`} onClick={() => handleActivate(customer)} className="text-green-600">
+                                          <DropdownMenuItem onClick={() => handleActivate(customer)}>
                                             <UserCheck className="h-4 w-4 mr-2" />
-                                            Activate
+                                            Activate Service
                                           </DropdownMenuItem>
                                         )}
-                                        <DropdownMenuItem key={`delete-${customer.id}`} className="text-red-600" onClick={() => handleDelete(customer)}>
+                                        <DropdownMenuItem 
+                                          className="text-red-600" 
+                                          onClick={() => handleDelete(customer)}
+                                        >
                                           <Trash2 className="h-4 w-4 mr-2" />
-                                          Delete
+                                          Delete Customer
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
                                   </TableCell>
                                 </TableRow>
                               ))}
-                              {filteredCustomers.length === 0 && !loading && (
-                                <TableRow>
-                                  <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                                    No customers found. {searchTerm && "Try adjusting your search terms."}
-                                  </TableCell>
-                                </TableRow>
-                              )}
                             </TableBody>
                           </Table>
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Mobile/Tablet Card View */}
-                    <div className="lg:hidden space-y-4 p-4">
-                      {filteredCustomers.map((customer) => (
-                        <Card key={customer.id} className="border border-gray-200 shadow-sm">
-                          <CardContent className="p-4">
-                            <div className="space-y-3">
-                              {/* Header with name and status */}
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                                  <div className="bg-blue-100 p-2 rounded-lg flex-shrink-0">
-                                    <User className="h-4 w-4 text-blue-600" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-medium text-gray-900 truncate">{customer.name}</div>
-                                    <div className="text-sm text-gray-500 truncate">ID: {customer.customerId}</div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-2 flex-shrink-0">
-                                  {getStatusBadge(customer.connectionStatus)}
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                                        <MoreHorizontal className="h-4 w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="w-48" align="end">
-                                      <DropdownMenuItem key={`mobile-view-${customer.id}`} onClick={() => handleViewDetails(customer)}>
-                                        <Eye className="h-4 w-4 mr-2" />
-                                        View Details
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem key={`mobile-edit-${customer.id}`} onClick={() => handleEdit(customer)}>
-                                        <Edit className="h-4 w-4 mr-2" />
-                                        Edit
-                                      </DropdownMenuItem>
-                                      {customer.connectionStatus === "active" ? (
-                                        <DropdownMenuItem key={`mobile-suspend-${customer.id}`} onClick={() => handleSuspend(customer)} className="text-orange-600">
-                                          <UserX className="h-4 w-4 mr-2" />
-                                          Suspend
-                                        </DropdownMenuItem>
-                                      ) : (
-                                        <DropdownMenuItem key={`mobile-activate-${customer.id}`} onClick={() => handleActivate(customer)} className="text-green-600">
-                                          <UserCheck className="h-4 w-4 mr-2" />
-                                          Activate
-                                        </DropdownMenuItem>
-                                      )}
-                                      <DropdownMenuItem key={`mobile-delete-${customer.id}`} className="text-red-600" onClick={() => handleDelete(customer)}>
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Delete
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
-                              </div>
-
-                              {/* Plan and Billing */}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-2 min-w-0 flex-1">
-                                  {getConnectionTypeIcon(customer.connectionType)}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-medium text-gray-900 text-sm truncate">{getPlanLabel(customer.plan)}</div>
-                                    <div className="text-xs text-gray-500 capitalize">{customer.connectionType}</div>
-                                  </div>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  <div className="font-medium text-sm">₹{customer.monthlyCharges.toLocaleString()}/mo</div>
-                                  {customer.outstandingAmount > 0 && (
-                                    <div className="text-xs text-red-600">
-                                      Due: ₹{customer.outstandingAmount.toLocaleString()}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Contact Information */}
-                              <div className="space-y-1">
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Phone className="h-3 w-3 mr-2 flex-shrink-0" />
-                                  <span className="truncate">{customer.phone}</span>
-                                </div>
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Mail className="h-3 w-3 mr-2 flex-shrink-0" />
-                                  <span className="truncate">{customer.email}</span>
-                                </div>
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <MapPin className="h-3 w-3 mr-2 flex-shrink-0" />
-                                  <span className="truncate">{customer.address}</span>
-                                </div>
-                              </div>
-
-                              {/* Join Date */}
-                              <div className="pt-2 border-t border-gray-100">
-                                <div className="text-xs text-gray-500">
-                                  Joined: {customer.joinDate ? new Date(customer.joinDate).toLocaleDateString() : 'N/A'}
-                                  {customer.lastPayment && (
-                                    <span className="ml-4">
-                                      Last Payment: {new Date(customer.lastPayment).toLocaleDateString()}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-
+                        <ScrollBar orientation="horizontal" />
+                      </ScrollArea>
+                      
+                      {/* Empty State for Desktop */}
                       {filteredCustomers.length === 0 && !loading && (
-                        <div className="text-center text-gray-500 py-8">
-                          <User className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-                          <p>No customers found.</p>
-                          {searchTerm && <p className="text-sm">Try adjusting your search terms.</p>}
+                        <div className="text-center text-gray-500 py-12">
+                          <div className="flex flex-col items-center">
+                            <User className="h-16 w-16 text-gray-300 mb-4" />
+                            <h3 className="text-lg font-medium mb-2">No customers found</h3>
+                            {searchTerm ? (
+                              <p className="text-sm">Try adjusting your search terms or filters.</p>
+                            ) : (
+                              <p className="text-sm">Get started by adding your first customer.</p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* View Customer Dialog */}
-            <ViewCustomerDialog 
-              customer={selectedCustomer}
-              open={showViewDialog}
-              onClose={() => setShowViewDialog(false)}
-            />
+                    {/* Mobile Card View with Vertical Scrolling */}
+                    <div className="md:hidden">
+                      <ScrollArea className="h-[600px] w-full">
+                        <div className="space-y-3 p-4">
+                          {filteredCustomers.map((customer) => (
+                            <Card key={customer.id} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                              <CardContent className="p-4">
+                                <div className="space-y-4">
+                                  {/* Header */}
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                      <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
+                                        <User className="h-5 w-5 text-blue-600" />
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <h3 className="font-semibold text-gray-900 truncate text-sm">
+                                          {customer.name}
+                                        </h3>
+                                        <p className="text-xs text-gray-500 truncate">
+                                          ID: {customer.customerId}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center space-x-2 flex-shrink-0">
+                                      {getStatusBadge(customer.connectionStatus)}
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className="w-48" align="end">
+                                          <DropdownMenuItem onClick={() => handleViewDetails(customer)}>
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            View Details
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleEdit(customer)}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Edit
+                                          </DropdownMenuItem>
+                                          {customer.connectionStatus === "active" ? (
+                                            <DropdownMenuItem onClick={() => handleSuspend(customer)}>
+                                              <UserX className="h-4 w-4 mr-2" />
+                                              Suspend
+                                            </DropdownMenuItem>
+                                          ) : (
+                                            <DropdownMenuItem onClick={() => handleActivate(customer)}>
+                                              <UserCheck className="h-4 w-4 mr-2" />
+                                              Activate
+                                            </DropdownMenuItem>
+                                          )}
+                                          <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(customer)}>
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  </div>
 
-            {/* Edit Customer Dialog */}
-            <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-              <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Edit Customer</DialogTitle>
-                  <DialogDescription>Update customer information</DialogDescription>
-                </DialogHeader>
-                {selectedCustomer && (
-                  <EditCustomerForm
-                    customer={selectedCustomer}
-                    onClose={() => setShowEditDialog(false)}
-                    onSuccess={handleEditSuccess}
-                  />
-                )}
-              </DialogContent>
-            </Dialog>
-          </div>
+                                  {/* Plan and Billing */}
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                      {getConnectionTypeIcon(customer.connectionType)}
+                                      <div className="min-w-0 flex-1">
+                                        <div className="font-medium text-gray-900 text-sm truncate">
+                                          {getPlanLabel(customer.plan)}
+                                        </div>
+                                        <div className="text-xs text-gray-500 capitalize">
+                                          {customer.connectionType}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                      <div className="font-semibold text-sm text-gray-900">
+                                        ₹{customer.monthlyCharges.toLocaleString()}/mo
+                                      </div>
+                                      {customer.outstandingAmount > 0 && (
+                                        <div className="text-xs text-red-600">
+                                          Due: ₹{customer.outstandingAmount.toLocaleString()}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Contact Grid */}
+                                  <div className="grid grid-cols-1 gap-2">
+                                    <div className="flex items-center text-sm text-gray-600">
+                                      <Phone className="h-3 w-3 mr-2 text-green-600 flex-shrink-0" />
+                                      <span className="truncate">{customer.phone || "N/A"}</span>
+                                    </div>
+                                    <div className="flex items-center text-sm text-gray-600">
+                                      <Mail className="h-3 w-3 mr-2 text-blue-600 flex-shrink-0" />
+                                      <span className="truncate">{customer.email}</span>
+                                    </div>
+                                    <div className="flex items-center text-sm text-gray-600">
+                                      <MapPin className="h-3 w-3 mr-2 text-red-600 flex-shrink-0" />
+                                      <span className="truncate">{customer.address || "N/A"}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Join Date */}
+                                  <div className="pt-2 border-t border-gray-100">
+                                    <div className="text-xs text-gray-500">
+                                      Joined: {customer.joinDate ? new Date(customer.joinDate).toLocaleDateString() : 'N/A'}
+                                      {customer.lastPayment && (
+                                        <span className="ml-4">
+                                          Last Payment: {new Date(customer.lastPayment).toLocaleDateString()}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+
+                          {/* Empty State for Mobile */}
+                          {filteredCustomers.length === 0 && !loading && (
+                            <div className="text-center text-gray-500 py-12">
+                              <User className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                              <h3 className="text-lg font-medium mb-2">No customers found</h3>
+                              {searchTerm ? (
+                                <p className="text-sm">Try adjusting your search terms or filters.</p>
+                              ) : (
+                                <p className="text-sm">Get started by adding your first customer.</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* View Customer Dialog */}
+                <ViewCustomerDialog 
+                  customer={selectedCustomer}
+                  open={showViewDialog}
+                  onClose={() => setShowViewDialog(false)}
+                />
+
+                {/* Edit Customer Dialog */}
+                <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Edit Customer</DialogTitle>
+                      <DialogDescription>
+                        Update customer information for {selectedCustomer?.name}
+                      </DialogDescription>
+                    </DialogHeader>
+                    {selectedCustomer && (
+                      <EditCustomerForm
+                        customer={selectedCustomer}
+                        onClose={() => {
+                          setShowEditDialog(false)
+                          setSelectedCustomer(null)
+                        }}
+                        onSuccess={handleEditSuccess}
+                      />
+                    )}
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+          </main>
         </div>
       </div>
     </DashboardLayout>

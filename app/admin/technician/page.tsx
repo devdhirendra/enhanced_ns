@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
@@ -29,6 +30,7 @@ import {
   Mail,
   MapPin,
   Download,
+  AlertCircle,
   RefreshCw,
   Users,
   UserCheck,
@@ -83,6 +85,11 @@ interface ApiUser {
   updatedAt?: string
   status?: string
 }
+interface ApiResponse {
+  data?: ApiUser[]
+  users?: ApiUser[]
+  [key: string]: any // Allow other properties
+}
 
 export default function TechniciansPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -94,6 +101,7 @@ export default function TechniciansPage() {
   const [showViewDialog, setShowViewDialog] = useState(false)
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { toast } = useToast()
 
@@ -172,11 +180,11 @@ export default function TechniciansPage() {
     return Math.floor(Math.random() * 8) + 1 // 1-8 years
   }
 
-  const fetchTechnicians = async () => {
+const fetchTechnicians = async () => {
     try {
       setLoading(true)
       console.log('Fetching technicians for user:', currentUserId)
-      const response = await admintechnicianApi.getAll()
+      const response = await admintechnicianApi.getAll() as ApiResponse
       console.log('API Response:', response)
       
       // Handle different response formats
@@ -407,513 +415,633 @@ export default function TechniciansPage() {
   const onLeaveTechnicians = technicians.filter((t) => t.status === "on_leave").length
   const inactiveTechnicians = technicians.filter((t) => t.status === "inactive" || t.status === "suspended").length
 
-  return (
-    <DashboardLayout title="Technician Management" description="Manage field technicians and their assignments">
-      <div className="space-y-4 md:space-y-6">
-        {/* Current User Info - Optional Debug Info */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
-            <strong>Debug Info:</strong> Current User ID: {currentUserId}
-          </div>
-        )}
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Total Technicians</CardTitle>
-              <div className="p-2 bg-blue-500 rounded-lg">
-                <Users className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-900">{totalTechnicians}</div>
-              <p className="text-sm text-gray-500 mt-2">Registered technicians</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Active</CardTitle>
-              <div className="p-2 bg-green-500 rounded-lg">
-                <UserCheck className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-900">{activeTechnicians}</div>
-              <p className="text-sm text-gray-500 mt-2">Currently working</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-yellow-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">On Leave</CardTitle>
-              <div className="p-2 bg-yellow-500 rounded-lg">
-                <Clock className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-900">{onLeaveTechnicians}</div>
-              <p className="text-sm text-gray-500 mt-2">Temporarily unavailable</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-red-50 to-red-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Inactive</CardTitle>
-              <div className="p-2 bg-red-500 rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-900">{inactiveTechnicians}</div>
-              <p className="text-sm text-gray-500 mt-2">Suspended or inactive</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          {/* Search and Filter Row */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search technicians..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Department" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                <SelectItem value="field_operations">Field Operations</SelectItem>
-                <SelectItem value="network_maintenance">Network Maintenance</SelectItem>
-                <SelectItem value="customer_support">Customer Support</SelectItem>
-                <SelectItem value="installation">Installation</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="on_leave">On Leave</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Action Buttons Row */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchTechnicians}
-              disabled={loading}
-              className="w-full sm:w-auto bg-transparent"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} className="w-full sm:w-auto bg-transparent">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-              <DialogTrigger asChild>
-                <Button className="w-full sm:w-auto">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Technician
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Add New Technician</DialogTitle>
-                  <DialogDescription>Create a new technician profile with complete details</DialogDescription>
-                </DialogHeader>
-                <AddTechnicianForm onClose={() => setShowAddDialog(false)} onSuccess={handleAddSuccess} />
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-
-        <Card className="border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg md:text-xl">All Technicians ({filteredTechnicians.length})</CardTitle>
-            <CardDescription>Complete list of field technicians and their current status</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0 sm:p-6">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600">Loading technicians...</span>
-              </div>
-            ) : (
-              <>
-                {/* Desktop Table View */}
-                <div className="hidden lg:block overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[200px]">Technician</TableHead>
-                        <TableHead className="min-w-[150px]">Contact</TableHead>
-                        <TableHead className="min-w-[150px]">Department</TableHead>
-                        <TableHead className="min-w-[150px]">Assignment</TableHead>
-                        <TableHead className="min-w-[120px]">Experience</TableHead>
-                        <TableHead className="min-w-[100px]">Salary</TableHead>
-                        <TableHead className="min-w-[80px]">Status</TableHead>
-                        <TableHead className="min-w-[100px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTechnicians.map((technician) => (
-                        <TableRow key={technician.id}>
-                          <TableCell>
-                            <div className="flex items-center space-x-3">
-                              <div className="bg-blue-100 p-2 rounded-lg">
-                                <HardHat className="h-4 w-4 text-blue-600" />
-                              </div>
-                              <div>
-                                <div className="font-medium text-gray-900">{technician.name}</div>
-                                <div className="text-sm text-gray-500">ID: {technician.employeeId}</div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <div className="flex items-center text-sm text-gray-600">
-                                <Phone className="h-3 w-3 mr-1" />
-                                {technician.phone}
-                              </div>
-                              <div className="flex items-center text-sm text-gray-600">
-                                <Mail className="h-3 w-3 mr-1" />
-                                <span className="truncate max-w-[150px]">{technician.email}</span>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium text-gray-900">
-                                {getDepartmentLabel(technician.department)}
-                              </div>
-                              <div className="text-sm text-gray-500">{getPositionLabel(technician.position)}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center text-sm text-gray-600">
-                              <MapPin className="h-3 w-3 mr-1" />
-                              <span className="truncate max-w-[120px]">{technician.assignedArea}</span>
-                            </div>
-                            <div className="text-sm text-gray-500 capitalize">{technician.workShift} shift</div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium text-gray-900">{technician.experience} years</div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium text-gray-900">₹{technician.salary.toLocaleString()}</div>
-                          </TableCell>
-                          <TableCell>{getStatusBadge(technician.status)}</TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" disabled={deleting === technician.id}>
-                                  {deleting === technician.id ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                                  ) : (
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-64" align="end">
-                                <DropdownMenuItem onClick={() => handleViewDetails(technician)}>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleEdit(technician)}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  className="text-red-600" 
-                                  onClick={() => handleDelete(technician)}
-                                  disabled={deleting === technician.id}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filteredTechnicians.length === 0 && !loading && (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center text-gray-500 py-8">
-                            No technicians found. {searchTerm && "Try adjusting your search terms."}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+return (
+  <DashboardLayout title="Technician Management" description="Manage field technicians and their assignments">
+    <div className="min-h-screen bg-gray-50 overflow-y">
+      <div className="grid grid-cols-1">
+        <main className="h-[calc(100vh-4rem)]">
+          <div className="max-w-7xl mx-auto">
+            <div className="space-y-4">
+              {/* Error Alert */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                    <p className="text-red-800">{error}</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={fetchTechnicians}
+                      className="ml-auto"
+                    >
+                      Retry
+                    </Button>
+                  </div>
                 </div>
+              )}
 
-                {/* Mobile Card View - Keep the same as before */}
-                <div className="lg:hidden space-y-4 p-4">
-                  {filteredTechnicians.map((technician) => (
-                    <Card key={technician.id} className="border border-gray-200 shadow-sm">
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          {/* Header with name and status */}
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center space-x-3 flex-1 min-w-0">
-                              <div className="bg-blue-100 p-2 rounded-lg flex-shrink-0">
-                                <HardHat className="h-4 w-4 text-blue-600" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="font-medium text-gray-900 truncate">{technician.name}</div>
-                                <div className="text-sm text-gray-500 truncate">ID: {technician.employeeId}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2 flex-shrink-0">
-                              {getStatusBadge(technician.status)}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8" disabled={deleting === technician.id}>
-                                    {deleting === technician.id ? (
-                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                                    ) : (
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-48" align="end">
-                                  <DropdownMenuItem onClick={() => handleViewDetails(technician)}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View Details
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleEdit(technician)}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    className="text-red-600" 
-                                    onClick={() => handleDelete(technician)}
-                                    disabled={deleting === technician.id}
+              {/* Current User Info - Optional Debug Info */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-800">
+                  <strong>Debug Info:</strong> Current User ID: {currentUserId}
+                </div>
+              )}
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Total Technicians</CardTitle>
+                    <div className="p-2 bg-blue-500 rounded-lg flex-shrink-0">
+                      <Users className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{totalTechnicians}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Registered technicians</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Active</CardTitle>
+                    <div className="p-2 bg-green-500 rounded-lg flex-shrink-0">
+                      <UserCheck className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{activeTechnicians}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Currently working</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-yellow-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">On Leave</CardTitle>
+                    <div className="p-2 bg-yellow-500 rounded-lg flex-shrink-0">
+                      <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{onLeaveTechnicians}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Temporarily unavailable</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-red-50 to-red-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Inactive</CardTitle>
+                    <div className="p-2 bg-red-500 rounded-lg flex-shrink-0">
+                      <AlertTriangle className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{inactiveTechnicians}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Suspended or inactive</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Header Section */}
+              <div className="flex flex-col space-y-4">
+                {/* Search and Filter Section */}
+                <Card className="shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col lg:flex-row gap-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          placeholder="Search by name, email, or employee ID..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10 h-10"
+                        />
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                          <SelectTrigger className="w-full sm:w-48 h-10">
+                            <Filter className="h-4 w-4 mr-2" />
+                            <SelectValue placeholder="Filter by Department" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Departments</SelectItem>
+                            <SelectItem value="field_operations">Field Operations</SelectItem>
+                            <SelectItem value="network_maintenance">Network Maintenance</SelectItem>
+                            <SelectItem value="customer_support">Customer Support</SelectItem>
+                            <SelectItem value="installation">Installation</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                          <SelectTrigger className="w-full sm:w-48 h-10">
+                            <Filter className="h-4 w-4 mr-2" />
+                            <SelectValue placeholder="Filter by Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="inactive">Inactive</SelectItem>
+                            <SelectItem value="on_leave">On Leave</SelectItem>
+                            <SelectItem value="suspended">Suspended</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Action Buttons Section */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchTechnicians}
+                      disabled={loading}
+                      className="h-9"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                      Refresh ({filteredTechnicians.length})
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleExport} 
+                      className="h-9"
+                      disabled={filteredTechnicians.length === 0}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export CSV
+                    </Button>
+                  </div>
+                  
+                  <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+                    <DialogTrigger asChild>
+                      <Button className="h-9">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add New Technician
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Add New Technician</DialogTitle>
+                        <DialogDescription>
+                          Create a new technician profile with complete details
+                        </DialogDescription>
+                      </DialogHeader>
+                      <AddTechnicianForm 
+                        onClose={() => setShowAddDialog(false)} 
+                        onSuccess={handleAddSuccess} 
+                      />
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </div>
+
+              {/* Main Content Card */}
+              <Card className="border-0 shadow-lg">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-xl font-semibold text-gray-900">
+                        All Technicians ({filteredTechnicians.length})
+                      </CardTitle>
+                      <CardDescription className="text-gray-600 mt-1">
+                        Complete list of field technicians and their current status
+                        {searchTerm && ` • Filtered by: "${searchTerm}"`}
+                      </CardDescription>
+                    </div>
+                    {loading && (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-0">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <span className="ml-2 text-gray-600">Loading technicians...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Desktop/Tablet Table View with Horizontal Scroll */}
+                      <div className="hidden md:block">
+                        <ScrollArea className="w-full">
+                          <div className="min-w-[1200px]">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-gray-50/50">
+                                  <TableHead className="w-[200px] font-semibold">Technician</TableHead>
+                                  <TableHead className="w-[180px] font-semibold">Contact</TableHead>
+                                  <TableHead className="w-[160px] font-semibold">Department</TableHead>
+                                  <TableHead className="w-[150px] font-semibold">Assignment</TableHead>
+                                  <TableHead className="w-[120px] font-semibold">Experience</TableHead>
+                                  <TableHead className="w-[120px] font-semibold">Salary</TableHead>
+                                  <TableHead className="w-[100px] font-semibold">Status</TableHead>
+                                  <TableHead className="w-[100px] font-semibold">Actions</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredTechnicians.map((technician) => (
+                                  <TableRow 
+                                    key={technician.id} 
+                                    className="hover:bg-gray-50/50 transition-colors"
                                   >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
+                                    <TableCell className="py-4">
+                                      <div className="flex items-center space-x-3">
+                                        <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
+                                          <HardHat className="h-4 w-4 text-blue-600" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="font-medium text-gray-900 truncate">
+                                            {technician.name}
+                                          </div>
+                                          <div className="text-sm text-gray-500 truncate">
+                                            ID: {technician.employeeId}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div className="space-y-1">
+                                        <div className="flex items-center text-sm text-gray-600">
+                                          <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
+                                          <span className="truncate">{technician.phone || "N/A"}</span>
+                                        </div>
+                                        <div className="flex items-center text-sm text-gray-600">
+                                          <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
+                                          <span className="truncate">{technician.email}</span>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div>
+                                        <div className="font-medium text-gray-900 truncate">
+                                          {getDepartmentLabel(technician.department)}
+                                        </div>
+                                        <div className="text-sm text-gray-500 truncate">
+                                          {getPositionLabel(technician.position)}
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div className="flex items-center text-sm text-gray-600 mb-1">
+                                        <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
+                                        <span className="truncate">{technician.assignedArea || "N/A"}</span>
+                                      </div>
+                                      <div className="text-sm text-gray-500 capitalize">
+                                        {technician.workShift} shift
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div className="font-medium text-gray-900">
+                                        {technician.experience} years
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div className="font-medium text-gray-900">
+                                        ₹{technician.salary.toLocaleString()}
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      {getStatusBadge(technician.status)}
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-8 w-8" disabled={deleting === technician.id}>
+                                            {deleting === technician.id ? (
+                                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                                            ) : (
+                                              <MoreHorizontal className="h-4 w-4" />
+                                            )}
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className="w-64" align="end">
+                                          <DropdownMenuItem onClick={() => handleViewDetails(technician)}>
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            View Details
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleEdit(technician)}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Edit Technician
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem 
+                                            className="text-red-600" 
+                                            onClick={() => handleDelete(technician)}
+                                            disabled={deleting === technician.id}
+                                          >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete Technician
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
                           </div>
-
-                          {/* Department and Position */}
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium text-gray-900 text-sm">
-                                {getDepartmentLabel(technician.department)}
-                              </div>
-                              <div className="text-xs text-gray-500">{getPositionLabel(technician.position)}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-medium text-sm">₹{technician.salary.toLocaleString()}</div>
-                              <div className="text-xs text-gray-500">{technician.experience} years exp.</div>
-                            </div>
-                          </div>
-
-                          {/* Contact Information */}
-                          <div className="space-y-1">
-                            <div className="flex items-center text-sm text-gray-600">
-                              <Phone className="h-3 w-3 mr-2 flex-shrink-0" />
-                              <span className="truncate">{technician.phone}</span>
-                            </div>
-                            <div className="flex items-center text-sm text-gray-600">
-                              <Mail className="h-3 w-3 mr-2 flex-shrink-0" />
-                              <span className="truncate">{technician.email}</span>
-                            </div>
-                            <div className="flex items-center text-sm text-gray-600">
-                              <MapPin className="h-3 w-3 mr-2 flex-shrink-0" />
-                              <span className="truncate">{technician.assignedArea}</span>
-                            </div>
-                          </div>
-
-                          {/* Skills */}
-                          <div className="pt-2 border-t border-gray-100">
-                            <div className="text-xs text-gray-500 mb-1">Skills:</div>
-                            <div className="flex flex-wrap gap-1">
-                              {technician.skills.slice(0, 3).map((skill) => (
-                                <span key={skill} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                                  {skill}
-                                </span>
-                              ))}
-                              {technician.skills.length > 3 && (
-                                <span className="text-xs text-gray-500">+{technician.skills.length - 3} more</span>
+                          <ScrollBar orientation="horizontal" />
+                        </ScrollArea>
+                        
+                        {/* Empty State for Desktop */}
+                        {filteredTechnicians.length === 0 && !loading && (
+                          <div className="text-center text-gray-500 py-12">
+                            <div className="flex flex-col items-center">
+                              <HardHat className="h-16 w-16 text-gray-300 mb-4" />
+                              <h3 className="text-lg font-medium mb-2">No technicians found</h3>
+                              {searchTerm ? (
+                                <p className="text-sm">Try adjusting your search terms or filters.</p>
+                              ) : (
+                                <p className="text-sm">Get started by adding your first technician.</p>
                               )}
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        )}
+                      </div>
 
-                  {filteredTechnicians.length === 0 && !loading && (
-                    <div className="text-center text-gray-500 py-8">
-                      <HardHat className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-                      <p>No technicians found.</p>
-                      {searchTerm && <p className="text-sm">Try adjusting your search terms.</p>}
+                      {/* Mobile Card View with Vertical Scrolling */}
+                      <div className="md:hidden">
+                        <ScrollArea className="h-[600px] w-full">
+                          <div className="space-y-3 p-4">
+                            {filteredTechnicians.map((technician) => (
+                              <Card key={technician.id} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                <CardContent className="p-4">
+                                  <div className="space-y-4">
+                                    {/* Header */}
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                        <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
+                                          <HardHat className="h-5 w-5 text-blue-600" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <h3 className="font-semibold text-gray-900 truncate text-sm">
+                                            {technician.name}
+                                          </h3>
+                                          <p className="text-xs text-gray-500 truncate">
+                                            ID: {technician.employeeId}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center space-x-2 flex-shrink-0">
+                                        {getStatusBadge(technician.status)}
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={deleting === technician.id}>
+                                              {deleting === technician.id ? (
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                                              ) : (
+                                                <MoreHorizontal className="h-4 w-4" />
+                                              )}
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent className="w-48" align="end">
+                                            <DropdownMenuItem onClick={() => handleViewDetails(technician)}>
+                                              <Eye className="h-4 w-4 mr-2" />
+                                              View Details
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleEdit(technician)}>
+                                              <Edit className="h-4 w-4 mr-2" />
+                                              Edit
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem 
+                                              className="text-red-600" 
+                                              onClick={() => handleDelete(technician)}
+                                              disabled={deleting === technician.id}
+                                            >
+                                              <Trash2 className="h-4 w-4 mr-2" />
+                                              Delete
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </div>
+                                    </div>
+
+                                    {/* Department and Salary */}
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="font-medium text-gray-900 text-sm">
+                                          {getDepartmentLabel(technician.department)}
+                                        </div>
+                                        <div className="text-xs text-gray-500">{getPositionLabel(technician.position)}</div>
+                                      </div>
+                                      <div className="text-right flex-shrink-0">
+                                        <div className="font-semibold text-sm text-gray-900">
+                                          ₹{technician.salary.toLocaleString()}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                          {technician.experience} years exp.
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Contact Grid */}
+                                    <div className="grid grid-cols-1 gap-2">
+                                      <div className="flex items-center text-sm text-gray-600">
+                                        <Phone className="h-3 w-3 mr-2 text-green-600 flex-shrink-0" />
+                                        <span className="truncate">{technician.phone || "N/A"}</span>
+                                      </div>
+                                      <div className="flex items-center text-sm text-gray-600">
+                                        <Mail className="h-3 w-3 mr-2 text-blue-600 flex-shrink-0" />
+                                        <span className="truncate">{technician.email}</span>
+                                      </div>
+                                      <div className="flex items-center text-sm text-gray-600">
+                                        <MapPin className="h-3 w-3 mr-2 text-red-600 flex-shrink-0" />
+                                        <span className="truncate">{technician.assignedArea || "N/A"}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Skills */}
+                                    <div className="pt-2 border-t border-gray-100">
+                                      <div className="text-xs text-gray-500 mb-1">Skills:</div>
+                                      <div className="flex flex-wrap gap-1">
+                                        {technician.skills.slice(0, 3).map((skill) => (
+                                          <span key={skill} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                                            {skill}
+                                          </span>
+                                        ))}
+                                        {technician.skills.length > 3 && (
+                                          <span className="text-xs text-gray-500">+{technician.skills.length - 3} more</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+
+                            {/* Empty State for Mobile */}
+                            {filteredTechnicians.length === 0 && !loading && (
+                              <div className="text-center text-gray-500 py-12">
+                                <HardHat className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                                <h3 className="text-lg font-medium mb-2">No technicians found</h3>
+                                {searchTerm ? (
+                                  <p className="text-sm">Try adjusting your search terms or filters.</p>
+                                ) : (
+                                  <p className="text-sm">Get started by adding your first technician.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* View Details Dialog */}
+              <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Technician Details</DialogTitle>
+                    <DialogDescription>Complete information about the technician</DialogDescription>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-4 top-4"
+                      onClick={() => setShowViewDialog(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </DialogHeader>
+                  {selectedTechnician && (
+                    <div className="space-y-6">
+                      {/* Personal Information */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Full Name</label>
+                            <p className="text-gray-900 font-medium">{selectedTechnician.name}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Employee ID</label>
+                            <p className="text-gray-900 font-medium">{selectedTechnician.employeeId}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Email</label>
+                            <p className="text-gray-900">{selectedTechnician.email}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Phone</label>
+                            <p className="text-gray-900">{selectedTechnician.phone}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Work Information */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Work Information</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Department</label>
+                            <p className="text-gray-900">{getDepartmentLabel(selectedTechnician.department)}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Position</label>
+                            <p className="text-gray-900">{getPositionLabel(selectedTechnician.position)}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Assigned Area</label>
+                            <p className="text-gray-900">{selectedTechnician.assignedArea}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Work Shift</label>
+                            <p className="text-gray-900 capitalize">{selectedTechnician.workShift}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Experience</label>
+                            <p className="text-gray-900">{selectedTechnician.experience} years</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Salary</label>
+                            <p className="text-gray-900 font-medium">₹{selectedTechnician.salary.toLocaleString()}</p>
+                          </div>
+                          {selectedTechnician.specialization && (
+                            <div className="md:col-span-2">
+                              <label className="text-sm font-medium text-gray-500">Specialization</label>
+                              <p className="text-gray-900">{selectedTechnician.specialization}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Skills */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Skills & Expertise</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedTechnician.skills.map((skill) => (
+                            <span
+                              key={skill}
+                              className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Status and Dates */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Status & Timeline</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Current Status</label>
+                            <div className="mt-1">{getStatusBadge(selectedTechnician.status)}</div>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Join Date</label>
+                            <p className="text-gray-900">{new Date(selectedTechnician.joinDate).toLocaleDateString()}</p>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Last Active</label>
+                            <p className="text-gray-900">
+                              {new Date(selectedTechnician.lastActive).toLocaleDateString()}{' '}
+                              {new Date(selectedTechnician.lastActive).toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                </DialogContent>
+              </Dialog>
 
-        {/* View Details Dialog */}
-        <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Technician Details</DialogTitle>
-              <DialogDescription>Complete information about the technician</DialogDescription>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-4 top-4"
-                onClick={() => setShowViewDialog(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </DialogHeader>
-            {selectedTechnician && (
-              <div className="space-y-6">
-                {/* Personal Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Full Name</label>
-                      <p className="text-gray-900 font-medium">{selectedTechnician.name}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Employee ID</label>
-                      <p className="text-gray-900 font-medium">{selectedTechnician.employeeId}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Email</label>
-                      <p className="text-gray-900">{selectedTechnician.email}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Phone</label>
-                      <p className="text-gray-900">{selectedTechnician.phone}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Work Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Work Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Department</label>
-                      <p className="text-gray-900">{getDepartmentLabel(selectedTechnician.department)}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Position</label>
-                      <p className="text-gray-900">{getPositionLabel(selectedTechnician.position)}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Assigned Area</label>
-                      <p className="text-gray-900">{selectedTechnician.assignedArea}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Work Shift</label>
-                      <p className="text-gray-900 capitalize">{selectedTechnician.workShift}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Experience</label>
-                      <p className="text-gray-900">{selectedTechnician.experience} years</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Salary</label>
-                      <p className="text-gray-900 font-medium">₹{selectedTechnician.salary.toLocaleString()}</p>
-                    </div>
-                    {selectedTechnician.specialization && (
-                      <div className="md:col-span-2">
-                        <label className="text-sm font-medium text-gray-500">Specialization</label>
-                        <p className="text-gray-900">{selectedTechnician.specialization}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Skills */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Skills & Expertise</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedTechnician.skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Status and Dates */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Status & Timeline</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Current Status</label>
-                      <div className="mt-1">{getStatusBadge(selectedTechnician.status)}</div>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Join Date</label>
-                      <p className="text-gray-900">{new Date(selectedTechnician.joinDate).toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Last Active</label>
-                      <p className="text-gray-900">
-                        {new Date(selectedTechnician.lastActive).toLocaleDateString()}{' '}
-                        {new Date(selectedTechnician.lastActive).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Technician Dialog */}
-        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Technician</DialogTitle>
-              <DialogDescription>Update technician information</DialogDescription>
-            </DialogHeader>
-            {selectedTechnician && (
-              <EditTechnicianForm
-                technician={selectedTechnician}
-                onClose={() => setShowEditDialog(false)}
-                onSuccess={handleEditSuccess}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
+              {/* Edit Technician Dialog */}
+              <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Edit Technician</DialogTitle>
+                    <DialogDescription>
+                      Update technician information for {selectedTechnician?.name}
+                    </DialogDescription>
+                  </DialogHeader>
+                  {selectedTechnician && (
+                    <EditTechnicianForm
+                      technician={selectedTechnician}
+                      onClose={() => {
+                        setShowEditDialog(false)
+                        setSelectedTechnician(null)
+                      }}
+                      onSuccess={handleEditSuccess}
+                    />
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </main>
       </div>
-    </DashboardLayout>
-  )
+    </div>
+  </DashboardLayout>
+)
 }

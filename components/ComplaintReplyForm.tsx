@@ -11,7 +11,8 @@ import { toast } from "sonner"
 interface ComplaintReplyFormProps {
   complaintId: string
   onClose: () => void
-  onSuccess?: () => void
+  onSuccess: () => void
+  userId?: string // Add this line
 }
 
 export default function ComplaintReplyForm({ complaintId, onClose, onSuccess }: ComplaintReplyFormProps) {

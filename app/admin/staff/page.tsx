@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
@@ -26,15 +27,18 @@ import {
   Phone,
   Eye,
   Edit,
+  MoreHorizontal,
   Trash2,
   Download,
   UserPlus,
   Shield,
   Mail,
   Plus,
+  AlertCircle,
   Filter,
   RefreshCw,
 } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { formatDate, exportToCSV } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { staffApi } from "@/lib/api"
@@ -153,6 +157,7 @@ export default function StaffPage() {
   const [activeTab, setActiveTab] = useState("staff")
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   // NEW STATE VARIABLES FOR VIEW DIALOG
   const [showViewStaffDialog, setShowViewStaffDialog] = useState(false)
   const [viewingStaff, setViewingStaff] = useState<Staff | null>(null)
@@ -266,347 +271,523 @@ export default function StaffPage() {
   const totalStaff = staff.length
   const activeStaff = staff.length
 
-  return (
-    <DashboardLayout title="Admin Settings" description="System configuration and user management">
-      <div className="space-y-4 sm:space-y-6 p-2 sm:p-4 lg:p-2  ">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-          {loading ? (
-            <>
-              <StatsCardSkeleton />
-              <StatsCardSkeleton />
-              <StatsCardSkeleton />
-              <StatsCardSkeleton />
-            </>
-          ) : (
-            <>
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Total Staff</CardTitle>
-                  <div className="p-2 bg-blue-500 rounded-lg">
-                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+return (
+  <DashboardLayout title="Admin Settings" description="System configuration and user management">
+    <div className="min-h-screen bg-gray-50 overflow-hidden">
+      <div className="grid grid-cols-1">
+        <main className="h-[calc(100vh-4rem)]">
+          <div className="max-w-7xl mx-auto">
+            <div className="space-y-4">
+              {/* Error Alert */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                    <p className="text-red-800">{error}</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={fetchStaffData}
+                      className="ml-auto"
+                    >
+                      Retry
+                    </Button>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{totalStaff}</div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">{activeStaff} active users</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Active Staff</CardTitle>
-                  <div className="p-2 bg-green-500 rounded-lg">
-                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{activeStaff}</div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Currently online</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Admin Users</CardTitle>
-                  <div className="p-2 bg-purple-500 rounded-lg">
-                    <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
-                    {staff.filter(s => s.role === 'admin').length}
-                  </div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">With admin access</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Regular Staff</CardTitle>
-                  <div className="p-2 bg-orange-500 rounded-lg">
-                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
-                    {staff.filter(s => s.role === 'staff').length}
-                  </div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Standard access</p>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
-
-        {/* Main Content */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-          <div className="flex flex-col space-y-4 lg:flex-row lg:justify-between lg:items-center lg:space-y-0 lg:space-x-4">
-            <TabsList className="grid w-full max-w-md grid-cols-2 h-9 sm:h-10">
-              <TabsTrigger value="staff" className="text-xs sm:text-sm">Admin Staff</TabsTrigger>
-              <TabsTrigger value="roles" className="text-xs sm:text-sm">Roles & Permissions</TabsTrigger>
-            </TabsList>
-            
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-auto">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={fetchStaffData} 
-                disabled={loading}
-                className="flex-1 sm:flex-none h-9 sm:h-10"
-              >
-                <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                <span className="text-xs sm:text-sm">Refresh</span>
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleExport} 
-                className="flex-1 sm:flex-none bg-transparent h-9 sm:h-10"
-              >
-                <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                <span className="text-xs sm:text-sm">Export</span>
-              </Button>
-              
-              {activeTab === "staff" ? (
-                <>
-                  <Dialog open={showAddStaffDialog} onOpenChange={setShowAddStaffDialog}>
-                    <DialogTrigger asChild>
-                      <Button className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 h-9 sm:h-10">
-                        <UserPlus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                        <span className="text-xs sm:text-sm">Add Staff</span>
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto mx-auto">
-                      <DialogHeader>
-                        <DialogTitle className="text-lg sm:text-xl">Add New Admin Staff</DialogTitle>
-                        <DialogDescription className="text-sm">Create a new admin user account</DialogDescription>
-                      </DialogHeader>
-                      <AddStaffForm onClose={() => setShowAddStaffDialog(false)} onSuccess={handleAddStaffSuccess} />
-                    </DialogContent>
-                  </Dialog>
-
-                  <Dialog open={showEditStaffDialog} onOpenChange={setShowEditStaffDialog}>
-                    <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto mx-auto">
-                      <DialogHeader>
-                        <DialogTitle className="text-lg sm:text-xl">Edit Staff Member</DialogTitle>
-                        <DialogDescription className="text-sm">Update staff member information</DialogDescription>
-                      </DialogHeader>
-                      {editingStaff && (
-                        <EditStaffForm
-                          staff={editingStaff}
-                          onClose={() => setShowEditStaffDialog(false)}
-                          onSuccess={() => {
-                            setShowEditStaffDialog(false)
-                            fetchStaffData()
-                            toast({
-                              title: "Staff Updated",
-                              description: "Staff member has been updated successfully!",
-                            })
-                          }}
-                        />
-                      )}
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* NEW VIEW STAFF DIALOG */}
-                  <Dialog open={showViewStaffDialog} onOpenChange={setShowViewStaffDialog}>
-                    <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto mx-auto">
-                      <DialogHeader>
-                        <DialogTitle className="text-lg sm:text-xl flex items-center space-x-2">
-                          <Users className="h-5 w-5" />
-                          <span>Staff Details</span>
-                        </DialogTitle>
-                        <DialogDescription className="text-sm">
-                          View detailed information for {viewingStaff?.profileDetail.name}
-                        </DialogDescription>
-                      </DialogHeader>
-                      {viewingStaff && (
-                        <ViewStaffDialog
-                          staff={viewingStaff}
-                          onClose={() => setShowViewStaffDialog(false)}
-                        />
-                      )}
-                    </DialogContent>
-                  </Dialog>
-                </>
-              ) : (
-                <Button variant="outline" className="flex-1 sm:flex-none bg-transparent h-9 sm:h-10" disabled>
-                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                  <span className="text-xs sm:text-sm">Create Role (Coming Soon)</span>
-                </Button>
+                </div>
               )}
-            </div>
-          </div>
 
-          {/* Staff Tab */}
-          <TabsContent value="staff" className="space-y-4 sm:space-y-6">
-            {loading ? (
-              <TableSkeleton />
-            ) : (
-              <>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-                  <div className="relative flex-1 max-w-md w-full">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Search staff..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 h-9 sm:h-10"
-                    />
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+                {loading ? (
+                  <>
+                    <StatsCardSkeleton />
+                    <StatsCardSkeleton />
+                    <StatsCardSkeleton />
+                    <StatsCardSkeleton />
+                  </>
+                ) : (
+                  <>
+                    <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Total Staff</CardTitle>
+                        <div className="p-2 bg-blue-500 rounded-lg flex-shrink-0">
+                          <Users className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 lg:px-6">
+                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{totalStaff}</div>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">{activeStaff} active users</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Active Staff</CardTitle>
+                        <div className="p-2 bg-green-500 rounded-lg flex-shrink-0">
+                          <Users className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 lg:px-6">
+                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{activeStaff}</div>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Currently online</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Admin Users</CardTitle>
+                        <div className="p-2 bg-purple-500 rounded-lg flex-shrink-0">
+                          <Shield className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 lg:px-6">
+                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+                          {staff.filter(s => s.role === 'admin').length}
+                        </div>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">With admin access</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Regular Staff</CardTitle>
+                        <div className="p-2 bg-orange-500 rounded-lg flex-shrink-0">
+                          <Users className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 lg:px-6">
+                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+                          {staff.filter(s => s.role === 'staff').length}
+                        </div>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Standard access</p>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
+              </div>
+
+              {/* Main Content */}
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+                {/* Header Section */}
+                <div className="flex flex-col space-y-4">
+                  {/* Tabs and Actions Row */}
+                  <Card className="shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="flex flex-col lg:flex-row gap-4">
+                        <div className="flex-1">
+                          <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
+                            <TabsTrigger value="staff" className="text-sm">Admin Staff</TabsTrigger>
+                            <TabsTrigger value="roles" className="text-sm">Roles & Permissions</TabsTrigger>
+                          </TabsList>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={fetchStaffData} 
+                            disabled={loading}
+                            className="h-10"
+                          >
+                            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                            Refresh ({filteredStaff.length})
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleExport} 
+                            className="h-10"
+                            disabled={filteredStaff.length === 0}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Export CSV
+                          </Button>
+                        </div>
+                      
+                   
+
+                  {/* Action Buttons Section */}
+                  <div className=" sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex flex-wrap gap-2">
+                      {activeTab === "staff" ? (
+                        <Dialog open={showAddStaffDialog} onOpenChange={setShowAddStaffDialog}>
+                          <DialogTrigger asChild>
+                            <Button className="h-9">
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Add Staff
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>Add New Admin Staff</DialogTitle>
+                              <DialogDescription>Create a new admin user account</DialogDescription>
+                            </DialogHeader>
+                            <AddStaffForm onClose={() => setShowAddStaffDialog(false)} onSuccess={handleAddStaffSuccess} />
+                          </DialogContent>
+                        </Dialog>
+                      ) : (
+                        <Button variant="outline" className="h-9" disabled>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Role (Coming Soon)
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <Select value={roleFilter} onValueChange={setRoleFilter}>
-                    <SelectTrigger className="w-full sm:w-48 h-9 sm:h-10">
-                      <Filter className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-                      <SelectValue placeholder="Filter by role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Roles</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  </div>
+                   </CardContent>
+                  </Card>
                 </div>
 
-                <Card className="border-0 shadow-lg">
-                  <CardHeader className="pb-3 sm:pb-6">
-                    <CardTitle className="text-lg sm:text-xl font-bold text-gray-900">
-                      Admin Staff ({filteredStaff.length})
-                    </CardTitle>
-                    <CardDescription className="text-sm">Manage administrative users and their access</CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-2 sm:px-6">
-                    <div className="overflow-x-auto -mx-2 sm:mx-0">
-                      <div className="inline-block min-w-full align-middle">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="min-w-[200px] px-2 sm:px-4">Staff Details</TableHead>
-                              <TableHead className="min-w-[150px] px-2 sm:px-4">Contact</TableHead>
-                              <TableHead className="min-w-[150px] px-2 sm:px-4">Role & Assignment</TableHead>
-                              <TableHead className="min-w-[100px] px-2 sm:px-4">Status</TableHead>
-                              <TableHead className="min-w-[120px] px-2 sm:px-4">Created Date</TableHead>
-                              <TableHead className="min-w-[120px] px-2 sm:px-4 text-center">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {filteredStaff.map((staffMember) => (
-                              <TableRow key={staffMember.user_id} className="hover:bg-gray-50/50">
-                                <TableCell className="px-2 sm:px-4">
-                                  <div className="flex items-center space-x-2 sm:space-x-3">
-                                    <div className="bg-blue-100 p-1.5 sm:p-2 rounded-lg flex-shrink-0">
-                                      <Users className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="font-medium text-gray-900 text-sm sm:text-base truncate">
-                                        {staffMember.profileDetail.name}
+                {/* Staff Tab */}
+                <TabsContent value="staff" className="space-y-4">
+                  {loading ? (
+                    <TableSkeleton />
+                  ) : (
+                    <>
+                      {/* Search and Filter Section */}
+                      <Card className="shadow-sm">
+                        <CardContent className="p-4">
+                          <div className="flex flex-col lg:flex-row gap-4">
+                            <div className="relative flex-1">
+                              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                              <Input
+                                placeholder="Search by name, email, or ID..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10 h-10"
+                              />
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                                <SelectTrigger className="w-full sm:w-48 h-10">
+                                  <Filter className="h-4 w-4 mr-2" />
+                                  <SelectValue placeholder="Filter by Role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Roles</SelectItem>
+                                  <SelectItem value="staff">Staff</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Main Content Card */}
+                      <Card className="border-0 shadow-lg">
+                        <CardHeader className="pb-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle className="text-xl font-semibold text-gray-900">
+                                Admin Staff ({filteredStaff.length})
+                              </CardTitle>
+                              <CardDescription className="text-gray-600 mt-1">
+                                Manage administrative users and their access
+                                {searchTerm && ` • Filtered by: "${searchTerm}"`}
+                              </CardDescription>
+                            </div>
+                            {loading && (
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                            )}
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="p-0">
+                          {/* Desktop/Tablet Table View with Horizontal Scroll */}
+                          <div className="hidden md:block">
+                            <ScrollArea className="w-full">
+                              <div className="min-w-[1200px]">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-gray-50/50">
+                                      <TableHead className="w-[200px] font-semibold">Staff Details</TableHead>
+                                      <TableHead className="w-[180px] font-semibold">Contact</TableHead>
+                                      <TableHead className="w-[160px] font-semibold">Role & Assignment</TableHead>
+                                      <TableHead className="w-[100px] font-semibold">Status</TableHead>
+                                      <TableHead className="w-[120px] font-semibold">Created Date</TableHead>
+                                      <TableHead className="w-[120px] font-semibold">Actions</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {filteredStaff.map((staffMember) => (
+                                      <TableRow 
+                                        key={staffMember.user_id} 
+                                        className="hover:bg-gray-50/50 transition-colors"
+                                      >
+                                        <TableCell className="py-4">
+                                          <div className="flex items-center space-x-3">
+                                            <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
+                                              <Users className="h-4 w-4 text-blue-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                              <div className="font-medium text-gray-900 truncate">
+                                                {staffMember.profileDetail.name}
+                                              </div>
+                                              <div className="text-sm text-gray-500 truncate">
+                                                ID: {staffMember.user_id.slice(0, 8)}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </TableCell>
+                                        
+                                        <TableCell className="py-4">
+                                          <div className="space-y-1">
+                                            <div className="flex items-center text-sm text-gray-600">
+                                              <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
+                                              <span className="truncate">{staffMember.profileDetail.phone || "N/A"}</span>
+                                            </div>
+                                            <div className="flex items-center text-sm text-gray-600">
+                                              <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
+                                              <span className="truncate">{staffMember.email}</span>
+                                            </div>
+                                          </div>
+                                        </TableCell>
+                                        
+                                        <TableCell className="py-4">
+                                          <div>
+                                            <Badge variant="outline" className="capitalize mb-1">
+                                              {staffMember.role}
+                                            </Badge>
+                                            <div className="text-sm text-gray-500 truncate">
+                                              {staffMember.profileDetail.assignedTo || "Unassigned"}
+                                            </div>
+                                          </div>
+                                        </TableCell>
+                                        
+                                        <TableCell className="py-4">
+                                          <Badge className="bg-green-100 text-green-800">Active</Badge>
+                                        </TableCell>
+                                        
+                                        <TableCell className="py-4">
+                                          <div className="text-sm text-gray-600">
+                                            {formatDate(staffMember.createdAt)}
+                                          </div>
+                                        </TableCell>
+                                        
+                                        <TableCell className="py-4">
+                                          <div className="flex items-center space-x-1">
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => handleViewStaff(staffMember.user_id)}
+                                              className="h-8 w-8"
+                                            >
+                                              <Eye className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              onClick={() => handleEditStaff(staffMember.user_id)}
+                                              className="h-8 w-8"
+                                            >
+                                              <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button 
+                                              variant="ghost" 
+                                              size="icon" 
+                                              onClick={() => handleDeleteStaff(staffMember)}
+                                              className="h-8 w-8 text-red-600 hover:text-red-700"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                              <ScrollBar orientation="horizontal" />
+                            </ScrollArea>
+                            
+                            {/* Empty State for Desktop */}
+                            {filteredStaff.length === 0 && !loading && (
+                              <div className="text-center text-gray-500 py-12">
+                                <div className="flex flex-col items-center">
+                                  <Users className="h-16 w-16 text-gray-300 mb-4" />
+                                  <h3 className="text-lg font-medium mb-2">No staff members found</h3>
+                                  {searchTerm ? (
+                                    <p className="text-sm">Try adjusting your search terms or filters.</p>
+                                  ) : (
+                                    <p className="text-sm">Get started by adding your first staff member.</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Mobile Card View with Vertical Scrolling */}
+                          <div className="md:hidden">
+                            <ScrollArea className="h-[600px] w-full">
+                              <div className="space-y-3 p-4">
+                                {filteredStaff.map((staffMember) => (
+                                  <Card key={staffMember.user_id} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                    <CardContent className="p-4">
+                                      <div className="space-y-4">
+                                        {/* Header */}
+                                        <div className="flex items-start justify-between">
+                                          <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                            <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
+                                              <Users className="h-5 w-5 text-blue-600" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                              <h3 className="font-semibold text-gray-900 truncate text-sm">
+                                                {staffMember.profileDetail.name}
+                                              </h3>
+                                              <p className="text-xs text-gray-500 truncate">
+                                                ID: {staffMember.user_id.slice(0, 8)}
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center space-x-2 flex-shrink-0">
+                                            <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                  <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent className="w-48" align="end">
+                                                <DropdownMenuItem onClick={() => handleViewStaff(staffMember.user_id)}>
+                                                  <Eye className="h-4 w-4 mr-2" />
+                                                  View Details
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleEditStaff(staffMember.user_id)}>
+                                                  <Edit className="h-4 w-4 mr-2" />
+                                                  Edit
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem 
+                                                  className="text-red-600" 
+                                                  onClick={() => handleDeleteStaff(staffMember)}
+                                                >
+                                                  <Trash2 className="h-4 w-4 mr-2" />
+                                                  Delete
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
+                                        </div>
+
+                                        {/* Role and Assignment */}
+                                        <div className="flex items-center justify-between">
+                                          <div>
+                                            <Badge variant="outline" className="capitalize text-xs">
+                                              {staffMember.role}
+                                            </Badge>
+                                            <div className="text-xs text-gray-500 mt-1">
+                                              {staffMember.profileDetail.assignedTo || "Unassigned"}
+                                            </div>
+                                          </div>
+                                          <div className="text-right flex-shrink-0">
+                                            <div className="text-xs text-gray-500">
+                                              Created: {formatDate(staffMember.createdAt)}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Contact Grid */}
+                                        <div className="grid grid-cols-1 gap-2">
+                                          <div className="flex items-center text-sm text-gray-600">
+                                            <Phone className="h-3 w-3 mr-2 text-green-600 flex-shrink-0" />
+                                            <span className="truncate">{staffMember.profileDetail.phone || "N/A"}</span>
+                                          </div>
+                                          <div className="flex items-center text-sm text-gray-600">
+                                            <Mail className="h-3 w-3 mr-2 text-blue-600 flex-shrink-0" />
+                                            <span className="truncate">{staffMember.email}</span>
+                                          </div>
+                                        </div>
                                       </div>
-                                      <div className="text-xs sm:text-sm text-gray-500 truncate">
-                                        ID: {staffMember.user_id.slice(0, 8)}
-                                      </div>
-                                      <div className="text-xs text-gray-400 hidden sm:block">
-                                        Joined: {formatDate(staffMember.createdAt)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="px-2 sm:px-4">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center text-xs sm:text-sm text-gray-600">
-                                      <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
-                                      <span className="truncate">{staffMember.profileDetail.phone}</span>
-                                    </div>
-                                    <div className="flex items-center text-xs sm:text-sm text-gray-600">
-                                      <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
-                                      <span className="truncate max-w-[120px] sm:max-w-[150px]">{staffMember.email}</span>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="px-2 sm:px-4">
-                                  <div>
-                                    <Badge variant="outline" className="capitalize mb-1 text-xs">
-                                      {staffMember.role}
-                                    </Badge>
-                                    <div className="text-xs sm:text-sm text-gray-500 truncate">
-                                      {staffMember.profileDetail.assignedTo || "Unassigned"}
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="px-2 sm:px-4">
-                                  <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
-                                </TableCell>
-                                <TableCell className="px-2 sm:px-4">
-                                  <div className="text-xs sm:text-sm text-gray-600">
-                                    {formatDate(staffMember.createdAt)}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="px-2 sm:px-4">
-                                  <div className="flex items-center justify-center space-x-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleViewStaff(staffMember.user_id)}
-                                      className="h-7 w-7 sm:h-8 sm:w-8"
-                                    >
-                                      <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleEditStaff(staffMember.user_id)}
-                                      className="h-7 w-7 sm:h-8 sm:w-8"
-                                    >
-                                      <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                                    </Button>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      onClick={() => handleDeleteStaff(staffMember)}
-                                      className="h-7 w-7 sm:h-8 sm:w-8 text-red-600 hover:text-red-700"
-                                    >
-                                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            {filteredStaff.length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={6} className="text-center text-gray-500 py-8 px-2 sm:px-4">
-                                  <div className="flex flex-col items-center space-y-2">
-                                    <Users className="h-8 w-8 text-gray-400" />
-                                    <div className="text-sm sm:text-base">No staff members found</div>
-                                    {searchTerm && (
-                                      <div className="text-xs sm:text-sm">Try adjusting your search terms</div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+
+                                {/* Empty State for Mobile */}
+                                {filteredStaff.length === 0 && !loading && (
+                                  <div className="text-center text-gray-500 py-12">
+                                    <Users className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                                    <h3 className="text-lg font-medium mb-2">No staff members found</h3>
+                                    {searchTerm ? (
+                                      <p className="text-sm">Try adjusting your search terms or filters.</p>
+                                    ) : (
+                                      <p className="text-sm">Get started by adding your first staff member.</p>
                                     )}
                                   </div>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-          </TabsContent>
+                                )}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+                </TabsContent>
 
-          {/* Roles Tab */}
-          <TabsContent value="roles" className="space-y-6">
-            <div className="text-center py-8 sm:py-12">
-              <Shield className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-base sm:text-lg font-medium text-gray-900">Roles & Permissions</h3>
-              <p className="text-gray-500 mt-2 text-sm sm:text-base">This feature is coming soon.</p>
-              <p className="text-xs sm:text-sm text-gray-400 mt-1">Role management will be available in the next update.</p>
+                {/* Roles Tab */}
+                <TabsContent value="roles" className="space-y-6">
+                  <Card className="border-0 shadow-lg">
+                    <CardContent className="p-8">
+                      <div className="text-center py-8 sm:py-12">
+                        <Shield className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-base sm:text-lg font-medium text-gray-900">Roles & Permissions</h3>
+                        <p className="text-gray-500 mt-2 text-sm sm:text-base">This feature is coming soon.</p>
+                        <p className="text-xs sm:text-sm text-gray-400 mt-1">Role management will be available in the next update.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Dialogs */}
+                <Dialog open={showEditStaffDialog} onOpenChange={setShowEditStaffDialog}>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Edit Staff Member</DialogTitle>
+                      <DialogDescription>Update staff member information</DialogDescription>
+                    </DialogHeader>
+                    {editingStaff && (
+                      <EditStaffForm
+                        staff={editingStaff}
+                        onClose={() => setShowEditStaffDialog(false)}
+                        onSuccess={() => {
+                          setShowEditStaffDialog(false)
+                          fetchStaffData()
+                          toast({
+                            title: "Staff Updated",
+                            description: "Staff member has been updated successfully!",
+                          })
+                        }}
+                      />
+                    )}
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={showViewStaffDialog} onOpenChange={setShowViewStaffDialog}>
+                  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center space-x-2">
+                        <Users className="h-5 w-5" />
+                        <span>Staff Details</span>
+                      </DialogTitle>
+                      <DialogDescription>
+                        View detailed information for {viewingStaff?.profileDetail.name}
+                      </DialogDescription>
+                    </DialogHeader>
+                    {viewingStaff && (
+                      <ViewStaffDialog
+                        staff={viewingStaff}
+                        onClose={() => setShowViewStaffDialog(false)}
+                      />
+                    )}
+                  </DialogContent>
+                </Dialog>
+              </Tabs>
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </main>
       </div>
-    </DashboardLayout>
-  )
+    </div>
+  </DashboardLayout>
+)
 }
 
 function AddStaffForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {

@@ -18,9 +18,10 @@ interface Operator {
   planAssigned: string
 }
 
-interface EditOperatorFormProps {
-  operator: Operator
-  onClose: () => void
+export interface EditOperatorFormProps {
+  operator: Operator;
+  onClose: () => void;
+  onSuccess?: (updatedOperator?: any) => Promise<void>; // Add this line
 }
 
 export default function EditOperatorForm({ operator, onClose }: EditOperatorFormProps) {

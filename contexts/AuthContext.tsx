@@ -41,6 +41,7 @@ export interface User {
   lastLogin?: string
 }
 
+// In AuthContext.tsx, update the Operator interface:
 export interface Operator extends User {
   id: string
   companyName: string
@@ -57,13 +58,21 @@ export interface Operator extends User {
   customerCount: number
   gstNumber: string
   businessType: string
-  serviceCapacity: any
+  serviceCapacity: {
+    connections: number
+    olts: number // Add this to match OperatorDetailsView
+    bandwidth?: string // Keep existing if needed
+  }
   apiAccess: any
   status: "active" | "inactive" | "suspended"
   createdAt: string
   updatedAt: string
+  // Add the missing properties that OperatorDetailsView expects:
+  technicianCount: number
+  expiryDate: string
+  lastRenewed: string
+  nextBillDate: string
 }
-
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<void>

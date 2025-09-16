@@ -65,49 +65,71 @@ export default function OperatorsPage() {
   const { toast } = useToast()
 
   // Transform User to Operator helper function
-  const transformUserToOperator = useCallback((user: User): Operator => {
-    return {
-      ...user,
-      id: user.user_id,
-      companyName: user.profileDetail?.companyName || user.profileDetail?.name || "Unknown Company",
-      ownerName: user.profileDetail?.name || "Unknown Owner",
-      phone: user.profileDetail?.phone || "",
-      email: user.email || "",
-      address: user.profileDetail?.address || {
-        state: "N/A",
-        district: "N/A", 
-        area: "N/A",
-      },
-      planAssigned: user.profileDetail?.planAssigned || "Basic",
-      revenue: user.profileDetail?.revenue || 0,
-      customerCount: user.profileDetail?.customerCount || 0,
-      gstNumber: user.profileDetail?.gstNumber || "",
-      businessType: user.profileDetail?.businessType || "General Business",
-      serviceCapacity: user.profileDetail?.serviceCapacity || {
-        connections: 100,
-        bandwidth: "100 Mbps"
-      },
-      apiAccess: user.profileDetail?.apiAccess || {
-        enabled: false,
-        apiKey: "",
-        lastUsed: null
-      },
-      status: user.status || "active",
-      createdAt: user.createdAt || new Date().toISOString(),
-      updatedAt: user.updatedAt || new Date().toISOString(),
-    }
-  }, [])
-
+ // In your OperatorsPage, update the transform function:
+const transformUserToOperator = useCallback((user: User): Operator => {
+  return {
+    ...user,
+    id: user.user_id,
+    companyName: user.profileDetail?.companyName || user.profileDetail?.name || "Unknown Company",
+    ownerName: user.profileDetail?.name || "Unknown Owner",
+    phone: user.profileDetail?.phone || "",
+    email: user.email || "",
+    address: user.profileDetail?.address || {
+      state: "N/A",
+      district: "N/A", 
+      area: "N/A",
+    },
+    planAssigned: user.profileDetail?.planAssigned || "Basic",
+    revenue: user.profileDetail?.revenue || 0,
+    customerCount: user.profileDetail?.customerCount || 0,
+    gstNumber: user.profileDetail?.gstNumber || "",
+    businessType: user.profileDetail?.businessType || "General Business",
+    serviceCapacity: {
+      connections: user.profileDetail?.serviceCapacity?.connections || 100,
+      olts: user.profileDetail?.serviceCapacity?.olts || 0, // Add this
+      bandwidth: user.profileDetail?.serviceCapacity?.bandwidth || "100 Mbps"
+    },
+    apiAccess: user.profileDetail?.apiAccess || {
+      enabled: false,
+      apiKey: "",
+      lastUsed: null
+    },
+    status: user.status || "active",
+    createdAt: user.createdAt || new Date().toISOString(),
+    updatedAt: user.updatedAt || new Date().toISOString(),
+    // Add the missing properties:
+    technicianCount: user.profileDetail?.technicianCount || 0,
+    expiryDate: user.profileDetail?.expiryDate || new Date().toISOString(),
+    lastRenewed: user.profileDetail?.lastRenewed || new Date().toISOString(),
+    nextBillDate: user.profileDetail?.nextBillDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}, []);
+interface OperatorsResponse {
+  success?: boolean;
+  data?: User[];
+  operators?: User[];
+  message?: string;
+}
   // Fetch operators with proper error handling
-  const fetchOperators = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      console.log("[OperatorsPage] Fetching operators from API...")
-      
-      const response = await operatorApi.getAll()
-      const operatorsData = Array.isArray(response) ? response : response?.data || []
-      
+const fetchOperators = useCallback(async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    console.log("[OperatorsPage] Fetching operators from API...");
+    
+    const response = await operatorApi.getAll() as OperatorsResponse;
+    
+    let operatorsData: User[] = [];
+    
+    if (Array.isArray(response)) {
+      operatorsData = response;
+    } else if (response) {
+      if (Array.isArray(response.data)) {
+        operatorsData = response.data;
+      } else if (Array.isArray(response.operators)) {
+        operatorsData = response.operators;
+      }
+    }
       console.log("[OperatorsPage] Operators fetched successfully:", operatorsData.length, "operators")
       
       const validOperators = operatorsData.filter(operator => 

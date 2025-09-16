@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
@@ -16,7 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Filter, MoreHorizontal, MessageSquare, Eye, UserCheck, Clock, AlertTriangle, CheckCircle, XCircle, Phone, Mail, Calendar, User, FileText, Download, RefreshCw, TrendingUp, Users, Timer } from 'lucide-react'
+import { Plus, Search, Filter, MoreHorizontal, MessageSquare, Eye, UserCheck, Clock, AlertTriangle, CheckCircle, XCircle, Phone, Mail, Calendar, User, FileText, Download, RefreshCw, TrendingUp, Users, Timer, AlertCircle, } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
@@ -56,28 +57,51 @@ export default function ComplaintsPage() {
   const [showReplyDialog, setShowReplyDialog] = useState(false)
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
   const { user } = useAuth() // Get user context
 
   // Fetch complaints from API
   const fetchComplaints = async () => {
-    try {
-      setLoading(true)
-      const response = await complaintApi.getAll()
-      setComplaints(response || [])
-    } catch (error) {
-      console.error("Error fetching complaints:", error)
-      toast({
-        title: "Error Loading Complaints",
-        description: "Failed to load complaints. Please try again.",
-        variant: "destructive",
-      })
-      setComplaints([])
-    } finally {
-      setLoading(false)
-    }
+  try {
+    setLoading(true)
+    const response = await complaintApi.getAll()
+    
+    // Map API response to match your Complaint interface
+    const mappedComplaints = response.map((item: any) => ({
+      id: item.id || item._id || '',
+      title: item.title || '',
+      description: item.description || '',
+      category: item.category || '',
+      priority: item.priority || 'medium',
+      status: item.status || 'open',
+      customerInfo: {
+        name: item.customerInfo?.name || item.customerName || '',
+        email: item.customerInfo?.email || item.customerEmail || '',
+        phone: item.customerInfo?.phone || item.customerPhone || '',
+        customerId: item.customerInfo?.customerId || item.customerId || ''
+      },
+      assignedTo: item.assignedTo || '',
+      createdAt: item.createdAt || item.createdDate || '',
+      updatedAt: item.updatedAt || item.updatedDate || '',
+      source: item.source || 'web',
+      expectedResolution: item.expectedResolution,
+      replies: item.replies || item.messageCount || 0
+    }))
+    
+    setComplaints(mappedComplaints)
+  } catch (error) {
+    console.error("Error fetching complaints:", error)
+    toast({
+      title: "Error Loading Complaints",
+      description: "Failed to load complaints. Please try again.",
+      variant: "destructive",
+    })
+    setComplaints([])
+  } finally {
+    setLoading(false)
   }
-
+}
   useEffect(() => {
     fetchComplaints()
   }, [])
@@ -234,421 +258,523 @@ export default function ComplaintsPage() {
     avgResponseTime: "2.5 hours", // This should be calculated from API data
   }
 
-  return (
-    <DashboardLayout title="Complaint Management" description="Manage customer complaints and support tickets">
-      <div className="space-y-4 md:space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-4">
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-3 md:p-4">
-              <div className="flex items-center space-x-2">
-                <FileText className="h-6 w-6 md:h-8 md:w-8 text-blue-600 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-lg md:text-2xl font-bold text-gray-900 truncate">{stats.total}</p>
-                  <p className="text-xs md:text-sm text-gray-600">Total</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-3 md:p-4">
-              <div className="flex items-center space-x-2">
-                <Clock className="h-6 w-6 md:h-8 md:w-8 text-blue-600 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-lg md:text-2xl font-bold text-gray-900 truncate">{stats.open}</p>
-                  <p className="text-xs md:text-sm text-gray-600">Open</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-3 md:p-4">
-              <div className="flex items-center space-x-2">
-                <Timer className="h-6 w-6 md:h-8 md:w-8 text-yellow-600 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-lg md:text-2xl font-bold text-gray-900 truncate">{stats.inProgress}</p>
-                  <p className="text-xs md:text-sm text-gray-600">Progress</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-3 md:p-4">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-6 w-6 md:h-8 md:w-8 text-green-600 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-lg md:text-2xl font-bold text-gray-900 truncate">{stats.resolved}</p>
-                  <p className="text-xs md:text-sm text-gray-600">Resolved</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg col-span-2 md:col-span-1">
-            <CardContent className="p-3 md:p-4">
-              <div className="flex items-center space-x-2">
-                <TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-purple-600 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-lg md:text-2xl font-bold text-gray-900 truncate">{stats.avgResponseTime}</p>
-                  <p className="text-xs md:text-sm text-gray-600">Avg Response</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          {/* Search and Filter Row */}
-          <div className="flex flex-col lg:flex-row gap-2 lg:gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search complaints..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="grid grid-cols-3 lg:flex lg:space-x-2 gap-2">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="min-w-0 lg:w-36">
-                  <Filter className="h-4 w-4 mr-1 lg:mr-2 flex-shrink-0" />
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="in-progress">In Progress</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                  <SelectItem value="escalated">Escalated</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="min-w-0 lg:w-36">
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priority</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="min-w-0 lg:w-36">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="technical">Technical</SelectItem>
-                  <SelectItem value="billing">Billing</SelectItem>
-                  <SelectItem value="service">Service</SelectItem>
-                  <SelectItem value="installation">Installation</SelectItem>
-                  <SelectItem value="support">Support</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Action Buttons Row */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchComplaints}
-              disabled={loading}
-              className="w-full sm:w-auto bg-transparent"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} className="w-full sm:w-auto bg-transparent">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-              <DialogTrigger asChild>
-                <Button className="w-full sm:w-auto">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Complaint
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create New Complaint</DialogTitle>
-                  <DialogDescription>Register a new customer complaint with complete details</DialogDescription>
-                </DialogHeader>
-                <AddComplaintForm 
-                  onClose={() => setShowAddDialog(false)} 
-                  onSuccess={handleAddSuccess}
-                  userId={user?.user_id} 
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-
-        <Card className="border-0 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg md:text-xl">All Complaints ({filteredComplaints.length})</CardTitle>
-            <CardDescription>Complete list of customer complaints and their current status</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600">Loading complaints...</span>
-              </div>
-            ) : (
-              <>
-                {/* Enhanced Mobile/Tablet Card View */}
-                <div className="xl:hidden space-y-3 p-3 md:p-4">
-                  {filteredComplaints.map((complaint) => (
-                    <Card key={complaint.id} className="border border-gray-200 shadow-sm">
-                      <CardContent className="p-4">
-                        <div className="space-y-3">
-                          {/* Header with ID, status and actions */}
-                          <div className="flex items-start justify-between">
-                            <div className="flex flex-col space-y-2 flex-1 min-w-0">
-                              <div className="flex items-center space-x-2">
-                                <div className="font-medium text-blue-600 text-sm truncate">{complaint.id}</div>
-                                {getPriorityBadge(complaint.priority)}
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                {getStatusBadge(complaint.status)}
-                                <Badge variant="outline" className="capitalize text-xs">
-                                  {complaint.category}
-                                </Badge>
-                              </div>
-                            </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-48" align="end">
-                                <DropdownMenuItem onClick={() => handleReply(complaint)}>
-                                  <MessageSquare className="h-4 w-4 mr-2" />
-                                  Reply ({complaint.replies || 0})
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleAssign(complaint, "Technical Team")}>
-                                  <UserCheck className="h-4 w-4 mr-2" />
-                                  Assign Technical
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleAssign(complaint, "Billing Team")}>
-                                  <UserCheck className="h-4 w-4 mr-2" />
-                                  Assign Billing
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleStatusUpdate(complaint, "resolved")}>
-                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                  Mark Resolved
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleStatusUpdate(complaint, "escalated")}>
-                                  <AlertTriangle className="h-4 w-4 mr-2" />
-                                  Escalate
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-
-                          {/* Title and description */}
-                          <div>
-                            <div className="font-medium text-gray-900 mb-1 text-sm md:text-base line-clamp-1">
-                              {complaint.title}
-                            </div>
-                            <div className="text-sm text-gray-500 line-clamp-2">{complaint.description}</div>
-                          </div>
-
-                          {/* Customer info */}
-                          <div className="space-y-1 text-sm">
-                            <div className="font-medium text-gray-900">{complaint.customerInfo?.name || "N/A"}</div>
-                            <div className="flex items-center text-gray-600">
-                              <User className="h-3 w-3 mr-1 flex-shrink-0" />
-                              <span className="truncate">{complaint.customerInfo?.customerId || "N/A"}</span>
-                            </div>
-                            <div className="flex items-center text-gray-600">
-                              <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
-                              <span className="truncate">{complaint.customerInfo?.phone || "N/A"}</span>
-                            </div>
-                          </div>
-
-                          {/* Footer with assignment and date */}
-                          <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
-                            <div className="flex items-center text-gray-500 min-w-0 flex-1">
-                              <Users className="h-3 w-3 mr-1 flex-shrink-0" />
-                              <span className="truncate">{complaint.assignedTo || "Unassigned"}</span>
-                            </div>
-                            <div className="text-gray-500 flex items-center flex-shrink-0 ml-2">
-                              <Calendar className="h-3 w-3 mr-1" />
-                              {complaint.createdAt ? new Date(complaint.createdAt).toLocaleDateString() : "N/A"}
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-
-                  {filteredComplaints.length === 0 && (
-                    <div className="text-center text-gray-500 py-8">
-                      <FileText className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-                      <p>No complaints found.</p>
-                      {searchTerm && <p className="text-sm">Try adjusting your search terms.</p>}
-                    </div>
-                  )}
-                </div>
-
-                {/* Desktop Table View - Enhanced Responsiveness */}
-                <div className="hidden xl:block">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="min-w-[100px] w-[100px]">ID</TableHead>
-                          <TableHead className="min-w-[250px] w-[250px]">Complaint</TableHead>
-                          <TableHead className="min-w-[180px] w-[180px]">Customer</TableHead>
-                          <TableHead className="min-w-[100px] w-[100px]">Category</TableHead>
-                          <TableHead className="min-w-[80px] w-[80px]">Priority</TableHead>
-                          <TableHead className="min-w-[100px] w-[100px]">Status</TableHead>
-                          <TableHead className="min-w-[120px] w-[120px]">Assigned To</TableHead>
-                          <TableHead className="min-w-[100px] w-[100px]">Created</TableHead>
-                          <TableHead className="min-w-[80px] w-[80px]">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredComplaints.map((complaint) => (
-                          <TableRow key={complaint.id}>
-                            <TableCell>
-                              <div className="font-medium text-blue-600 text-sm">{complaint.id}</div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="font-medium text-gray-900 text-sm truncate max-w-[220px]" title={complaint.title}>
-                                  {complaint.title}
-                                </div>
-                                <div className="text-xs text-gray-500 truncate max-w-[220px]" title={complaint.description}>
-                                  {complaint.description}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="font-medium text-gray-900 text-sm truncate max-w-[160px]">
-                                  {complaint.customerInfo?.name || "N/A"}
-                                </div>
-                                <div className="text-xs text-gray-500 flex items-center">
-                                  <User className="h-3 w-3 mr-1 flex-shrink-0" />
-                                  <span className="truncate max-w-[120px]">
-                                    {complaint.customerInfo?.customerId || "N/A"}
-                                  </span>
-                                </div>
-                                <div className="text-xs text-gray-500 flex items-center">
-                                  <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
-                                  <span className="truncate max-w-[120px]">
-                                    {complaint.customerInfo?.phone || "N/A"}
-                                  </span>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="capitalize text-xs">
-                                {complaint.category}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{getPriorityBadge(complaint.priority)}</TableCell>
-                            <TableCell>{getStatusBadge(complaint.status)}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center text-sm text-gray-600">
-                                <Users className="h-3 w-3 mr-1 flex-shrink-0" />
-                                <span className="truncate max-w-[100px]" title={complaint.assignedTo || "Unassigned"}>
-                                  {complaint.assignedTo || "Unassigned"}
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm text-gray-600">
-                                {complaint.createdAt ? new Date(complaint.createdAt).toLocaleDateString() : "N/A"}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-64" align="end">
-                                  <DropdownMenuItem onClick={() => handleReply(complaint)}>
-                                    <MessageSquare className="h-4 w-4 mr-2" />
-                                    Reply ({complaint.replies || 0})
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleAssign(complaint, "Technical Team")}>
-                                    <UserCheck className="h-4 w-4 mr-2" />
-                                    Assign to Technical
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleAssign(complaint, "Billing Team")}>
-                                    <UserCheck className="h-4 w-4 mr-2" />
-                                    Assign to Billing
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleStatusUpdate(complaint, "resolved")}>
-                                    <CheckCircle className="h-4 w-4 mr-2" />
-                                    Mark Resolved
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleStatusUpdate(complaint, "escalated")}>
-                                    <AlertTriangle className="h-4 w-4 mr-2" />
-                                    Escalate
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDelete(complaint.id)} className="text-red-600">
-                                    <XCircle className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {filteredComplaints.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={9} className="text-center text-gray-500 py-8">
-                              No complaints found. {searchTerm && "Try adjusting your search terms."}
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+return (
+  <DashboardLayout title="Complaint Management" description="Manage customer complaints and support tickets">
+    <div className="min-h-screen bg-gray-50 overflow">
+      <div className="grid grid-cols-1">
+        <main className="h-[calc(100vh-4rem)]">
+          <div className="max-w-7xl mx-auto">
+            <div className="space-y-4">
+              {/* Error Alert */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                    <p className="text-red-800">{error}</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={fetchComplaints}
+                      className="ml-auto"
+                    >
+                      Retry
+                    </Button>
                   </div>
                 </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              )}
 
-        {/* Reply Dialog */}
-        <Dialog open={showReplyDialog} onOpenChange={setShowReplyDialog}>
-          <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Reply to Complaint</DialogTitle>
-              <DialogDescription>
-                Send a response to complaint {selectedComplaint?.id} from {selectedComplaint?.customerInfo?.name}
-              </DialogDescription>
-            </DialogHeader>
-            {selectedComplaint && (
-              <ComplaintReplyForm
-                complaintId={selectedComplaint.id}
-                onClose={() => setShowReplyDialog(false)}
-                onSuccess={handleReplySuccess}
-                userId={user?.user_id}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Total</CardTitle>
+                    <div className="p-2 bg-blue-500 rounded-lg flex-shrink-0">
+                      <FileText className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{stats.total}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">All complaints</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Open</CardTitle>
+                    <div className="p-2 bg-orange-500 rounded-lg flex-shrink-0">
+                      <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{stats.open}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Awaiting response</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-yellow-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Progress</CardTitle>
+                    <div className="p-2 bg-yellow-500 rounded-lg flex-shrink-0">
+                      <Timer className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{stats.inProgress}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Being worked on</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Resolved</CardTitle>
+                    <div className="p-2 bg-green-500 rounded-lg flex-shrink-0">
+                      <CheckCircle className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{stats.resolved}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Successfully closed</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100 col-span-2 sm:col-span-3 xl:col-span-1">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                    <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Avg Response</CardTitle>
+                    <div className="p-2 bg-purple-500 rounded-lg flex-shrink-0">
+                      <TrendingUp className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-4 lg:px-6">
+                    <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{stats.avgResponseTime}</div>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Response time</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Header Section */}
+              <div className="flex flex-col space-y-4">
+                {/* Search and Filter Section */}
+                <Card className="shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col lg:flex-row gap-4">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          placeholder="Search complaints by ID, title, or customer..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10 h-10"
+                        />
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                          <SelectTrigger className="w-full sm:w-48 h-10">
+                            <Filter className="h-4 w-4 mr-2" />
+                            <SelectValue placeholder="Filter by Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="open">Open</SelectItem>
+                            <SelectItem value="in-progress">In Progress</SelectItem>
+                            <SelectItem value="resolved">Resolved</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
+                            <SelectItem value="escalated">Escalated</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                          <SelectTrigger className="w-full sm:w-48 h-10">
+                            <SelectValue placeholder="Filter by Priority" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Priority</SelectItem>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="critical">Critical</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                          <SelectTrigger className="w-full sm:w-48 h-10">
+                            <SelectValue placeholder="Filter by Category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            <SelectItem value="technical">Technical</SelectItem>
+                            <SelectItem value="billing">Billing</SelectItem>
+                            <SelectItem value="service">Service</SelectItem>
+                            <SelectItem value="installation">Installation</SelectItem>
+                            <SelectItem value="support">Support</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Action Buttons Section */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchComplaints}
+                      disabled={loading}
+                      className="h-9"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                      Refresh ({filteredComplaints.length})
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleExport} 
+                      className="h-9"
+                      disabled={filteredComplaints.length === 0}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export CSV
+                    </Button>
+                  </div>
+                  
+                  <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+                    <DialogTrigger asChild>
+                      <Button className="h-9">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add New Complaint
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Create New Complaint</DialogTitle>
+                        <DialogDescription>
+                          Register a new customer complaint with complete details
+                        </DialogDescription>
+                      </DialogHeader>
+                      <AddComplaintForm 
+                        onClose={() => setShowAddDialog(false)} 
+                        onSuccess={handleAddSuccess}
+                        userId={user?.user_id} 
+                      />
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </div>
+
+              {/* Main Content Card */}
+              <Card className="border-0 shadow-lg">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-xl font-semibold text-gray-900">
+                        All Complaints ({filteredComplaints.length})
+                      </CardTitle>
+                      <CardDescription className="text-gray-600 mt-1">
+                        Complete list of customer complaints and their current status
+                        {searchTerm && ` • Filtered by: "${searchTerm}"`}
+                      </CardDescription>
+                    </div>
+                    {loading && (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-0">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <span className="ml-2 text-gray-600">Loading complaints...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Desktop/Tablet Table View with Horizontal Scroll */}
+                      <div className="md:block overflow-y">
+                        <ScrollArea className="w-full">
+                          <div className="min-w-[1400px]">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-gray-50/50">
+                                  <TableHead className="w-[100px] font-semibold">ID</TableHead>
+                                  <TableHead className="w-[250px] font-semibold">Complaint</TableHead>
+                                  <TableHead className="w-[180px] font-semibold">Customer</TableHead>
+                                  <TableHead className="w-[100px] font-semibold">Category</TableHead>
+                                  <TableHead className="w-[80px] font-semibold">Priority</TableHead>
+                                  <TableHead className="w-[100px] font-semibold">Status</TableHead>
+                                  <TableHead className="w-[120px] font-semibold">Assigned To</TableHead>
+                                  <TableHead className="w-[100px] font-semibold">Created</TableHead>
+                                  <TableHead className="w-[100px] font-semibold">Actions</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {filteredComplaints.map((complaint, index) => {
+  // Generate a unique key for each row
+  const rowKey = complaint.id || `temp-${index}-${Date.now()}`;
+  
+  return (
+    <TableRow 
+      key={rowKey} 
+      className="hover:bg-gray-50/50 transition-colors"
+    >
+                                    <TableCell className="py-4">
+                                      <div className="font-medium text-blue-600 text-sm">{complaint.id}</div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div className="space-y-1">
+                                        <div className="font-medium text-gray-900 text-sm truncate" title={complaint.title}>
+                                          {complaint.title}
+                                        </div>
+                                        <div className="text-xs text-gray-500 truncate" title={complaint.description}>
+                                          {complaint.description}
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div className="space-y-1">
+                                        <div className="font-medium text-gray-900 text-sm truncate">
+                                          {complaint.customerInfo?.name || "N/A"}
+                                        </div>
+                                        <div className="text-xs text-gray-500 flex items-center">
+                                          <User className="h-3 w-3 mr-1 flex-shrink-0" />
+                                          <span className="truncate">
+                                            {complaint.customerInfo?.customerId || "N/A"}
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-gray-500 flex items-center">
+                                          <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
+                                          <span className="truncate">
+                                            {complaint.customerInfo?.phone || "N/A"}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <Badge variant="outline" className="capitalize text-xs">
+                                        {complaint.category}
+                                      </Badge>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      {getPriorityBadge(complaint.priority)}
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      {getStatusBadge(complaint.status)}
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div className="flex items-center text-sm text-gray-600">
+                                        <Users className="h-3 w-3 mr-1 flex-shrink-0" />
+                                        <span className="truncate" title={complaint.assignedTo || "Unassigned"}>
+                                          {complaint.assignedTo || "Unassigned"}
+                                        </span>
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <div className="text-sm text-gray-600 flex items-center">
+                                        <Calendar className="h-3 w-3 mr-1 flex-shrink-0" />
+                                        {complaint.createdAt ? new Date(complaint.createdAt).toLocaleDateString() : "N/A"}
+                                      </div>
+                                    </TableCell>
+                                    
+                                    <TableCell className="py-4">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className="w-64" align="end">
+                                          <DropdownMenuItem onClick={() => handleReply(complaint)}>
+                                            <MessageSquare className="h-4 w-4 mr-2" />
+                                            Reply ({complaint.replies || 0})
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleAssign(complaint, "Technical Team")}>
+                                            <UserCheck className="h-4 w-4 mr-2" />
+                                            Assign to Technical
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleAssign(complaint, "Billing Team")}>
+                                            <UserCheck className="h-4 w-4 mr-2" />
+                                            Assign to Billing
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleStatusUpdate(complaint, "resolved")}>
+                                            <CheckCircle className="h-4 w-4 mr-2" />
+                                            Mark Resolved
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleStatusUpdate(complaint, "escalated")}>
+                                            <AlertTriangle className="h-4 w-4 mr-2" />
+                                            Escalate
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleDelete(complaint.id)} className="text-red-600">
+                                            <XCircle className="h-4 w-4 mr-2" />
+                                            Delete
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
+                                   </TableRow>
+  );
+})}
+                              </TableBody>
+                            </Table>
+                          </div>
+                          <ScrollBar orientation="horizontal" />
+                        </ScrollArea>
+                        
+                        {/* Empty State for Desktop */}
+                        {filteredComplaints.length === 0 && !loading && (
+                          <div className="text-center text-gray-500 py-12">
+                            <div className="flex flex-col items-center">
+                              <FileText className="h-16 w-16 text-gray-300 mb-4" />
+                              <h3 className="text-lg font-medium mb-2">No complaints found</h3>
+                              {searchTerm ? (
+                                <p className="text-sm">Try adjusting your search terms or filters.</p>
+                              ) : (
+                                <p className="text-sm">Get started by adding your first complaint.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Mobile Card View with Vertical Scrolling */}
+                      <div className="md:hidden">
+                        <ScrollArea className="h-[600px] w-full">
+                          <div className="space-y-3 p-4">
+                            {filteredComplaints.map((complaint) => (
+                              <Card key={complaint.id} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                                <CardContent className="p-4">
+                                  <div className="space-y-4">
+                                    {/* Header with ID, status and actions */}
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex flex-col space-y-2 flex-1 min-w-0">
+                                        <div className="flex items-center space-x-2">
+                                          <div className="font-medium text-blue-600 text-sm truncate">{complaint.id}</div>
+                                          {getPriorityBadge(complaint.priority)}
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                          {getStatusBadge(complaint.status)}
+                                          <Badge variant="outline" className="capitalize text-xs">
+                                            {complaint.category}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className="w-48" align="end">
+                                          <DropdownMenuItem onClick={() => handleReply(complaint)}>
+                                            <MessageSquare className="h-4 w-4 mr-2" />
+                                            Reply ({complaint.replies || 0})
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleAssign(complaint, "Technical Team")}>
+                                            <UserCheck className="h-4 w-4 mr-2" />
+                                            Assign Technical
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleAssign(complaint, "Billing Team")}>
+                                            <UserCheck className="h-4 w-4 mr-2" />
+                                            Assign Billing
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleStatusUpdate(complaint, "resolved")}>
+                                            <CheckCircle className="h-4 w-4 mr-2" />
+                                            Mark Resolved
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleStatusUpdate(complaint, "escalated")}>
+                                            <AlertTriangle className="h-4 w-4 mr-2" />
+                                            Escalate
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+
+                                    {/* Title and description */}
+                                    <div>
+                                      <div className="font-medium text-gray-900 mb-1 text-sm line-clamp-1">
+                                        {complaint.title}
+                                      </div>
+                                      <div className="text-sm text-gray-500 line-clamp-2">{complaint.description}</div>
+                                    </div>
+
+                                    {/* Customer info */}
+                                    <div className="space-y-1">
+                                      <div className="font-medium text-gray-900 text-sm">{complaint.customerInfo?.name || "N/A"}</div>
+                                      <div className="flex items-center text-sm text-gray-600">
+                                        <User className="h-3 w-3 mr-2 text-blue-600 flex-shrink-0" />
+                                        <span className="truncate">{complaint.customerInfo?.customerId || "N/A"}</span>
+                                      </div>
+                                      <div className="flex items-center text-sm text-gray-600">
+                                        <Phone className="h-3 w-3 mr-2 text-green-600 flex-shrink-0" />
+                                        <span className="truncate">{complaint.customerInfo?.phone || "N/A"}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Footer with assignment and date */}
+                                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                                      <div className="flex items-center text-xs text-gray-500 min-w-0 flex-1">
+                                        <Users className="h-3 w-3 mr-1 flex-shrink-0" />
+                                        <span className="truncate">{complaint.assignedTo || "Unassigned"}</span>
+                                      </div>
+                                      <div className="text-xs text-gray-500 flex items-center flex-shrink-0 ml-2">
+                                        <Calendar className="h-3 w-3 mr-1" />
+                                        {complaint.createdAt ? new Date(complaint.createdAt).toLocaleDateString() : "N/A"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+
+                            {/* Empty State for Mobile */}
+                            {filteredComplaints.length === 0 && !loading && (
+                              <div className="text-center text-gray-500 py-12">
+                                <FileText className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                                <h3 className="text-lg font-medium mb-2">No complaints found</h3>
+                                {searchTerm ? (
+                                  <p className="text-sm">Try adjusting your search terms or filters.</p>
+                                ) : (
+                                  <p className="text-sm">Get started by adding your first complaint.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Reply Dialog */}
+              <Dialog open={showReplyDialog} onOpenChange={setShowReplyDialog}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Reply to Complaint</DialogTitle>
+                    <DialogDescription>
+                      Send a response to complaint {selectedComplaint?.id} from {selectedComplaint?.customerInfo?.name}
+                    </DialogDescription>
+                  </DialogHeader>
+                  {selectedComplaint && (
+                    <ComplaintReplyForm
+                      complaintId={selectedComplaint.id}
+                      onClose={() => setShowReplyDialog(false)}
+                      onSuccess={handleReplySuccess}
+                      userId={user?.user_id}
+                    />
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </main>
       </div>
-    </DashboardLayout>
-  )
+    </div>
+  </DashboardLayout>
+)
 }
