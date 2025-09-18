@@ -104,14 +104,22 @@ export default function VendorInventoryPage() {
       })
   }, [])
 
-  const filteredInventory = inventory.filter((item) => {
-    const matchesSearch =
-      item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === "all" || item.category === selectedCategory
-    const matchesStatus = selectedStatus === "all" || item.status === selectedStatus
-    return matchesSearch && matchesCategory && matchesStatus
-  })
+const filteredInventory = inventory.filter((item) => {
+  // Add null/undefined checks for all properties used in filtering
+  const productName = item?.productName || "";
+  const sku = item?.sku || "";
+  const category = item?.category || "";
+  const status = item?.status || "";
+
+  const matchesSearch =
+    productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    sku.toLowerCase().includes(searchTerm.toLowerCase());
+  
+  const matchesCategory = selectedCategory === "all" || category === selectedCategory;
+  const matchesStatus = selectedStatus === "all" || status === selectedStatus;
+  
+  return matchesSearch && matchesCategory && matchesStatus;
+});
 
   const getStatusColor = (status: string) => {
     switch (status) {

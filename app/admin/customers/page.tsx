@@ -100,14 +100,14 @@ export default function CustomersPage() {
         phone: apiUser.profileDetail?.phone || "",
         customerId: apiUser.profileDetail?.customerId || `CUST${apiUser.id || apiUser.user_id}`,
         plan: apiUser.profileDetail?.planId || "basic",
-        connectionStatus: apiUser.status || "pending",
+        connectionStatus:  apiUser.profileDetail?.planStatus|| "pending",
         monthlyCharges: Number(apiUser.profileDetail?.monthlyRate) || 0,
         address: apiUser.profileDetail?.address || "",
         joinDate: apiUser.createdAt ? new Date(apiUser.createdAt).toISOString().split('T')[0] : "",
         lastPayment: apiUser.profileDetail?.lastPayment || "",
         outstandingAmount: Number(apiUser.profileDetail?.outstandingAmount) || 0,
         connectionType: apiUser.profileDetail?.connectionType || "fiber",
-        planId: apiUser.profileDetail?.planId
+        planId: apiUser.profileDetail?.planId,
       }))
       
       setCustomers(transformedCustomers)
@@ -298,8 +298,9 @@ export default function CustomersPage() {
     }
 
     try {
-      await customerApi.update(customer.id, { 
-        status: "suspended"
+      await customerApi.updatePlan(customer.id, { 
+        planId: customer.planId,
+        planStatus: "suspended"
       })
       toast({
         title: "Customer Suspended",
@@ -328,9 +329,11 @@ export default function CustomersPage() {
     }
 
     try {
-      await customerApi.update(customer.id, { 
-        status: "active"
+      await customerApi.updatePlan(customer.id, { 
+        planId: customer.planId,
+        planStatus: "active"
       })
+
       toast({
         title: "Customer Activated",
         description: `${customer.name}'s connection has been activated.`,

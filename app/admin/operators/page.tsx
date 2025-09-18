@@ -362,6 +362,8 @@ const fetchOperators = useCallback(async () => {
   const handleEditSuccess = async (updatedOperator?: any) => {
     console.log("[OperatorsPage] Operator updated successfully:", updatedOperator)
     
+     
+
     setShowEditDialog(false)
     setSelectedOperator(null)
     

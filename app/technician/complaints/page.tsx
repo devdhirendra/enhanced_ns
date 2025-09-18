@@ -84,9 +84,6 @@ export default function ComplaintsPage() {
   const [resolution, setResolution] = useState("")
   const [loading, setLoading] = useState(true)
 
-
- 
-
   useEffect(() => {
     if (user?.user_id) {
       fetchComplaints()
@@ -102,11 +99,10 @@ export default function ComplaintsPage() {
 
       const technicianId = user.profileDetail?.technicianId || user.user_id
       const assignedComplaints = await technicianApi.getAssignedComplaints(technicianId)
-      // const getallcomplaints = await technicianApi.getAllComplaints() 
 
       console.log("[v0] Fetched complaints:", assignedComplaints)
 
-      // Transform API data to component format
+      // Transform API data to component format with normalized priority
       const transformedComplaints = Array.isArray(assignedComplaints)
         ? assignedComplaints.map((complaint) => ({
             id: complaint.complaint_id || complaint.id,
@@ -114,7 +110,7 @@ export default function ComplaintsPage() {
             customer: {
               name: complaint.customerName || "Unknown Customer",
               phone: complaint.customerPhone || "N/A",
-              address: complaint.Area || "Unknown Location",
+              address: complaint.Area || complaint.customerAddress || "Unknown Location",
               email: complaint.customerEmail || "N/A",
               customerId: complaint.customerId || "N/A",
             },
@@ -125,26 +121,24 @@ export default function ComplaintsPage() {
                   ? "Equipment Fault"
                   : complaint.type === "installation"
                     ? "New Installation"
-                    : "Connectivity Issue",
+                    : complaint.category || "Connectivity Issue",
               description: complaint.description || "No description provided",
-              severity: complaint.priority || "medium",
+              severity: complaint.priority ? complaint.priority.toLowerCase() : "medium",
               reportedTime: complaint.createdAt || new Date().toISOString(),
             },
             status: complaint.status || "assigned",
-            priority: complaint.priority || "medium",
+            priority: complaint.priority ? complaint.priority.toLowerCase() : "medium", // Normalize priority to lowercase
             assignedDate: complaint.createdAt || new Date().toISOString(),
             dueDate: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), // 4 hours from now
             estimatedResolution: "2 hours",
             location: { lat: 30.7333, lng: 76.7794 },
             previousComplaints: 0,
-            customerNotes: complaint.CustomerNotes || "",
+            customerNotes: complaint.CustomerNotes || complaint.customerNotes || "",
             technicianNotes: complaint.technicianNotes || "",
           }))
         : []
 
       setComplaints(transformedComplaints)
-
-      // setComplaints(transformedComplaints)
       console.log("[v0] Complaints loaded successfully")
     } catch (error) {
       console.error("[v0] Error fetching complaints:", error)
@@ -166,13 +160,16 @@ export default function ComplaintsPage() {
       complaint.issue.description.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesStatus = statusFilter === "all" || complaint.status === statusFilter
-    const matchesPriority = priorityFilter === "all" || complaint.priority === priorityFilter
+    
+    // Fixed: Case-insensitive priority filtering
+    const matchesPriority = priorityFilter === "all" || complaint.priority.toLowerCase() === priorityFilter.toLowerCase()
 
     return matchesSearch && matchesStatus && matchesPriority
   })
 
   const getPriorityColor = (priority: string) => {
-    switch (priority) {
+    const normalizedPriority = priority.toLowerCase()
+    switch (normalizedPriority) {
       case "high":
         return "bg-red-100 text-red-800 border-red-200"
       case "medium":
@@ -453,7 +450,9 @@ export default function ComplaintsPage() {
                         <h3 className="font-medium text-gray-900">{complaint.issue.category}</h3>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Badge className={getPriorityColor(complaint.priority)}>{complaint.priority}</Badge>
+                        <Badge className={getPriorityColor(complaint.priority)}>
+                          {complaint.priority.charAt(0).toUpperCase() + complaint.priority.slice(1)}
+                        </Badge>
                         <Badge variant="outline">{complaint.ticketNumber}</Badge>
                         {complaint.previousComplaints > 0 && (
                           <Badge variant="outline" className="bg-yellow-50 text-yellow-800">
@@ -647,7 +646,9 @@ function ComplaintDetailsModal({
           <div className="mt-2 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Priority:</span>
-              <Badge className={getPriorityColor(complaint.priority)}>{complaint.priority}</Badge>
+              <Badge className={getPriorityColor(complaint.priority)}>
+                {complaint.priority.charAt(0).toUpperCase() + complaint.priority.slice(1)}
+              </Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Category:</span>
@@ -707,7 +708,8 @@ function ComplaintDetailsModal({
 }
 
 function getPriorityColor(priority: string) {
-  switch (priority) {
+  const normalizedPriority = priority.toLowerCase()
+  switch (normalizedPriority) {
     case "high":
       return "bg-red-100 text-red-800 border-red-200"
     case "medium":

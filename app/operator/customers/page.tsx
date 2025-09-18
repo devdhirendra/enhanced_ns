@@ -44,7 +44,7 @@ import {
 } from "lucide-react"
 import { formatDate, formatCurrency, getStatusColor, exportToCSV } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { operatorApi } from "@/lib/api"
+import { customerApi, operatorApi } from "@/lib/api"
 import { showConfirmationDialog } from "@/lib/confirmation-dialog"
 
 interface Customer {
@@ -90,7 +90,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
-
+ 
   const fetchCustomers = async () => {
     try {
       setLoading(true)
@@ -109,22 +109,6 @@ export default function CustomersPage() {
         console.error("[v0] Error fetching customers:", customersData.reason)
         throw new Error("Failed to fetch customers")
       }
-
-      // if (plansData.status === "fulfilled") {
-      //   console.log("[v0] Plans fetched:", plansData.value.length)
-      //   setPlans(Array.isArray(plansData.value) ? plansData.value : [])
-      // } else {
-      //   console.warn("[v0] Error fetching plans:", plansData.reason)
-      //   // Set default plans if API fails
-      //   setPlans([
-      //     { plan_id: "PLAN001", name: "25 Mbps Basic", speed: "25 Mbps", price: 500, type: "residential" },
-      //     { plan_id: "PLAN002", name: "50 Mbps Basic", speed: "50 Mbps", price: 800, type: "residential" },
-      //     { plan_id: "PLAN003", name: "75 Mbps Standard", speed: "75 Mbps", price: 1000, type: "residential" },
-      //     { plan_id: "PLAN004", name: "100 Mbps Premium", speed: "100 Mbps", price: 1200, type: "residential" },
-      //     { plan_id: "PLAN005", name: "150 Mbps Premium", speed: "150 Mbps", price: 1800, type: "residential" },
-      //     { plan_id: "PLAN006", name: "200 Mbps Business", speed: "200 Mbps", price: 2500, type: "business" },
-      //   ])
-      // }
 
       toast({
         title: "Data Loaded",
@@ -147,6 +131,7 @@ export default function CustomersPage() {
     fetchCustomers()
   }, [])
 
+ 
   const filteredCustomers = customers.filter((customer) => {
     const matchesSearch =
       customer.profileDetail.name.toUpperCase().includes(searchTerm.toUpperCase()) ||
@@ -183,60 +168,73 @@ export default function CustomersPage() {
     setShowCustomerDetailsDialog(true)
   }
 
-  const handleEditCustomer = async (customerId: string) => {
-    try {
-      const customer = customers.find((c) => c.user_id === customerId)
-      if (!customer) return
+ const handleEditCustomer = async (customer: any) => {
+  console.log("Editing customer:", customer);
 
-      // This would open an edit dialog in a real implementation
-      toast({
-        title: "Edit Customer",
-        description: `Opening edit form for customer ${customer.profileDetail.name}`,
-      })
-    } catch (error) {
-      console.error("[v0] Error editing customer:", error)
-      toast({
-        title: "Edit Failed",
-        description: "Failed to edit customer. Please try again.",
-        variant: "destructive",
-      })
-    }
+  try {
+   const payload = {
+      email: customer.email,
+      profileDetail: {
+        name: customer.name,
+        phone: customer.phone,
+        address: customer.address,
+        planId: customer.plan,        // your frontend field "plan"
+        planStatus: customer.status,  // your frontend field "status"
+        monthlyRate: customer.monthly_bill,
+        connectionType: customer.connectionType ?? "fiber", // keep existing or default
+        customerId: customer.profileDetail?.customerId ?? "" // preserve existing
+      }
+    };
+
+    const updatedCustomer = await customerApi.update(customer.user_id, payload);
+
+    console.log("✅ Customer updated successfully:", updatedCustomer);
+
+    return updatedCustomer;
+  } catch (err) {
+    console.error("❌ Customer not updated", err);
   }
+};
+
+
 
   const handleDeleteCustomer = async (customerId: string) => {
-    try {
-      const customer = customers.find((c) => c.user_id === customerId)
-      if (!customer) return
+  try {
+    const customer = customers.find((c) => c.user_id === customerId)
+    if (!customer) return
 
-      const confirmed = await showConfirmationDialog({
-        title: "Delete Customer",
-        message: `Are you sure you want to delete customer "${customer.profileDetail.name}"? This action cannot be undone.`,
-        confirmText: "Delete",
-        cancelText: "Cancel",
-        variant: "destructive",
-      })
+    const confirmed = await showConfirmationDialog({
+      title: "Delete Customer",
+      message: `Are you sure you want to delete customer "${customer.profileDetail.name}"? This action cannot be undone.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "destructive",
+    })
 
-      if (confirmed) {
-        console.log("[v0] Deleting customer:", customerId)
-        await operatorApi.deleteCustomer(customerId)
+    if (confirmed) {
+      console.log("[v0] Deleting customer:", customerId)
 
-        toast({
-          title: "Customer Deleted",
-          description: `Customer ${customer.profileDetail.name} has been deleted successfully.`,
-        })
+      // 🔥 FIX: call the correct API
+      await customerApi.delete(customerId)
 
-        // Refresh the customer list
-        fetchCustomers()
-      }
-    } catch (error) {
-      console.error("[v0] Error deleting customer:", error)
       toast({
-        title: "Delete Failed",
-        description: "Failed to delete customer. Please try again.",
-        variant: "destructive",
+        title: "Customer Deleted",
+        description: `Customer ${customer.profileDetail.name} has been deleted successfully.`,
       })
+
+      // Refresh the customer list
+      fetchCustomers()
     }
+  } catch (error) {
+    console.error("[v0] Error deleting customer:", error)
+    toast({
+      title: "Delete Failed",
+      description: "Failed to delete customer. Please try again.",
+      variant: "destructive",
+    })
   }
+}
+
 
   const customerStats = {
     total: customers.length,
@@ -465,7 +463,7 @@ export default function CustomersPage() {
                             <TableCell>
                               <div>
                                 <div className="font-medium text-gray-900">{customer.profileDetail.name}</div>
-                                <div className="text-sm text-gray-500">{customer.user_id}</div>
+                                <div className="text-sm text-gray-500">{customer.profileDetail.customerId}</div>
                                 <div className="flex items-center text-xs text-gray-400 mt-1">
                                   <MapPin className="h-3 w-3 mr-1" />
                                   <span className="truncate max-w-[180px]">{customer.profileDetail.address}</span>
@@ -520,7 +518,7 @@ export default function CustomersPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => handleEditCustomer(customer.user_id)}
+                                  onClick={() => handleEditCustomer(customer)}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>
@@ -666,20 +664,18 @@ function AddCustomerForm({
       setLoading(true)
       console.log("[v0] Creating customer:", formData)
 
-      const customerData = {
-        email: formData.email,
-        profileDetail: {
-          name: formData.name,
-          phone: formData.phone,
-          address: formData.address,
-          planId: formData.planId,
-          monthlyRate: formData.monthlyRate,
-          connectionDate: formData.connectionDate || new Date().toISOString(),
-          installationType: formData.installationType,
-          technicianId: formData.technicianId,
-          notes: formData.notes,
-        },
-      }
+          const customerData = {
+          email: formData.email,
+          password: "customerpass", // or your default
+          profileDetail: {
+            name: formData.name,
+            phone: formData.phone,
+            address: formData.address,
+            planId: "Basic",
+            connectionType: formData.installationType ,   // ✅ required
+            monthlyRate: 999,          // ✅ required
+          },
+        }
 
       await operatorApi.createCustomer(customerData)
 
@@ -899,6 +895,7 @@ function BulkUploadForm({ onClose }: { onClose: () => void }) {
   )
 }
 
+
 function CustomerDetailsView({ customer }: { customer: Customer }) {
   return (
     <div className="space-y-6">
@@ -913,7 +910,7 @@ function CustomerDetailsView({ customer }: { customer: Customer }) {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Customer ID:</span>
-                <span className="font-medium">{customer.user_id}</span>
+                <span className="font-medium">{customer.profileDetail.customerId}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Phone:</span>

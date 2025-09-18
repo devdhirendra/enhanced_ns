@@ -207,46 +207,92 @@ export default function ComplaintsManagement() {
     }).length,
   }
 
-  const handleAddComplaint = async () => {
-    try {
-      console.log("[v0] Creating new complaint:", newComplaint)
+  // const handleAddComplaint = async () => {
+  //   try {
+  //     console.log("[v0] Creating new complaint:", newComplaint)
 
-      const complaintData = {
-        customerUserId: newComplaint.customerUserId,
-        customerId: newComplaint.customerId,
-        description: newComplaint.description,
-        type: newComplaint.type,
-        priority: newComplaint.priority,
-        technicianId: newComplaint.technicianId,
-      }
+  //     const complaintData = {
+  //       customerUserId: newComplaint.customerUserId,
+  //       customerId: newComplaint.customerId,
+  //       description: newComplaint.description,
+  //       type: newComplaint.type,
+  //       priority: newComplaint.priority,
+  //       technicianId: newComplaint.technicianId,
+  //     }
 
-      await operatorApi.createComplaint(complaintData.customerUserId, complaintData)
+  //     await operatorApi.createComplaint(complaintData.customerUserId, complaintData)
 
-      toast({
-        title: "Complaint Created",
-        description: "New complaint has been created successfully!",
-      })
+  //     toast({
+  //       title: "Complaint Created",
+  //       description: "New complaint has been created successfully!",
+  //     })
 
-      // Reset form and refresh data
-      setNewComplaint({
-        customerUserId: "",
-        customerId: "",
-        description: "",
-        type: "",
-        priority: "medium",
-        technicianId: "",
-      })
-      setIsAddDialogOpen(false)
-      fetchComplaintsData()
-    } catch (error) {
-      console.error("[v0] Error creating complaint:", error)
-      toast({
-        title: "Creation Failed",
-        description: "Failed to create complaint. Please try again.",
-        variant: "destructive",
-      })
+  //     // Reset form and refresh data
+  //     setNewComplaint({
+  //       customerUserId: "",
+  //       customerId: "",
+  //       description: "",
+  //       type: "",
+  //       priority: "medium",
+  //       technicianId: "",
+  //     })
+  //     setIsAddDialogOpen(false)
+  //     fetchComplaintsData()
+  //   } catch (error) {
+  //     console.error("[v0] Error creating complaint:", error)
+  //     toast({
+  //       title: "Creation Failed",
+  //       description: "Failed to create complaint. Please try again.",
+  //       variant: "destructive",
+  //     })
+  //   }
+  // }
+
+    const handleAddComplaint = async () => {
+  try {
+    console.log("[v0] Creating new complaint:", newComplaint)
+
+    const complaintData = {
+      type: newComplaint.type,
+      priority: newComplaint.priority || "medium",
+      description: newComplaint.description,
+      technicianId: newComplaint.technicianId || "",
+      Area: newComplaint.Area || "",          // optional
+      category: newComplaint.category || "",  // optional
+      response: newComplaint.response || "",  // optional
     }
+
+    // ✅ Pass customerUserId as route param
+    await operatorApi.createComplaint(newComplaint.customerUserId, complaintData)
+
+    toast({
+      title: "Complaint Created",
+      description: "New complaint has been created successfully!",
+    })
+
+    // Reset form
+    setNewComplaint({
+      customerUserId: "",
+      customerId: "",
+      description: "",
+      type: "",
+      priority: "medium",
+      technicianId: "",
+      Area: "",
+      category: "",
+      response: "",
+    })
+    setIsAddDialogOpen(false)
+    fetchComplaintsData()
+  } catch (error) {
+    console.error("[v0] Error creating complaint:", error)
+    toast({
+      title: "Creation Failed",
+      description: "Failed to create complaint. Please try again.",
+      variant: "destructive",
+    }) 
   }
+}
 
   const handleStatusUpdate = async (complaintId: string, newStatus: string) => {
     try {

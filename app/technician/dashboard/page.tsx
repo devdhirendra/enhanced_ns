@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
-import { technicianApi, inventoryApi } from "@/lib/api"
+import { technicianApi, inventoryApi, complaintApi } from "@/lib/api"
 import {
   CheckCircle,
   Clock,
@@ -65,24 +65,24 @@ export default function TechnicianDashboardPage() {
 
     try {
       setLoading(true)
-      console.log("[v0] Fetching technician dashboard data...")
+      console.log("[Dashboard] Fetching technician dashboard data...")
 
       // Fetch technician's assigned complaints (tasks)
       const technicianId = user.profileDetail?.technicianId || user.user_id
 
       const [assignedComplaints, technicianStock] = await Promise.all([
         technicianApi.getAssignedComplaints(technicianId).catch((err) => {
-          console.warn("[v0] Failed to fetch complaints:", err)
+          console.warn("[Dashboard] Failed to fetch complaints:", err)
           return []
         }),
         inventoryApi.getTechnicianStock(technicianId).catch((err) => {
-          console.warn("[v0] Failed to fetch inventory:", err)
+          console.warn("[Dashboard] Failed to fetch inventory:", err)
           return []
         }),
       ])
 
-      console.log("[v0] Fetched complaints:", assignedComplaints)
-      console.log("[v0] Fetched inventory:", technicianStock)
+      console.log("[Dashboard] Fetched complaints:", assignedComplaints)
+      console.log("[Dashboard] Fetched inventory:", technicianStock)
 
       // Transform complaints to tasks format
       const transformedTasks = Array.isArray(assignedComplaints)
@@ -96,15 +96,11 @@ export default function TechnicianDashboardPage() {
               address: complaint.Area || "Unknown Location",
             },
             priority: complaint.priority || "medium",
-            status:
-              complaint.status === "assigned"
-                ? "assigned"
-                : complaint.status === "in-progress"
-                  ? "in_progress"
-                  : "assigned",
+            status: mapComplaintStatus(complaint.status), // Use mapping function
             dueTime: new Date().toLocaleTimeString(),
             estimatedDuration: "2 hours",
             location: { lat: 30.7333, lng: 76.7794 },
+            originalStatus: complaint.status, // Keep original for API calls
           }))
         : []
 
@@ -125,14 +121,14 @@ export default function TechnicianDashboardPage() {
 
       // Calculate stats from real data
       const calculatedStats = {
-        tasksCompleted: transformedTasks.filter((t) => t.status === "completed").length,
+        tasksCompleted: transformedTasks.filter((t) => t.status === "completed" || t.status === "resolved").length,
         tasksInProgress: transformedTasks.filter((t) => t.status === "in_progress").length,
-        tasksPending: transformedTasks.filter((t) => t.status === "assigned").length,
+        tasksPending: transformedTasks.filter((t) => t.status === "assigned" || t.status === "open").length,
         customersSatisfied: 45, // This would come from a separate API
         avgResponseTime: "25 min",
         completionRate: 94,
         monthlyTarget: 50,
-        currentMonth: transformedTasks.filter((t) => t.status === "completed").length,
+        currentMonth: transformedTasks.filter((t) => t.status === "completed" || t.status === "resolved").length,
       }
 
       // Generate recent activities from tasks
@@ -163,9 +159,9 @@ export default function TechnicianDashboardPage() {
       setStats(calculatedStats)
       setRecentActivities(activities)
 
-      console.log("[v0] Dashboard data loaded successfully")
+      console.log("[Dashboard] Dashboard data loaded successfully")
     } catch (error) {
-      console.error("[v0] Error fetching dashboard data:", error)
+      console.error("[Dashboard] Error fetching dashboard data:", error)
       toast({
         title: "Error Loading Dashboard",
         description: "Failed to load dashboard data. Using offline mode.",
@@ -185,12 +181,42 @@ export default function TechnicianDashboardPage() {
     }
   }
 
+  // Helper function to map complaint status to display status
+  const mapComplaintStatus = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "open":
+      case "assigned":
+        return "assigned"
+      case "in-progress":
+        return "in_progress"
+      case "resolved":
+      case "closed":
+        return "resolved"
+      default:
+        return "assigned"
+    }
+  }
+
+  // Helper function to map display status back to API status
+  const mapToApiStatus = (displayStatus: string) => {
+    switch (displayStatus) {
+      case "assigned":
+        return "assigned"
+      case "in_progress":
+        return "in-progress"
+      case "resolved":
+        return "resolved"
+      default:
+        return displayStatus
+    }
+  }
+
   if (!user) {
     return <div>Loading...</div>
   }
 
   const getPriorityColor = (priority: string) => {
-    switch (priority) {
+    switch (priority?.toLowerCase()) {
       case "high":
         return "bg-red-100 text-red-800"
       case "medium":
@@ -203,12 +229,14 @@ export default function TechnicianDashboardPage() {
   }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
+      case "resolved":
       case "completed":
         return "bg-green-100 text-green-800"
       case "in_progress":
         return "bg-blue-100 text-blue-800"
       case "assigned":
+      case "open":
         return "bg-orange-100 text-orange-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -216,7 +244,7 @@ export default function TechnicianDashboardPage() {
   }
 
   const getTaskTypeIcon = (type: string) => {
-    switch (type) {
+    switch (type?.toLowerCase()) {
       case "installation":
         return <Zap className="h-4 w-4" />
       case "maintenance":
@@ -241,57 +269,93 @@ export default function TechnicianDashboardPage() {
     }
   }
 
-  const handleStartTask = async (taskId: string) => {
+  const handleStartTask = async (task: any) => {
     try {
-      console.log("[v0] Starting task:", taskId)
+      const taskId = task.id
+      console.log("[Dashboard] Starting task:", taskId)
 
-      // Update complaint status to in-progress
-      await technicianApi.updateComplaint(taskId, {
-        status: "in-progress",
-        technicianNotes: "Task started by technician",
+      // Use the working complaint status change endpoint
+      const updateResult = await complaintApi.changestatus(taskId, {
+        status: "in-progress"
       })
 
-      setTasks(
-        tasks.map((task) =>
-          task.id === taskId ? { ...task, status: "in_progress", startedAt: currentTime.toLocaleTimeString() } : task,
-        ),
+      console.log("[Dashboard] Update result:", updateResult)
+
+      // Update local state optimistically
+      setTasks((prevTasks) =>
+        prevTasks.map((t) =>
+          t.id === taskId
+            ? { 
+                ...t, 
+                status: "in_progress",
+                startedAt: new Date().toLocaleTimeString() 
+              }
+            : t
+        )
       )
+
+      // Update stats
+      setStats(prevStats => ({
+        ...prevStats,
+        tasksInProgress: prevStats.tasksInProgress + 1,
+        tasksPending: Math.max(0, prevStats.tasksPending - 1)
+      }))
 
       toast({
         title: "Task Started",
         description: "Task has been marked as in progress.",
       })
     } catch (error) {
-      console.error("[v0] Error starting task:", error)
+      console.error("[Dashboard] Error starting task:", error)
       toast({
         title: "Error",
-        description: "Failed to start task. Please try again.",
+        description: `Failed to start task: ${error.message || 'Please check network connection'}`,
         variant: "destructive",
       })
     }
   }
 
-  const handleCompleteTask = async (taskId: string) => {
+  const handleCompleteTask = async (task: any) => {
     try {
-      console.log("[v0] Completing task:", taskId)
+      const taskId = task.id
+      console.log("[Dashboard] Completing task:", taskId)
 
-      // Update complaint status to resolved
-      await technicianApi.updateComplaint(taskId, {
-        status: "resolved",
-        technicianNotes: "Task completed successfully",
+      // Use the working complaint status change endpoint
+      const updateResult = await complaintApi.changestatus(taskId, {
+        status: "resolved"
       })
 
-      setTasks(tasks.map((task) => (task.id === taskId ? { ...task, status: "completed" } : task)))
+      console.log("[Dashboard] Complete result:", updateResult)
+
+      // Update local state optimistically
+      setTasks((prevTasks) =>
+        prevTasks.map((t) =>
+          t.id === taskId
+            ? { 
+                ...t, 
+                status: "resolved",
+                completedAt: new Date().toLocaleTimeString() 
+              }
+            : t
+        )
+      )
+
+      // Update stats
+      setStats(prevStats => ({
+        ...prevStats,
+        tasksCompleted: prevStats.tasksCompleted + 1,
+        tasksInProgress: Math.max(0, prevStats.tasksInProgress - 1)
+      }))
 
       toast({
         title: "Task Completed",
         description: "Task has been marked as completed.",
       })
     } catch (error) {
-      console.error("[v0] Error completing task:", error)
+      console.error("[Dashboard] Error completing task:", error)
       toast({
         title: "Error",
-        description: "Failed to complete task. Please try again.",
+        description: `Failed to complete task: ${error.message || 'Please check network connection'}`,
         variant: "destructive",
       })
     }
@@ -303,7 +367,17 @@ export default function TechnicianDashboardPage() {
   }
 
   const handleCallCustomer = (phone: string) => {
-    window.open(`tel:${phone}`)
+    if (phone && phone !== "N/A") {
+      window.open(`tel:${phone}`)
+    }
+  }
+
+  const refreshTasks = async () => {
+    await fetchDashboardData()
+    toast({
+      title: "Tasks Refreshed",
+      description: "Task list has been updated with latest data.",
+    })
   }
 
   if (loading) {
@@ -321,9 +395,9 @@ export default function TechnicianDashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
           <div className="flex items-center space-x-4">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={user.profileDetail.avatar || "/placeholder.svg"} alt={user.profileDetail.name} />
+              <AvatarImage src={user.profileDetail?.avatar || "/placeholder.svg"} alt={user.profileDetail?.name || "User"} />
               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                {user.profileDetail.name
+                {(user.profileDetail?.name || "User")
                   .split(" ")
                   .map((n) => n[0])
                   .join("")
@@ -331,7 +405,7 @@ export default function TechnicianDashboardPage() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user.profileDetail.name}!</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user.profileDetail?.name || "Technician"}!</h1>
               <p className="text-gray-600">
                 {currentTime.toLocaleDateString("en-IN", {
                   weekday: "long",
@@ -401,11 +475,23 @@ export default function TechnicianDashboardPage() {
         {/* Today's Tasks */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Today's Tasks
-            </CardTitle>
-            <CardDescription>Your scheduled tasks for today</CardDescription>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                <div>
+                  <CardTitle>Today's Tasks</CardTitle>
+                  <CardDescription>Your scheduled tasks for today</CardDescription>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={refreshTasks}
+                disabled={loading}
+              >
+                {loading ? "Refreshing..." : "Refresh"}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {tasks.length === 0 ? (
@@ -431,15 +517,17 @@ export default function TechnicianDashboardPage() {
                       <div className="space-y-2 text-sm text-gray-600">
                         <div className="flex items-center space-x-2">
                           <User className="h-4 w-4" />
-                          <span>{task.customer.name}</span>
+                          <span>{task.customer?.name || "Unknown"}</span>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Phone className="h-4 w-4" />
-                          <span>{task.customer.phone}</span>
-                        </div>
+                        {task.customer?.phone && task.customer.phone !== "N/A" && (
+                          <div className="flex items-center space-x-2">
+                            <Phone className="h-4 w-4" />
+                            <span>{task.customer.phone}</span>
+                          </div>
+                        )}
                         <div className="flex items-center space-x-2">
                           <MapPin className="h-4 w-4" />
-                          <span>{task.customer.address}</span>
+                          <span>{task.customer?.address || "Location not specified"}</span>
                         </div>
                         <div className="flex items-center space-x-4">
                           <div className="flex items-center space-x-1">
@@ -456,20 +544,26 @@ export default function TechnicianDashboardPage() {
                               <span className="text-blue-600">Started: {task.startedAt}</span>
                             </div>
                           )}
+                          {task.completedAt && (
+                            <div className="flex items-center space-x-1">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-green-600">Completed: {task.completedAt}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     <div className="flex flex-col space-y-2 lg:ml-4">
                       <Badge className={getStatusColor(task.status)}>
-                        {task.status.replace("_", " ").toUpperCase()}
+                        {task.status === "in_progress" ? "IN PROGRESS" : task.status.toUpperCase()}
                       </Badge>
 
                       <div className="flex flex-wrap gap-2">
                         {task.status === "assigned" && (
                           <Button
                             size="sm"
-                            onClick={() => handleStartTask(task.id)}
+                            onClick={() => handleStartTask(task)}
                             className="bg-blue-600 hover:bg-blue-700"
                           >
                             <Play className="h-4 w-4 mr-1" />
@@ -480,7 +574,7 @@ export default function TechnicianDashboardPage() {
                         {task.status === "in_progress" && (
                           <Button
                             size="sm"
-                            onClick={() => handleCompleteTask(task.id)}
+                            onClick={() => handleCompleteTask(task)}
                             className="bg-green-600 hover:bg-green-700"
                           >
                             <CheckCircle className="h-4 w-4 mr-1" />
@@ -488,15 +582,19 @@ export default function TechnicianDashboardPage() {
                           </Button>
                         )}
 
-                        <Button size="sm" variant="outline" onClick={() => handleNavigate(task.location)}>
-                          <Navigation className="h-4 w-4 mr-1" />
-                          Navigate
-                        </Button>
+                        {task.location && (
+                          <Button size="sm" variant="outline" onClick={() => handleNavigate(task.location)}>
+                            <Navigation className="h-4 w-4 mr-1" />
+                            Navigate
+                          </Button>
+                        )}
 
-                        <Button size="sm" variant="outline" onClick={() => handleCallCustomer(task.customer.phone)}>
-                          <Phone className="h-4 w-4 mr-1" />
-                          Call
-                        </Button>
+                        {task.customer?.phone && task.customer.phone !== "N/A" && (
+                          <Button size="sm" variant="outline" onClick={() => handleCallCustomer(task.customer.phone)}>
+                            <Phone className="h-4 w-4 mr-1" />
+                            Call
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -581,7 +679,7 @@ export default function TechnicianDashboardPage() {
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-orange-600 h-2 rounded-full"
-                  style={{ width: `${(stats.currentMonth / stats.monthlyTarget) * 100}%` }}
+                  style={{ width: `${Math.min(100, (stats.currentMonth / stats.monthlyTarget) * 100)}%` }}
                 ></div>
               </div>
             </div>

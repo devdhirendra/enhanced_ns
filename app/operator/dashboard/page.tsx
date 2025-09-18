@@ -31,7 +31,7 @@ import {
   Star,
 } from "lucide-react"
 import { formatDate, formatCurrency, getStatusColor } from "@/lib/utils"
-import { apiClient } from "@/lib/api"
+import { apiClient, customerApi, operatorApi } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 
 interface DashboardStats {
@@ -281,6 +281,34 @@ setRecentCustomers(
       setLoading(false)
     }
   }
+
+
+const handleEditCustomer = async (customer: any) => {
+  console.log("Editing customer:", customer);
+
+  try {
+    const payload = {
+      email: customer.email,
+      profileDetail: {
+        name: customer.name,
+        phone: customer.phone,
+        address: customer.address,
+        planId: customer.plan,         // your object uses "plan"
+        planStatus: customer.status,   // your object uses "status"
+        monthlyRate: customer.monthly_bill
+      }
+    };
+
+    const updatedCustomer = await customerApi.update(customer.customer_id, payload);
+
+    console.log("✅ Customer updated successfully:", updatedCustomer);
+
+    return updatedCustomer;
+  } catch (err) {
+    console.error("❌ Customer not updated", err);
+  }
+};
+
 
   useEffect(() => {
     fetchDashboardData()
@@ -559,7 +587,8 @@ setRecentCustomers(
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => console.log("Edit customer", customer.customer_id)}
+                                  
+                                  onClick={()=>handleEditCustomer(customer)}
                                 >
                                   <Edit className="h-4 w-4" />
                                 </Button>

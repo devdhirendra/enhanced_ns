@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,14 +32,14 @@ import {
   Filter,
 } from "lucide-react"
 import { inter } from "@/app/layout"
-
+import { taskApi } from "@/lib/api"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface Customer {
   name: string
   phone: string
   address: string
   email: string
-
 }
 
 interface Task {
@@ -97,104 +97,11 @@ interface TaskActionHandlers {
   getTaskTypeIcon: (type: string) => JSX.Element
 }
 
-// Mock data for tasks
-const mockTasks = [
-  {
-    id: "TASK-001",
-    ticketNumber: "TKT-2024-001",
-    type: "installation",
-    title: "Fiber Installation - New Connection",
-    description: "Install new fiber connection for residential customer",
-    customer: {
-      name: "Rajesh Kumar",
-      phone: "+91 9876543210",
-      address: "House 123, Sector 15, Chandigarh",
-      email: "rajesh@example.com",
-    },
-    priority: "high",
-    status: "assigned",
-    assignedDate: "2024-01-20T09:00:00Z",
-    dueDate: "2024-01-20T12:00:00Z",
-    estimatedDuration: "2 hours",
-    location: { lat: 30.7333, lng: 76.7794 },
-    materials: ["Fiber Cable - 50m", "ONT Device", "Router"],
-    notes: "Customer prefers morning installation",
-    createdBy: "Operator Team",
-  },
-  {
-    id: "TASK-002",
-    ticketNumber: "TKT-2024-002",
-    type: "maintenance",
-    title: "Router Replacement",
-    description: "Replace faulty router with new model",
-    customer: {
-      name: "Priya Singh",
-      phone: "+91 9876543211",
-      address: "Flat 45, Sector 22, Chandigarh",
-      email: "priya@example.com",
-    },
-    priority: "medium",
-    status: "in_progress",
-    assignedDate: "2024-01-20T10:00:00Z",
-    dueDate: "2024-01-20T15:00:00Z",
-    estimatedDuration: "1 hour",
-    location: { lat: 30.7614, lng: 76.7911 },
-    materials: ["Router - AC1200", "Ethernet Cable"],
-    notes: "Old router keeps restarting",
-    createdBy: "Customer Support",
-    startedAt: "2024-01-20T13:30:00Z",
-    workNotes: "Confirmed router issue, proceeding with replacement",
-  },
-  {
-    id: "TASK-003",
-    ticketNumber: "TKT-2024-003",
-    type: "repair",
-    title: "Signal Issue Investigation",
-    description: "Investigate and fix signal strength issues",
-    customer: {
-      name: "Amit Sharma",
-      phone: "+91 9876543212",
-      address: "Shop 67, Sector 35, Chandigarh",
-      email: "amit@example.com",
-    },
-    priority: "high",
-    status: "assigned",
-    assignedDate: "2024-01-20T11:00:00Z",
-    dueDate: "2024-01-20T16:00:00Z",
-    estimatedDuration: "1.5 hours",
-    location: { lat: 30.6942, lng: 76.7611 },
-    materials: ["Signal Meter", "Fiber Splitter"],
-    notes: "Customer reports intermittent connectivity",
-    createdBy: "Network Monitoring",
-  },
-  {
-    id: "TASK-004",
-    ticketNumber: "TKT-2024-004",
-    type: "installation",
-    title: "Business Internet Setup",
-    description: "Setup high-speed internet for business customer",
-    customer: {
-      name: "Tech Solutions Pvt Ltd",
-      phone: "+91 9876543213",
-      address: "Office 12, IT Park, Chandigarh",
-      email: "admin@techsolutions.com",
-    },
-    priority: "medium",
-    status: "completed",
-    assignedDate: "2024-01-19T09:00:00Z",
-    dueDate: "2024-01-19T14:00:00Z",
-    estimatedDuration: "3 hours",
-    location: { lat: 30.7046, lng: 76.7179 },
-    materials: ["Fiber Cable - 100m", "Business Router", "Switch"],
-    notes: "Requires dedicated line setup",
-    createdBy: "Sales Team",
-    completedAt: "2024-01-19T13:45:00Z",
-    completionNotes: "Installation completed successfully. Customer satisfied with speed tests.",
-  },
-]
-
 export default function TasksPage() {
-  const [tasks, setTasks] = useState(mockTasks)
+  const { user } = useAuth()
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [priorityFilter, setPriorityFilter] = useState("all")
@@ -204,6 +111,81 @@ export default function TasksPage() {
   const [workNotes, setWorkNotes] = useState("")
   const [completionNotes, setCompletionNotes] = useState("")
   const [hasChanges, setHasChanges] = useState(false)
+  const [successMessage, setSuccessMessage] = useState("")
+
+  // Map API status values to component status values
+  const mapApiStatus = (apiStatus: string): string => {
+    const statusMap: Record<string, string> = {
+      'Pending': 'assigned',
+      'In Progress': 'in_progress',
+      'Completed': 'completed',
+      'Cancelled': 'cancelled'
+    }
+    return statusMap[apiStatus] || 'assigned'
+  }
+
+  // Map component status values to API status values
+  const mapComponentToApiStatus = (componentStatus: string): string => {
+    const statusMap: Record<string, string> = {
+      'assigned': 'Pending',
+      'in_progress': 'In Progress',
+      'completed': 'Completed',
+      'paused': 'Pending', // Map paused back to Pending since API doesn't support Paused
+      'cancelled': 'Cancelled'
+    }
+    return statusMap[componentStatus] || 'Pending'
+  }
+
+  // Map API priority values to component priority values
+  const mapApiPriority = (apiPriority: string): string => {
+    return apiPriority.toLowerCase() // "High" -> "high", "Medium" -> "medium", "Low" -> "low"
+  }
+
+  // Map API category to component type
+  const mapApiCategory = (apiCategory: string): string => {
+    const categoryMap: Record<string, string> = {
+      'Bug': 'repair',
+      'Error': 'repair',
+      'Feature': 'installation',
+      'Maintenance': 'maintenance',
+      'Installation': 'installation'
+    }
+    return categoryMap[apiCategory] || 'repair'
+  }
+
+  // Generate customer info based on task data (placeholder implementation)
+  const generateCustomerInfo = (taskId: string) => {
+    // This is a placeholder - in a real app, you'd fetch this from an API
+    const customers = [
+      { name: "Rajesh Kumar", phone: "+91 9876543210", address: "House 123, Sector 15, Chandigarh", email: "rajesh@example.com" },
+      { name: "Priya Singh", phone: "+91 9876543211", address: "Flat 45, Sector 22, Chandigarh", email: "priya@example.com" },
+      { name: "Amit Sharma", phone: "+91 9876543212", address: "Shop 67, Sector 35, Chandigarh", email: "amit@example.com" },
+      { name: "Tech Solutions Pvt Ltd", phone: "+91 9876543213", address: "Office 12, IT Park, Chandigarh", email: "admin@techsolutions.com" },
+    ]
+    const index = parseInt(taskId.slice(-1)) || 0
+    return customers[index % customers.length]
+  }
+
+  // Generate location based on task (placeholder implementation)
+  const generateLocation = () => {
+    const locations = [
+      { lat: 30.7333, lng: 76.7794 },
+      { lat: 30.7614, lng: 76.7911 },
+      { lat: 30.6942, lng: 76.7611 },
+      { lat: 30.7046, lng: 76.7179 },
+    ]
+    return locations[Math.floor(Math.random() * locations.length)]
+  }
+
+  // Generate materials based on task type
+  const generateMaterials = (type: string) => {
+    const materialMap: Record<string, string[]> = {
+      'installation': ["Fiber Cable - 50m", "ONT Device", "Router"],
+      'maintenance': ["Router - AC1200", "Ethernet Cable"],
+      'repair': ["Signal Meter", "Fiber Splitter"],
+    }
+    return materialMap[type] || []
+  }
 
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch =
@@ -245,6 +227,8 @@ export default function TasksPage() {
         return "bg-orange-100 text-orange-800"
       case "paused":
         return "bg-gray-100 text-gray-800"
+      case "cancelled":
+        return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
@@ -263,41 +247,81 @@ export default function TasksPage() {
     }
   }
 
-  const handleStartTask = (taskId: string) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === taskId ? { ...task, status: "in_progress", startedAt: new Date().toISOString() } : task,
-      ),
-    )
-    setHasChanges(true)
+  const handleStartTask = async (taskId: string) => {
+    try {
+      // Update status via API - use correct API status value
+      await taskApi.updateStatus(taskId, "In Progress")
+      
+      // Update local state
+      setTasks(
+        tasks.map((task) =>
+          task.id === taskId ? { ...task, status: "in_progress", startedAt: new Date().toISOString() } : task,
+        ),
+      )
+      setSuccessMessage("Task started successfully")
+      setTimeout(() => setSuccessMessage(""), 3000)
+    } catch (error) {
+      console.error("Failed to start task:", error)
+      setError("Failed to start task. Please try again.")
+      setTimeout(() => setError(null), 5000)
+    }
   }
 
-  const handlePauseTask = (taskId: string) => {
-    setTasks(tasks.map((task) => (task.id === taskId ? { ...task, status: "paused" } : task)))
-    setHasChanges(true)
+  const handlePauseTask = async (taskId: string) => {
+    try {
+      // Since API doesn't support "Paused", we'll set it back to "Pending"
+      await taskApi.updateStatus(taskId, "Pending")
+      
+      // Update local state to show paused in UI
+      setTasks(tasks.map((task) => (task.id === taskId ? { ...task, status: "paused" } : task)))
+      setSuccessMessage("Task paused (set to Pending)")
+      setTimeout(() => setSuccessMessage(""), 3000)
+    } catch (error) {
+      console.error("Failed to pause task:", error)
+      setError("Failed to pause task. Please try again.")
+      setTimeout(() => setError(null), 5000)
+    }
   }
 
-  const handleCompleteTask = (taskId: string) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              status: "completed",
-              completedAt: new Date().toISOString(),
-              completionNotes: completionNotes || "Task completed successfully",
-            }
-          : task,
-      ),
-    )
-    setHasChanges(true)
-    setCompletionNotes("")
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      // Update status via API - use correct API status value
+      await taskApi.updateStatus(taskId, "Completed")
+      
+      // Update local state
+      setTasks(
+        tasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                status: "completed",
+                completedAt: new Date().toISOString(),
+                completionNotes: completionNotes || "Task completed successfully",
+              }
+            : task,
+        ),
+      )
+      setCompletionNotes("")
+      setSuccessMessage("Task completed successfully")
+      setTimeout(() => setSuccessMessage(""), 3000)
+    } catch (error) {
+      console.error("Failed to complete task:", error)
+      setError("Failed to complete task. Please try again.")
+      setTimeout(() => setError(null), 5000)
+    }
   }
 
-  const handleUpdateNotes = (taskId: string) => {
-    setTasks(tasks.map((task) => (task.id === taskId ? { ...task, workNotes: workNotes } : task)))
-    setHasChanges(true)
-    setWorkNotes("")
+  const handleUpdateNotes = async (taskId: string) => {
+    try {
+      // You can extend the API to support updating notes
+      // For now, just update local state
+      setTasks(tasks.map((task) => (task.id === taskId ? { ...task, workNotes: workNotes } : task)))
+      setWorkNotes("")
+      console.log(`Work notes updated for task ${taskId}`)
+    } catch (error) {
+      console.error("Failed to update notes:", error)
+      setError("Failed to update notes")
+    }
   }
 
   const handleNavigate = (location: any) => {
@@ -309,9 +333,14 @@ export default function TasksPage() {
     window.open(`tel:${phone}`)
   }
 
-  const handleApplyChanges = () => {
-    console.log("Applying task changes:", tasks)
-    setHasChanges(false)
+  const handleApplyChanges = async () => {
+    try {
+      console.log("All changes have been automatically applied via API calls")
+      setHasChanges(false)
+    } catch (error) {
+      console.error("Failed to apply changes:", error)
+      setError("Failed to save changes")
+    }
   }
 
   const taskStats = {
@@ -319,10 +348,117 @@ export default function TasksPage() {
     assigned: tasks.filter((t) => t.status === "assigned").length,
     inProgress: tasks.filter((t) => t.status === "in_progress").length,
     completed: tasks.filter((t) => t.status === "completed").length,
+    paused: tasks.filter((t) => t.status === "paused").length,
+  }
+
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        
+        const result = await taskApi.getAssigned(user?.user_id)
+        
+        if (result?.data && Array.isArray(result.data)) {
+          // Transform API data to component format
+          const transformedTasks: Task[] = result.data.map((apiTask: any) => {
+            const customerInfo = generateCustomerInfo(apiTask.taskId)
+            const taskType = mapApiCategory(apiTask.category)
+            
+            return {
+              id: apiTask.taskId,
+              ticketNumber: apiTask.taskId,
+              type: taskType,
+              title: apiTask.title,
+              description: apiTask.description,
+              customer: customerInfo,
+              priority: mapApiPriority(apiTask.priority),
+              status: mapApiStatus(apiTask.status),
+              assignedDate: apiTask.createdAt,
+              dueDate: apiTask.dueDate,
+              estimatedDuration: "2 hours", // Default value
+              location: generateLocation(),
+              materials: generateMaterials(taskType),
+              notes: `Task created by: ${apiTask.createdBy}`,
+              createdBy: apiTask.createdBy,
+              startedAt: undefined,
+              completedAt: undefined,
+              workNotes: undefined,
+              completionNotes: undefined,
+            }
+          })
+          
+          setTasks(transformedTasks)
+        } else {
+          setTasks([]) // Set empty array if no data
+        }
+      } catch (error) {
+        console.error("Failed to fetch tasks:", error)
+        setError("Failed to load tasks")
+        setTasks([]) // Set empty array on error
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (user?.user_id) {
+      fetchTasks()
+    }
+  }, [user?.user_id])
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Loading tasks...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+          <p className="text-red-500">{error}</p>
+          <Button 
+            onClick={() => window.location.reload()} 
+            variant="outline" 
+            className="mt-4"
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
+      {/* Success Message */}
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+            <p className="text-green-800">{successMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+            <p className="text-red-800">{error}</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
         <div>
@@ -330,12 +466,6 @@ export default function TasksPage() {
           <p className="text-gray-500">Manage your assigned tasks and track progress</p>
         </div>
         <div className="flex items-center space-x-2">
-          {hasChanges && (
-            <Button onClick={handleApplyChanges} className="bg-orange-600 hover:bg-orange-700">
-              <Save className="h-4 w-4 mr-2" />
-              Apply Changes
-            </Button>
-          )}
           <Button variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Export
@@ -436,6 +566,7 @@ export default function TasksPage() {
                 <SelectItem value="assigned">Assigned</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -445,20 +576,20 @@ export default function TasksPage() {
       {/* Tasks Tabs */}
       <Tabs defaultValue="active" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="active">Active Tasks ({taskStats.assigned + taskStats.inProgress})</TabsTrigger>
+          <TabsTrigger value="active">Active Tasks ({taskStats.assigned + taskStats.inProgress + taskStats.paused})</TabsTrigger>
           <TabsTrigger value="completed">Completed ({taskStats.completed})</TabsTrigger>
           <TabsTrigger value="all">All Tasks ({taskStats.total})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="space-y-4">
           <TaskList
-            tasks={getTasksByStatus("assigned").concat(getTasksByStatus("in_progress"))}
+            tasks={getTasksByStatus("assigned").concat(getTasksByStatus("in_progress")).concat(getTasksByStatus("paused"))}
             onStartTask={handleStartTask}
             onPauseTask={handlePauseTask}
             onCompleteTask={handleCompleteTask}
             onNavigate={handleNavigate}
             onCallCustomer={handleCallCustomer}
-            onViewDetails={(task) => {
+            onViewDetails={(task: Task) => {
               setSelectedTask(task)
               setShowTaskDialog(true)
             }}
@@ -476,7 +607,7 @@ export default function TasksPage() {
             onCompleteTask={handleCompleteTask}
             onNavigate={handleNavigate}
             onCallCustomer={handleCallCustomer}
-            onViewDetails={(task) => {
+            onViewDetails={(task: Task) => {
               setSelectedTask(task)
               setShowTaskDialog(true)
             }}
@@ -494,7 +625,7 @@ export default function TasksPage() {
             onCompleteTask={handleCompleteTask}
             onNavigate={handleNavigate}
             onCallCustomer={handleCallCustomer}
-            onViewDetails={(task) => {
+            onViewDetails={(task: Task) => {
               setSelectedTask(task)
               setShowTaskDialog(true)
             }}
@@ -619,6 +750,23 @@ function TaskList({
                       <Button size="sm" onClick={() => onPauseTask(task.id)} variant="outline">
                         <Pause className="h-4 w-4 mr-1" />
                         Pause
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => onCompleteTask(task.id)}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Complete
+                      </Button>
+                    </>
+                  )}
+
+                  {task.status === "paused" && (
+                    <>
+                      <Button size="sm" onClick={() => onStartTask(task.id)} className="bg-blue-600 hover:bg-blue-700">
+                        <Play className="h-4 w-4 mr-1" />
+                        Resume
                       </Button>
                       <Button
                         size="sm"
@@ -808,6 +956,19 @@ function TaskDetailsModal({
             <Button onClick={onPauseTask} variant="outline">
               <Pause className="h-4 w-4 mr-2" />
               Pause Task
+            </Button>
+            <Button onClick={onCompleteTask} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Complete Task
+            </Button>
+          </>
+        )}
+
+        {task.status === "paused" && (
+          <>
+            <Button onClick={onStartTask} className="bg-blue-600 hover:bg-blue-700">
+              <Play className="h-4 w-4 mr-2" />
+              Resume Task
             </Button>
             <Button onClick={onCompleteTask} className="bg-green-600 hover:bg-green-700">
               <CheckCircle className="h-4 w-4 mr-2" />

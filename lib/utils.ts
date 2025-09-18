@@ -52,7 +52,7 @@ export function formatDateTime(date: string): string {
 }
 
 export function getStatusColor(status: string): string {
-  switch (status.toLowerCase()) {
+  switch (status?.toLowerCase()) {
     case "active":
       return "bg-green-100 text-green-800 border-green-200"
     case "inactive":

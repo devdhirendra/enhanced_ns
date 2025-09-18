@@ -46,6 +46,9 @@ export default function AttendancePage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [checkOutReason, setCheckOutReason] = useState("")
   const [loading, setLoading] = useState(true)
+  const [checkInLoading, setCheckInLoading] = useState(false)
+  const [checkOutLoading, setCheckOutLoading] = useState(false)
+  const [checkOutDialogOpen, setCheckOutDialogOpen] = useState(false)
   const [currentAttendance, setCurrentAttendance] = useState({
     status: "checked_out",
     checkInTime: null,
@@ -59,15 +62,37 @@ export default function AttendancePage() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date())
+      // Update working hours in real-time if checked in
+      if (currentAttendance.status === "checked_in" && currentAttendance.checkInTime) {
+        updateWorkingHours()
+      }
     }, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [currentAttendance.checkInTime, currentAttendance.status])
 
   useEffect(() => {
     if (user?.user_id) {
       fetchAttendanceData()
     }
   }, [user])
+
+  const updateWorkingHours = () => {
+    if (currentAttendance.checkInTime && currentAttendance.status === "checked_in") {
+      const checkInDate = new Date()
+      const [hours, minutes, seconds] = currentAttendance.checkInTime.split(':')
+      checkInDate.setHours(parseInt(hours), parseInt(minutes), parseInt(seconds || '0'))
+      
+      const now = new Date()
+      const diffMs = now.getTime() - checkInDate.getTime()
+      const diffMinutes = Math.floor(diffMs / (1000 * 60))
+      const workingHours = `${Math.floor(diffMinutes / 60)}h ${diffMinutes % 60}m`
+      
+      setCurrentAttendance(prev => ({
+        ...prev,
+        workingHours
+      }))
+    }
+  }
 
   const fetchAttendanceData = async () => {
     if (!user?.user_id) return
@@ -130,6 +155,37 @@ export default function AttendancePage() {
     }
   }
 
+  const updateTodayAttendanceRecord = (checkIn?: string, checkOut?: string) => {
+    const today = new Date().toISOString().split("T")[0]
+    const existingRecordIndex = attendanceData.findIndex(record => record.date === today)
+    
+    if (existingRecordIndex >= 0) {
+      // Update existing record
+      const updatedData = [...attendanceData]
+      updatedData[existingRecordIndex] = {
+        ...updatedData[existingRecordIndex],
+        checkIn: checkIn || updatedData[existingRecordIndex].checkIn,
+        checkOut: checkOut || updatedData[existingRecordIndex].checkOut,
+        status: checkOut ? "present" : "present"
+      }
+      setAttendanceData(updatedData)
+    } else {
+      // Add new record for today
+      const newRecord = {
+        date: today,
+        status: "present",
+        checkIn: checkIn || null,
+        checkOut: checkOut || null,
+        workingHours: "0h 0m",
+        breakTime: "30m",
+        location: "Current Location",
+        tasksCompleted: 0,
+        overtime: "0m",
+      }
+      setAttendanceData(prev => [newRecord, ...prev])
+    }
+  }
+
   const handleCheckIn = async () => {
     if (!user?.user_id) return
 
@@ -143,23 +199,28 @@ export default function AttendancePage() {
     if (!confirmed) return
 
     try {
-      setLoading(true)
+      setCheckInLoading(true)
       const technicianId = user.profileDetail?.technicianId || user.user_id
       const now = new Date()
+      const checkInTime = now.toTimeString().split(" ")[0]
 
+      // Optimistically update UI first
+      setCurrentAttendance(prev => ({
+        ...prev,
+        status: "checked_in",
+        checkInTime: checkInTime,
+        currentLocation: "Current Location"
+      }))
+
+      // Update today's attendance record
+      updateTodayAttendanceRecord(checkInTime)
+
+      // Make API call
       await technicianApi.checkIn(technicianId, {
         at: now.toISOString(),
         location: "Current Location",
         date: now.toISOString().split("T")[0],
       })
-
-      setCurrentAttendance({
-        ...currentAttendance,
-        status: "checked_in",
-        checkInTime: now.toTimeString().split(" ")[0],
-      })
-
-      await fetchAttendanceData()
 
       toast({
         title: "Checked In",
@@ -167,57 +228,100 @@ export default function AttendancePage() {
       })
     } catch (error) {
       console.error("[v0] Error checking in:", error)
+      
+      // Revert optimistic update on error
+      setCurrentAttendance(prev => ({
+        ...prev,
+        status: "checked_out",
+        checkInTime: null,
+      }))
+      
+      // Remove the optimistic attendance record
+      const today = new Date().toISOString().split("T")[0]
+      setAttendanceData(prev => prev.filter(record => record.date !== today))
+      
       toast({
         title: "Check In Failed",
         description: "Failed to check in. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setCheckInLoading(false)
     }
   }
 
   const handleCheckOut = async () => {
     if (!user?.user_id) return
 
-    const confirmed = await showConfirmation({
-      title: "Check Out",
-      message: "Are you sure you want to check out for today?",
-      confirmText: "Check Out",
-      cancelText: "Cancel",
-    })
-
-    if (!confirmed) return
-
-    try {
-      setLoading(true)
-      const technicianId = user.profileDetail?.technicianId || user.user_id
-
-      await technicianApi.checkOut(technicianId)
-
-      setCurrentAttendance({
-        ...currentAttendance,
-        status: "checked_out",
+    // Close the dialog first
+    setCheckOutDialogOpen(false)
+    
+    // Small delay to ensure dialog is closed before showing confirmation
+    setTimeout(async () => {
+      const confirmed = await showConfirmation({
+        title: "Check Out",
+        message: "Are you sure you want to check out for today?",
+        confirmText: "Check Out",
+        cancelText: "Cancel",
       })
 
-      await fetchAttendanceData()
+      if (!confirmed) {
+        // If cancelled, reopen the dialog
+        setCheckOutDialogOpen(true)
+        return
+      }
 
-      toast({
-        title: "Checked Out",
-        description: "You have successfully checked out for today.",
-      })
+      try {
+        setCheckOutLoading(true)
+        const technicianId = user.profileDetail?.technicianId || user.user_id
+        const now = new Date()
+        const checkOutTime = now.toTimeString().split(" ")[0]
 
-      setCheckOutReason("")
-    } catch (error) {
-      console.error("[v0] Error checking out:", error)
-      toast({
-        title: "Check Out Failed",
-        description: "Failed to check out. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+        // Calculate final working hours
+        const checkInDate = new Date()
+        const [hours, minutes] = currentAttendance.checkInTime.split(':')
+        checkInDate.setHours(parseInt(hours), parseInt(minutes), 0)
+        const diffMs = now.getTime() - checkInDate.getTime()
+        const diffMinutes = Math.floor(diffMs / (1000 * 60))
+        const finalWorkingHours = `${Math.floor(diffMinutes / 60)}h ${diffMinutes % 60}m`
+
+        // Optimistically update UI
+        setCurrentAttendance(prev => ({
+          ...prev,
+          status: "checked_out",
+          workingHours: finalWorkingHours
+        }))
+
+        // Update today's attendance record
+        updateTodayAttendanceRecord(undefined, checkOutTime)
+
+        // Make API call
+        await technicianApi.checkOut(technicianId)
+
+        toast({
+          title: "Checked Out",
+          description: "You have successfully checked out for today.",
+        })
+
+        setCheckOutReason("")
+      } catch (error) {
+        console.error("[v0] Error checking out:", error)
+        
+        // Revert optimistic update on error
+        setCurrentAttendance(prev => ({
+          ...prev,
+          status: "checked_in",
+        }))
+        
+        toast({
+          title: "Check Out Failed",
+          description: "Failed to check out. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setCheckOutLoading(false)
+      }
+    }, 100)
   }
 
   const getStatusColor = (status: string) => {
@@ -334,11 +438,11 @@ export default function AttendancePage() {
 
             <div className="flex items-center justify-center p-4">
               {currentAttendance.status === "checked_in" ? (
-                <Dialog>
+                <Dialog open={checkOutDialogOpen} onOpenChange={setCheckOutDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button className="w-full bg-red-600 hover:bg-red-700" disabled={loading}>
+                    <Button className="w-full bg-red-600 hover:bg-red-700" disabled={checkOutLoading}>
                       <XCircle className="h-4 w-4 mr-2" />
-                      Check Out
+                      {checkOutLoading ? "Checking Out..." : "Check Out"}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
@@ -359,17 +463,17 @@ export default function AttendancePage() {
                           rows={3}
                         />
                       </div>
-                      <Button onClick={handleCheckOut} className="w-full" disabled={loading}>
+                      <Button onClick={handleCheckOut} className="w-full" disabled={checkOutLoading}>
                         <Save className="h-4 w-4 mr-2" />
-                        {loading ? "Checking Out..." : "Confirm Check Out"}
+                        {checkOutLoading ? "Checking Out..." : "Confirm Check Out"}
                       </Button>
                     </div>
                   </DialogContent>
                 </Dialog>
               ) : (
-                <Button onClick={handleCheckIn} className="w-full bg-green-600 hover:bg-green-700" disabled={loading}>
+                <Button onClick={handleCheckIn} className="w-full bg-green-600 hover:bg-green-700" disabled={checkInLoading}>
                   <CheckCircle className="h-4 w-4 mr-2" />
-                  {loading ? "Checking In..." : "Check In"}
+                  {checkInLoading ? "Checking In..." : "Check In"}
                 </Button>
               )}
             </div>

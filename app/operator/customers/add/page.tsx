@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Save, UserPlus, Phone, Mail, MapPin, Wifi, CreditCard, Calendar, Settings } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { operatorApi } from "@/lib/api"
 
 export default function AddCustomerPage() {
   const [formData, setFormData] = useState({
@@ -43,14 +44,43 @@ export default function AddCustomerPage() {
     }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Generate customer ID
-    const customerId = `CUST${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`
+  // const handleSubmit = (e: React.FormEvent) => {
+  //   e.preventDefault()
+  //   // Generate customer ID
+    
 
-    toast.success(`Customer ${customerId} created successfully!`)
-    console.log("Customer Data:", { ...formData, customerId })
+  //   toast.success(`Customer ${customerId} created successfully!`)
+  //   console.log("Customer Data:", { ...formData, customerId })
+  // }
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+
+  try {
+    console.log("[v0] Creating customer:", formData)
+
+    const customerData = {
+      email: formData.email,
+      password: "customerpass", // default password
+      profileDetail: {
+        name: formData.fullName,
+        phone: formData.mobileNumber,
+        // combine address fields
+        address: `${formData.houseNumber}, ${formData.locality}, ${formData.district}, ${formData.state} - ${formData.pinCode}`,
+        planId: formData.planAssigned || "Basic",
+        connectionType: formData.connectionType,  // ✅ required
+        monthlyRate: Number(formData.monthlyRate) || 999, // ✅ required
+      },
+    }
+
+    await operatorApi.createCustomer(customerData)
+
+    console.log("✅ Customer created:", customerData)
+    toast.success(`Customer ${formData.fullName} created successfully!`)
+  } catch (error) {
+    console.error("[v0] Error creating customer:", error)
+    toast.error("Failed to create customer. Please try again.")
   }
+}
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-6">
@@ -395,7 +425,7 @@ export default function AddCustomerPage() {
             <Link href="/operator/customers">
               <Button variant="outline">Cancel</Button>
             </Link>
-            <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={(e)=>handleSubmit(e)} type="submit" className="bg-blue-600 hover:bg-blue-700">
               <Save className="h-4 w-4 mr-2" />
               Create Customer
             </Button>

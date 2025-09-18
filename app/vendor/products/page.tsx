@@ -50,18 +50,34 @@ import { productApi } from "@/lib/api"
 
 interface Product {
   id: string
-  name: string
+  itemName: string
   category: string
-  price: number
-  stock: number
+  unitPrice: number
+  sellingPrice: number
+  quantity: number
   description: string
-  specifications: string
-  warranty: string
-  discount: number
-  status: "active" | "inactive" | "pending"
+  specification: string
+  warantyInfo: string
+  discount: string | number
+  status: "Available" | "Out of Stock" | "Discontinued"
   rating: number
   sold: number
-  createdDate: string
+  supplier: string
+  brand: string
+  unitType: string
+  phoneNumber: string
+  ModelNumber: string
+  ProductImage: string
+  costPrice: number
+  createID: string
+  createdAt: string
+  updatedAt: string
+  // Legacy field mappings for backward compatibility
+  name?: string
+  price?: number
+  stock?: number
+  specifications?: string
+  warranty?: string
 }
 
 interface ProductFormData {
@@ -73,6 +89,12 @@ interface ProductFormData {
   specifications: string
   warranty: string
   discount: string
+  supplier?: string
+  brand?: string
+  unitType?: string
+  phoneNumber?: string
+  ModelNumber?: string
+  ProductImage?: string
 }
 
 const categories = [
@@ -111,6 +133,12 @@ export default function ProductsPage() {
     specifications: "",
     warranty: "",
     discount: "0",
+    supplier: "",
+    brand: "",
+    unitType: "piece",
+    phoneNumber: "",
+    ModelNumber: "",
+    ProductImage: "",
   })
 
   // Dashboard Layout props
@@ -124,23 +152,34 @@ export default function ProductsPage() {
     }
   }, [vendorId])
 
-  // ✅ Updated fetchProducts with new API structure
+  // ✅ Enhanced fetchProducts with better error handling
   const fetchProducts = async () => {
-    if (!vendorId) return
+    if (!vendorId) {
+      console.warn("No vendorId available for fetching products");
+      return;
+    }
     
     setLoading(true)
     try {
       console.log("Fetching products for vendorId:", vendorId)
       const response = await productApi.get(vendorId)
+      console.log("Raw API response:", response)
       
       if (response?.success) {
         console.log("Fetched products:", response.data)
         setProductList(response.data || [])
       } else {
-        throw new Error(response?.error || "Failed to fetch products")
+        console.error("API returned unsuccessful response:", response)
+        throw new Error(response?.error || response?.message || "Failed to fetch products")
       }
     } catch (error: any) {
       console.error("Error fetching products:", error)
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        response: error.response
+      })
+      
       toast({
         title: "Error",
         description: error.message || "Failed to fetch products. Please try again.",
@@ -153,12 +192,16 @@ export default function ProductsPage() {
     }
   }
 
-  // Enhanced filtering logic with category API support
+  // Enhanced filtering logic with proper field mapping
   const filteredProducts = productList.filter((product) => {
+    const productName = product.itemName || product.name || ""
+    const productDesc = product.description || ""
+    const productSpecs = product.specification || product.specifications || ""
+    
     const matchesSearch = 
-      product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.specifications?.toLowerCase().includes(searchTerm.toLowerCase())
+      productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      productDesc.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      productSpecs.toLowerCase().includes(searchTerm.toLowerCase())
     
     const matchesCategory = selectedCategory === "all" || product.category === selectedCategory
     const matchesStatus = selectedStatus === "all" || product.status === selectedStatus
@@ -166,7 +209,7 @@ export default function ProductsPage() {
     return matchesSearch && matchesCategory && matchesStatus
   })
 
-  // Utility functions
+  // Utility functions with proper field mapping
   const getStockStatusColor = (stock: number) => {
     if (stock <= 5) return "text-red-600"
     if (stock <= 15) return "text-yellow-600"
@@ -175,6 +218,13 @@ export default function ProductsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case "Available":
+        return "bg-green-100 text-green-800"
+      case "Out of Stock":
+        return "bg-red-100 text-red-800"
+      case "Discontinued":
+        return "bg-gray-100 text-gray-800"
+      // Legacy status support
       case "active":
         return "bg-green-100 text-green-800"
       case "inactive":
@@ -196,102 +246,195 @@ export default function ProductsPage() {
       specifications: "",
       warranty: "",
       discount: "0",
+      supplier: "",
+      brand: "",
+      unitType: "piece",
+      phoneNumber: "",
+      ModelNumber: "",
+      ProductImage: "",
     })
   }
 
-  // ✅ Updated handleAddProduct with new API
+  // ✅ Enhanced handleAddProduct with validation and debugging
   const handleAddProduct = async () => {
-    if (!vendorId) return
-    
-    setActionLoading("add")
-    try {
-      const productData = {
-        name: newProduct.name,
-        category: newProduct.category,
-        price: parseFloat(newProduct.price),
-        stock: parseInt(newProduct.stock),
-        description: newProduct.description,
-        specifications: newProduct.specifications,
-        warranty: newProduct.warranty,
-        discount: parseFloat(newProduct.discount) || 0,
-        vendorId: vendorId, // Include vendorId in the payload
-        status: "active" // Default status
-      }
-
-      console.log("Creating product:", productData)
-      const response = await productApi.create(productData)
-      
-      if (response?.success) {
-        resetForm()
-        setIsAddDialogOpen(false)
-        await fetchProducts() // Refresh the list
-        
-        toast({
-          title: "Product Added",
-          description: `${productData.name} has been added to your catalog.`,
-        })
-      } else {
-        throw new Error(response?.error || "Failed to add product")
-      }
-    } catch (error: any) {
-      console.error("Error adding product:", error)
+    if (!vendorId) {
       toast({
         title: "Error",
-        description: error.message || "Failed to add product. Please try again.",
-        variant: "destructive"
-      })
-    } finally {
-      setActionLoading(null)
+        description: "Vendor ID is required",
+        variant: "destructive",
+      });
+      return;
     }
-  }
+
+    // Validate required fields
+    if (!newProduct.name || !newProduct.price || !newProduct.stock || !newProduct.description) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields (Name, Price, Stock, Description)",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setActionLoading("add");
+    try {
+      // Parse and validate numeric values
+      const quantity = parseInt(newProduct.stock);
+      const unitPrice = parseFloat(newProduct.price);
+      const discount = parseFloat(newProduct.discount) || 0;
+
+      if (isNaN(quantity) || quantity < 0) {
+        throw new Error("Invalid stock quantity");
+      }
+      if (isNaN(unitPrice) || unitPrice <= 0) {
+        throw new Error("Invalid price");
+      }
+      if (discount < 0 || discount > 100) {
+        throw new Error("Discount must be between 0 and 100");
+      }
+
+      const productData = {
+        itemName: newProduct.name.trim(),
+        quantity: quantity,
+        supplier: newProduct.supplier?.trim() || "",
+        unitPrice: unitPrice,
+        unitType: newProduct.unitType || "piece",
+        category: newProduct.category,
+        brand: newProduct.brand?.trim() || "",
+        phoneNumber: newProduct.phoneNumber?.trim() || "",
+        status: "Available",
+        description: newProduct.description.trim(),
+        specification: newProduct.specifications?.trim() || "",
+        ModelNumber: newProduct.ModelNumber?.trim() || "",
+        role: "operator",
+        costPrice: Math.round(unitPrice * 0.8 * 100) / 100, // Round to 2 decimal places
+        sellingPrice: unitPrice,
+        ProductImage: newProduct.ProductImage?.trim() || "",
+        warantyInfo: newProduct.warranty?.trim() || "",
+        discount: discount.toString() + "%", // Store as percentage string
+        rating: 0,
+        sold: 0,
+        createID: vendorId,
+      };
+
+      console.log("Creating product with data:", JSON.stringify(productData, null, 2));
+      console.log("Using vendorId:", vendorId);
+      
+      const response = await productApi.create(productData);
+      console.log("API Response:", response);
+
+      // ✅ Fixed: Handle different API response formats
+      const isSuccess = response?.success === true || 
+                       (response?.id && response?.itemName); // Product object with ID means success
+
+      if (isSuccess) {
+        resetForm();
+        setIsAddDialogOpen(false);
+        await fetchProducts(); // Refresh the list
+
+        const productName = response?.itemName || productData.itemName;
+        toast({
+          title: "Product Added",
+          description: `${productName} has been added to your catalog.`,
+        });
+      } else {
+        // More detailed error handling
+        const errorMessage = response?.error || response?.message || "Failed to add product";
+        console.error("API Error Response:", response);
+        throw new Error(errorMessage);
+      }
+    } catch (error: any) {
+      console.error("Error adding product:", error);
+      
+      // More specific error messages
+      let errorMessage = "Failed to add product. Please try again.";
+      if (error.message.includes("Invalid")) {
+        errorMessage = error.message;
+      } else if (error.message.includes("network") || error.message.includes("fetch")) {
+        errorMessage = "Network error. Please check your connection.";
+      } else if (error.response) {
+        errorMessage = `Server error: ${error.response.status}`;
+      }
+
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleEditProduct = (product: Product) => {
     setSelectedProduct(product)
     setNewProduct({
-      name: product.name,
+      name: product.itemName || product.name || "",
       category: product.category,
-      price: product.price.toString(),
-      stock: product.stock.toString(),
+      price: (product.unitPrice || product.price || 0).toString(),
+      stock: (product.quantity || product.stock || 0).toString(),
       description: product.description,
-      specifications: product.specifications,
-      warranty: product.warranty,
-      discount: product.discount.toString(),
+      specifications: product.specification || product.specifications || "",
+      warranty: product.warantyInfo || product.warranty || "",
+      discount: typeof product.discount === 'string' ? 
+        product.discount.replace('%', '') : 
+        (product.discount || 0).toString(),
+      supplier: product.supplier || "",
+      brand: product.brand || "",
+      unitType: product.unitType || "piece",
+      phoneNumber: product.phoneNumber || "",
+      ModelNumber: product.ModelNumber || "",
+      ProductImage: product.ProductImage || "",
     })
     setIsEditDialogOpen(true)
   }
 
-  // ✅ Updated handleUpdateProduct with new API
+  // ✅ Updated handleUpdateProduct with proper response handling
   const handleUpdateProduct = async () => {
     if (!selectedProduct) return
     
     setActionLoading("update")
     try {
       const productData = {
-        name: newProduct.name,
+        itemName: newProduct.name,
+        quantity: parseInt(newProduct.stock),
+        supplier: newProduct.supplier || "",
+        unitPrice: parseFloat(newProduct.price),
+        unitType: newProduct.unitType || "piece",
         category: newProduct.category,
-        price: parseFloat(newProduct.price),
-        stock: parseInt(newProduct.stock),
+        brand: newProduct.brand || "",
+        phoneNumber: newProduct.phoneNumber || "",
         description: newProduct.description,
-        specifications: newProduct.specifications,
-        warranty: newProduct.warranty,
-        discount: parseFloat(newProduct.discount) || 0,
+        specification: newProduct.specifications,
+        ModelNumber: newProduct.ModelNumber || "",
+        costPrice: parseFloat(newProduct.price) * 0.8,
+        sellingPrice: parseFloat(newProduct.price),
+        ProductImage: newProduct.ProductImage || "",
+        warantyInfo: newProduct.warranty,
+        discount: parseFloat(newProduct.discount) + "%",
       }
 
       console.log("Updating product:", selectedProduct.id, productData)
       const response = await productApi.update(selectedProduct.id, productData)
+      console.log("Update API Response:", response)
       
-      if (response?.success) {
+      // ✅ Fixed: Handle different API response formats
+      const isSuccess = response?.success === true || 
+                       (response?.id && response?.itemName); // Updated product object means success
+      
+      if (isSuccess) {
         setIsEditDialogOpen(false)
         setSelectedProduct(null)
         resetForm()
         await fetchProducts() // Refresh the list
         
+        const productName = response?.itemName || productData.itemName;
         toast({
           title: "Product Updated",
-          description: `${productData.name} has been updated successfully.`,
+          description: `${productName} has been updated successfully.`,
         })
       } else {
-        throw new Error(response?.error || "Failed to update product")
+        throw new Error(response?.error || response?.message || "Failed to update product")
       }
     } catch (error: any) {
       console.error("Error updating product:", error)
@@ -305,14 +448,21 @@ export default function ProductsPage() {
     }
   }
 
-  // ✅ Updated handleDeleteProduct with new API
+  // ✅ Updated handleDeleteProduct with proper response handling
   const handleDeleteProduct = async (productId: string) => {
     setActionLoading("delete")
     try {
       console.log("Deleting product:", productId)
       const response = await productApi.delete(productId)
+      console.log("Delete API Response:", response)
       
-      if (response?.success) {
+      // ✅ Fixed: Handle different API response formats for delete
+      const isSuccess = response?.success === true || 
+                       response?.message === "Product deleted successfully" ||
+                       response?.deleted === true ||
+                       (response && !response.error); // No error means success
+      
+      if (isSuccess) {
         await fetchProducts() // Refresh the list
         
         toast({
@@ -320,13 +470,26 @@ export default function ProductsPage() {
           description: "Product has been removed from your catalog.",
         })
       } else {
-        throw new Error(response?.error || "Failed to delete product")
+        throw new Error(response?.error || response?.message || "Failed to delete product")
       }
     } catch (error: any) {
       console.error("Error deleting product:", error)
+      
+      // More specific error handling for delete
+      let errorMessage = "Failed to delete product. Please try again."
+      if (error.message.includes("not found")) {
+        errorMessage = "Product not found or already deleted."
+      } else if (error.message.includes("network") || error.message.includes("fetch")) {
+        errorMessage = "Network error. Please check your connection."
+      } else if (error.response?.status === 404) {
+        errorMessage = "Product not found."
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to delete this product."
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to delete product. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       })
     } finally {
@@ -421,7 +584,7 @@ export default function ProductsPage() {
                 Total: {productList.length} products
               </Badge>
               <Badge variant="outline" className="text-green-600 border-green-600">
-                Active: {productList.filter(p => p.status === 'active').length}
+                Active: {productList.filter(p => p.status === 'Available' || p.status === 'active').length}
               </Badge>
               <Badge variant="outline" className="text-gray-600 border-gray-600">
                 Vendor ID: {vendorId}
@@ -505,9 +668,13 @@ export default function ProductsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="Available">Available</SelectItem>
+                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+                    <SelectItem value="Discontinued">Discontinued</SelectItem>
+                    {/* Legacy status support */}
+                    <SelectItem value="active">Active (Legacy)</SelectItem>
+                    <SelectItem value="inactive">Inactive (Legacy)</SelectItem>
+                    <SelectItem value="pending">Pending (Legacy)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -551,7 +718,9 @@ export default function ProductsPage() {
                       <TableRow key={product.id}>
                         <TableCell>
                           <div>
-                            <div className="font-medium text-gray-900">{product.name}</div>
+                            <div className="font-medium text-gray-900">
+                              {product.itemName || product.name}
+                            </div>
                             <div className="flex items-center mt-1">
                               {[...Array(5)].map((_, i) => (
                                 <Star
@@ -573,11 +742,11 @@ export default function ProductsPage() {
                           <Badge variant="outline">{product.category}</Badge>
                         </TableCell>
                         <TableCell className="font-medium">
-                          {formatCurrency(product.price)}
+                          {formatCurrency(product.unitPrice || product.price || 0)}
                         </TableCell>
                         <TableCell>
-                          <span className={`font-medium ${getStockStatusColor(product.stock)}`}>
-                            {product.stock}
+                          <span className={`font-medium ${getStockStatusColor(product.quantity || product.stock || 0)}`}>
+                            {product.quantity || product.stock || 0}
                           </span>
                         </TableCell>
                         <TableCell>{product.sold || 0}</TableCell>
@@ -612,7 +781,7 @@ export default function ProductsPage() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Delete Product</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Are you sure you want to delete "{product.name}"? This action cannot be undone.
+                                    Are you sure you want to delete "{product.itemName || product.name}"? This action cannot be undone.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -681,7 +850,7 @@ export default function ProductsPage() {
   )
 }
 
-// Product Form Dialog Component (unchanged)
+// ✅ Enhanced Product Form Dialog Component with additional fields
 interface ProductFormDialogProps {
   title: string
   description: string
@@ -704,12 +873,13 @@ const ProductFormDialog: React.FC<ProductFormDialogProps> = ({
   submitLabel,
 }) => {
   return (
-    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       <div className="space-y-4 py-4">
+        {/* Basic Information */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="productName">Product Name *</Label>
@@ -740,6 +910,8 @@ const ProductFormDialog: React.FC<ProductFormDialogProps> = ({
             </Select>
           </div>
         </div>
+
+        {/* Pricing and Stock */}
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="price">Price (₹) *</Label>
@@ -780,6 +952,70 @@ const ProductFormDialog: React.FC<ProductFormDialogProps> = ({
             />
           </div>
         </div>
+
+        {/* Additional Product Details */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="supplier">Supplier</Label>
+            <Input
+              id="supplier"
+              value={product.supplier || ""}
+              onChange={(e) => onProductChange({ ...product, supplier: e.target.value })}
+              placeholder="Supplier name"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brand">Brand</Label>
+            <Input
+              id="brand"
+              value={product.brand || ""}
+              onChange={(e) => onProductChange({ ...product, brand: e.target.value })}
+              placeholder="Brand name"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="unitType">Unit Type</Label>
+            <Select
+              value={product.unitType || "piece"}
+              onValueChange={(value) => onProductChange({ ...product, unitType: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="piece">Piece</SelectItem>
+                <SelectItem value="meter">Meter</SelectItem>
+                <SelectItem value="kilogram">Kilogram</SelectItem>
+                <SelectItem value="liter">Liter</SelectItem>
+                <SelectItem value="box">Box</SelectItem>
+                <SelectItem value="pack">Pack</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phoneNumber">Contact Number</Label>
+            <Input
+              id="phoneNumber"
+              value={product.phoneNumber || ""}
+              onChange={(e) => onProductChange({ ...product, phoneNumber: e.target.value })}
+              placeholder="+91 9876543210"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="modelNumber">Model Number</Label>
+            <Input
+              id="modelNumber"
+              value={product.ModelNumber || ""}
+              onChange={(e) => onProductChange({ ...product, ModelNumber: e.target.value })}
+              placeholder="Model/SKU number"
+            />
+          </div>
+        </div>
+
+        {/* Description and Specifications */}
         <div className="space-y-2">
           <Label htmlFor="description">Description *</Label>
           <Textarea
@@ -791,6 +1027,7 @@ const ProductFormDialog: React.FC<ProductFormDialogProps> = ({
             required
           />
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="specifications">Technical Specifications</Label>
           <Textarea
@@ -801,14 +1038,26 @@ const ProductFormDialog: React.FC<ProductFormDialogProps> = ({
             rows={2}
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="warranty">Warranty Information</Label>
-          <Input
-            id="warranty"
-            value={product.warranty}
-            onChange={(e) => onProductChange({ ...product, warranty: e.target.value })}
-            placeholder="2 years manufacturer warranty"
-          />
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="warranty">Warranty Information</Label>
+            <Input
+              id="warranty"
+              value={product.warranty}
+              onChange={(e) => onProductChange({ ...product, warranty: e.target.value })}
+              placeholder="2 years manufacturer warranty"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="productImage">Product Image URL</Label>
+            <Input
+              id="productImage"
+              value={product.ProductImage || ""}
+              onChange={(e) => onProductChange({ ...product, ProductImage: e.target.value })}
+              placeholder="https://example.com/image.jpg"
+            />
+          </div>
         </div>
       </div>
       <div className="flex justify-end space-x-2">
