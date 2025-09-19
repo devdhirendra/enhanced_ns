@@ -16,6 +16,34 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { inventoryApi } from "@/lib/api"
 
+// API Response Interface
+interface ApiProduct {
+  id: string
+  itemName: string
+  ModelNumber: string
+  category: string
+  quantity: number
+  unitPrice: number
+  costPrice: number
+  sellingPrice: number
+  supplier: string
+  brand: string
+  status: string
+  createdAt: string
+  updatedAt: string
+  specification: string
+  warantyInfo: string
+  unitType: string
+  discount: string
+  rating: number
+  sold: number
+  ProductImage: string
+  phoneNumber: string
+  createID: string
+  description: string
+}
+
+// Component Interface (normalized)
 interface InventoryItem {
   id: string
   productName: string
@@ -25,13 +53,99 @@ interface InventoryItem {
   minStockLevel: number
   maxStockLevel: number
   unitPrice: number
+  costPrice: number
+  sellingPrice: number
   totalValue: number
   location: string
   supplier: string
+  brand: string
   lastRestocked: string
   status: "in-stock" | "low-stock" | "out-of-stock" | "overstocked"
+  specification: string
+  warranty: string
+  unitType: string
+  discount: string
+  rating: number
+  sold: number
+  description: string
 }
 
+// Mapping function to convert API response to component format
+const mapApiProductToInventoryItem = (apiProduct: ApiProduct): InventoryItem => {
+  // Determine stock status based on quantity and business logic
+  const getStockStatus = (quantity: number, status: string): InventoryItem["status"] => {
+    // Handle API status variations
+    const normalizedStatus = status?.toLowerCase();
+    
+    if (quantity === 0 || normalizedStatus === "out of stock") {
+      return "out-of-stock";
+    }
+    
+    if (normalizedStatus === "discontinued" || normalizedStatus === "inactive") {
+      return "out-of-stock";
+    }
+    
+    // Set thresholds based on business logic
+    const minThreshold = 10; // You can make this dynamic based on category
+    const maxThreshold = 100;
+    
+    if (quantity < minThreshold) {
+      return "low-stock";
+    }
+    
+    if (quantity > maxThreshold) {
+      return "overstocked";
+    }
+    
+    return "in-stock";
+  };
+
+  // Calculate min/max stock levels based on business rules
+  const getStockLevels = (category: string, currentStock: number) => {
+    // Business logic for stock levels by category
+    const stockRules = {
+      "Networking": { min: 5, max: 50 },
+      "Cables": { min: 10, max: 100 },
+      "Hardware": { min: 15, max: 75 },
+      "default": { min: 10, max: 50 }
+    };
+    
+    const rules = stockRules[category as keyof typeof stockRules] || stockRules.default;
+    return {
+      minStockLevel: rules.min,
+      maxStockLevel: rules.max
+    };
+  };
+
+  const stockLevels = getStockLevels(apiProduct.category, apiProduct.quantity);
+  const stockStatus = getStockStatus(apiProduct.quantity, apiProduct.status);
+
+  return {
+    id: apiProduct.id,
+    productName: apiProduct.itemName,
+    sku: apiProduct.ModelNumber,
+    category: apiProduct.category,
+    currentStock: apiProduct.quantity,
+    minStockLevel: stockLevels.minStockLevel,
+    maxStockLevel: stockLevels.maxStockLevel,
+    unitPrice: apiProduct.unitPrice,
+    costPrice: apiProduct.costPrice,
+    sellingPrice: apiProduct.sellingPrice,
+    totalValue: apiProduct.quantity * apiProduct.unitPrice,
+    location: `Warehouse-${apiProduct.category}`, // Generate location based on category
+    supplier: apiProduct.supplier,
+    brand: apiProduct.brand,
+    lastRestocked: apiProduct.updatedAt,
+    status: stockStatus,
+    specification: apiProduct.specification,
+    warranty: apiProduct.warantyInfo,
+    unitType: apiProduct.unitType,
+    discount: apiProduct.discount,
+    rating: apiProduct.rating,
+    sold: apiProduct.sold,
+    description: apiProduct.description
+  };
+};
 
 export default function VendorInventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([])
@@ -43,83 +157,60 @@ export default function VendorInventoryPage() {
   const [adjustmentQuantity, setAdjustmentQuantity] = useState("")
   const [adjustmentType, setAdjustmentType] = useState<"add" | "remove">("add")
   const [adjustmentReason, setAdjustmentReason] = useState("")
+  const [loading, setLoading] = useState(true)
   const { toast } = useToast()
 
   useEffect(() => {
-    inventoryApi
-      .getAllProducts()
-      .then((res) => {
-        setInventory(res)
-      })
-      .catch((err) => {
+    const fetchInventory = async () => {
+      try {
+        setLoading(true)
+        const response = await inventoryApi.getAllProducts()
+        console.log("API Response:", response)
+        
+        // Map API response to component format
+        const mappedInventory = response.map(mapApiProductToInventoryItem)
+        setInventory(mappedInventory)
+        
+        toast({
+          title: "Inventory Loaded",
+          description: `Successfully loaded ${mappedInventory.length} products.`,
+        })
+      } catch (err) {
         console.error("Error fetching inventory:", err)
-        // Mock data for development
-        setInventory([
-          {
-            id: "INV001",
-            productName: "TP-Link AC1200 Router",
-            sku: "TPL-AC1200",
-            category: "Routers",
-            currentStock: 45,
-            minStockLevel: 10,
-            maxStockLevel: 100,
-            unitPrice: 3500,
-            totalValue: 157500,
-            location: "Warehouse A-1",
-            supplier: "TP-Link India",
-            lastRestocked: "2024-01-10T00:00:00Z",
-            status: "in-stock",
-          },
-          {
-            id: "INV002",
-            productName: "Fiber Optic Cable 2km",
-            sku: "FOC-2KM",
-            category: "Cables",
-            currentStock: 8,
-            minStockLevel: 15,
-            maxStockLevel: 50,
-            unitPrice: 2800,
-            totalValue: 22400,
-            location: "Warehouse B-2",
-            supplier: "Sterlite Tech",
-            lastRestocked: "2024-01-05T00:00:00Z",
-            status: "low-stock",
-          },
-          {
-            id: "INV003",
-            productName: "GPON ONU Device",
-            sku: "GPON-ONU",
-            category: "ONUs",
-            currentStock: 0,
-            minStockLevel: 5,
-            maxStockLevel: 30,
-            unitPrice: 4200,
-            totalValue: 0,
-            location: "Warehouse A-3",
-            supplier: "Huawei",
-            lastRestocked: "2023-12-20T00:00:00Z",
-            status: "out-of-stock",
-          },
-        ])
-      })
-  }, [])
+        toast({
+          title: "Error",
+          description: "Failed to load inventory. Please try again.",
+          variant: "destructive",
+        })
+        
+        // Fallback to empty array or mock data if needed
+        setInventory([])
+      } finally {
+        setLoading(false)
+      }
+    }
 
-const filteredInventory = inventory.filter((item) => {
-  // Add null/undefined checks for all properties used in filtering
-  const productName = item?.productName || "";
-  const sku = item?.sku || "";
-  const category = item?.category || "";
-  const status = item?.status || "";
+    fetchInventory()
+  }, [toast])
 
-  const matchesSearch =
-    productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sku.toLowerCase().includes(searchTerm.toLowerCase());
-  
-  const matchesCategory = selectedCategory === "all" || category === selectedCategory;
-  const matchesStatus = selectedStatus === "all" || status === selectedStatus;
-  
-  return matchesSearch && matchesCategory && matchesStatus;
-});
+  const filteredInventory = inventory.filter((item) => {
+    const productName = item?.productName || "";
+    const sku = item?.sku || "";
+    const category = item?.category || "";
+    const status = item?.status || "";
+
+    const matchesSearch =
+      productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sku.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = selectedCategory === "all" || category === selectedCategory;
+    const matchesStatus = selectedStatus === "all" || status === selectedStatus;
+    
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
+
+  // Get unique categories from inventory for filter dropdown
+  const categories = [...new Set(inventory.map(item => item.category))];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -156,39 +247,51 @@ const filteredInventory = inventory.filter((item) => {
     setIsAdjustDialogOpen(true)
   }
 
-  const processStockAdjustment = () => {
+  const processStockAdjustment = async () => {
     if (!selectedItem || !adjustmentQuantity) return
 
-    const quantity = Number.parseInt(adjustmentQuantity)
-    const newStock =
-      adjustmentType === "add" ? selectedItem.currentStock + quantity : selectedItem.currentStock - quantity
+    try {
+      const quantity = Number.parseInt(adjustmentQuantity)
+      const newStock =
+        adjustmentType === "add" ? selectedItem.currentStock + quantity : selectedItem.currentStock - quantity
 
-    // Determine new status based on stock levels
-    let newStatus: InventoryItem["status"] = "in-stock"
-    if (newStock === 0) newStatus = "out-of-stock"
-    else if (newStock < selectedItem.minStockLevel) newStatus = "low-stock"
-    else if (newStock > selectedItem.maxStockLevel) newStatus = "overstocked"
+      // Determine new status based on stock levels
+      let newStatus: InventoryItem["status"] = "in-stock"
+      if (newStock === 0) newStatus = "out-of-stock"
+      else if (newStock < selectedItem.minStockLevel) newStatus = "low-stock"
+      else if (newStock > selectedItem.maxStockLevel) newStatus = "overstocked"
 
-    const updatedInventory = inventory.map((item) =>
-      item.id === selectedItem.id
-        ? {
-            ...item,
-            currentStock: Math.max(0, newStock),
-            totalValue: Math.max(0, newStock) * item.unitPrice,
-            status: newStatus,
-          }
-        : item,
-    )
+      const updatedInventory = inventory.map((item) =>
+        item.id === selectedItem.id
+          ? {
+              ...item,
+              currentStock: Math.max(0, newStock),
+              totalValue: Math.max(0, newStock) * item.unitPrice,
+              status: newStatus,
+            }
+          : item,
+      )
 
-    setInventory(updatedInventory)
-    setIsAdjustDialogOpen(false)
-    setAdjustmentQuantity("")
-    setAdjustmentReason("")
+      setInventory(updatedInventory)
+      setIsAdjustDialogOpen(false)
+      setAdjustmentQuantity("")
+      setAdjustmentReason("")
 
-    toast({
-      title: "Stock Adjusted",
-      description: `${selectedItem.productName} stock has been ${adjustmentType === "add" ? "increased" : "decreased"} by ${quantity} units.`,
-    })
+      // Here you could also make an API call to update the backend
+      // await inventoryApi.updateStock(selectedItem.id, { quantity: Math.max(0, newStock) })
+
+      toast({
+        title: "Stock Adjusted",
+        description: `${selectedItem.productName} stock has been ${adjustmentType === "add" ? "increased" : "decreased"} by ${quantity} units.`,
+      })
+    } catch (error) {
+      console.error("Error adjusting stock:", error)
+      toast({
+        title: "Error",
+        description: "Failed to adjust stock. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const getInventoryByStatus = (status: string) => {
@@ -199,282 +302,304 @@ const filteredInventory = inventory.filter((item) => {
     return inventory.reduce((total, item) => total + item.totalValue, 0)
   }
 
-  return (
-        <DashboardLayout title="Vendor Dashboard" description="Overview of your network operations">
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
-          <p className="text-gray-600">Track and manage your product inventory</p>
+  if (loading) {
+    return (
+      <DashboardLayout title="Vendor Dashboard" description="Overview of your network operations">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Package className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+            <p className="mt-2 text-gray-600">Loading inventory...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
+    )
+  }
 
-      {/* Inventory Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Package className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inventory.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <TrendingDown className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{getInventoryByStatus("low-stock").length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{getInventoryByStatus("out-of-stock").length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overstocked</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{getInventoryByStatus("overstocked").length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <Package className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(getTotalInventoryValue())}</div>
-          </CardContent>
-        </Card>
-      </div>
+  return (
+    <DashboardLayout title="Vendor Dashboard" description="Overview of your network operations">
+      <div className="space-y-6 p-4 md:p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
+            <p className="text-gray-600">Track and manage your product inventory</p>
+          </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Inventory Items</CardTitle>
-          <CardDescription>Manage your product inventory and stock levels</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="all" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">All Items</TabsTrigger>
-              <TabsTrigger value="in-stock">In Stock</TabsTrigger>
-              <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
-              <TabsTrigger value="out-of-stock">Out of Stock</TabsTrigger>
-              <TabsTrigger value="overstocked">Overstocked</TabsTrigger>
-            </TabsList>
+        {/* Inventory Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+              <Package className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{inventory.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
+              <TrendingDown className="h-4 w-4 text-yellow-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{getInventoryByStatus("low-stock").length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{getInventoryByStatus("out-of-stock").length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Overstocked</CardTitle>
+              <TrendingUp className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{getInventoryByStatus("overstocked").length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Value</CardTitle>
+              <Package className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(getTotalInventoryValue())}</div>
+            </CardContent>
+          </Card>
+        </div>
 
-            <div className="mt-4 space-y-4">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Search inventory..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
+        <Card>
+          <CardHeader>
+            <CardTitle>Inventory Items</CardTitle>
+            <CardDescription>Manage your product inventory and stock levels</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="all" className="w-full">
+              <TabsList className="grid w-full grid-cols-5">
+                <TabsTrigger value="all">All Items</TabsTrigger>
+                <TabsTrigger value="in-stock">In Stock</TabsTrigger>
+                <TabsTrigger value="low-stock">Low Stock</TabsTrigger>
+                <TabsTrigger value="out-of-stock">Out of Stock</TabsTrigger>
+                <TabsTrigger value="overstocked">Overstocked</TabsTrigger>
+              </TabsList>
+
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Search inventory..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
                   </div>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Filter by category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                    <SelectTrigger className="w-[150px]">
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="in-stock">In Stock</SelectItem>
+                      <SelectItem value="low-stock">Low Stock</SelectItem>
+                      <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+                      <SelectItem value="overstocked">Overstocked</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter by category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="Routers">Routers</SelectItem>
-                    <SelectItem value="Cables">Cables</SelectItem>
-                    <SelectItem value="ONUs">ONUs</SelectItem>
-                    <SelectItem value="Switches">Switches</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="in-stock">In Stock</SelectItem>
-                    <SelectItem value="low-stock">Low Stock</SelectItem>
-                    <SelectItem value="out-of-stock">Out of Stock</SelectItem>
-                    <SelectItem value="overstocked">Overstocked</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
-              <TabsContent value="all">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Current Stock</TableHead>
-                      <TableHead>Min/Max</TableHead>
-                      <TableHead>Unit Price</TableHead>
-                      <TableHead>Total Value</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredInventory.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium text-gray-900">{item.productName}</div>
-                            <div className="text-sm text-gray-500">Location: {item.location}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{item.sku}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{item.category}</Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">{item.currentStock}</TableCell>
-                        <TableCell className="text-sm text-gray-600">
-                          {item.minStockLevel} / {item.maxStockLevel}
-                        </TableCell>
-                        <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                        <TableCell className="font-medium">{formatCurrency(item.totalValue)}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(item.status)}>
-                            <div className="flex items-center space-x-1">
-                              {getStatusIcon(item.status)}
-                              <span>{item.status.replace("-", " ")}</span>
-                            </div>
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button variant="outline" size="sm" onClick={() => handleStockAdjustment(item)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TabsContent>
-
-              {["in-stock", "low-stock", "out-of-stock", "overstocked"].map((status) => (
-                <TabsContent key={status} value={status}>
+                <TabsContent value="all">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Product</TableHead>
-                        <TableHead>SKU</TableHead>
+                        <TableHead>SKU/Model</TableHead>
+                        <TableHead>Category</TableHead>
                         <TableHead>Current Stock</TableHead>
                         <TableHead>Min/Max</TableHead>
+                        <TableHead>Cost Price</TableHead>
                         <TableHead>Unit Price</TableHead>
                         <TableHead>Total Value</TableHead>
-                        <TableHead>Last Restocked</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {getInventoryByStatus(status).map((item) => (
+                      {filteredInventory.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell>
                             <div>
                               <div className="font-medium text-gray-900">{item.productName}</div>
+                              <div className="text-sm text-gray-500">Brand: {item.brand}</div>
                               <div className="text-sm text-gray-500">Location: {item.location}</div>
                             </div>
                           </TableCell>
                           <TableCell className="font-mono text-sm">{item.sku}</TableCell>
-                          <TableCell className="font-medium">{item.currentStock}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{item.category}</Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {item.currentStock} {item.unitType}
+                          </TableCell>
                           <TableCell className="text-sm text-gray-600">
                             {item.minStockLevel} / {item.maxStockLevel}
                           </TableCell>
+                          <TableCell>{formatCurrency(item.costPrice)}</TableCell>
                           <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
                           <TableCell className="font-medium">{formatCurrency(item.totalValue)}</TableCell>
-                          <TableCell>{formatDate(item.lastRestocked)}</TableCell>
                           <TableCell>
-                            <Button variant="outline" size="sm" onClick={() => handleStockAdjustment(item)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <Badge className={getStatusColor(item.status)}>
+                              <div className="flex items-center space-x-1">
+                                {getStatusIcon(item.status)}
+                                <span>{item.status.replace("-", " ")}</span>
+                              </div>
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button variant="outline" size="sm" onClick={() => handleStockAdjustment(item)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </TabsContent>
-              ))}
-            </div>
-          </Tabs>
-        </CardContent>
-      </Card>
 
-      {/* Stock Adjustment Dialog */}
-      <Dialog open={isAdjustDialogOpen} onOpenChange={setIsAdjustDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Adjust Stock</DialogTitle>
-            <DialogDescription>Update inventory levels for {selectedItem?.productName}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Current Stock: {selectedItem?.currentStock}</Label>
+                {["in-stock", "low-stock", "out-of-stock", "overstocked"].map((status) => (
+                  <TabsContent key={status} value={status}>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead>SKU/Model</TableHead>
+                          <TableHead>Current Stock</TableHead>
+                          <TableHead>Min/Max</TableHead>
+                          <TableHead>Unit Price</TableHead>
+                          <TableHead>Total Value</TableHead>
+                          <TableHead>Last Updated</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {getInventoryByStatus(status).map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium text-gray-900">{item.productName}</div>
+                                <div className="text-sm text-gray-500">Brand: {item.brand}</div>
+                                <div className="text-sm text-gray-500">Location: {item.location}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">{item.sku}</TableCell>
+                            <TableCell className="font-medium">
+                              {item.currentStock} {item.unitType}
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-600">
+                              {item.minStockLevel} / {item.maxStockLevel}
+                            </TableCell>
+                            <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                            <TableCell className="font-medium">{formatCurrency(item.totalValue)}</TableCell>
+                            <TableCell>{formatDate(item.lastRestocked)}</TableCell>
+                            <TableCell>
+                              <Button variant="outline" size="sm" onClick={() => handleStockAdjustment(item)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TabsContent>
+                ))}
+              </div>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Stock Adjustment Dialog */}
+        <Dialog open={isAdjustDialogOpen} onOpenChange={setIsAdjustDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Adjust Stock</DialogTitle>
+              <DialogDescription>Update inventory levels for {selectedItem?.productName}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Current Stock: {selectedItem?.currentStock} {selectedItem?.unitType}</Label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="adjustmentType">Adjustment Type</Label>
+                <Select value={adjustmentType} onValueChange={(value: "add" | "remove") => setAdjustmentType(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="add">Add Stock</SelectItem>
+                    <SelectItem value="remove">Remove Stock</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  value={adjustmentQuantity}
+                  onChange={(e) => setAdjustmentQuantity(e.target.value)}
+                  placeholder="Enter quantity"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reason">Reason</Label>
+                <Select value={adjustmentReason} onValueChange={setAdjustmentReason}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="restock">Restock</SelectItem>
+                    <SelectItem value="sale">Sale</SelectItem>
+                    <SelectItem value="damage">Damage</SelectItem>
+                    <SelectItem value="return">Return</SelectItem>
+                    <SelectItem value="correction">Stock Correction</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="adjustmentType">Adjustment Type</Label>
-              <Select value={adjustmentType} onValueChange={(value: "add" | "remove") => setAdjustmentType(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="add">Add Stock</SelectItem>
-                  <SelectItem value="remove">Remove Stock</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setIsAdjustDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={processStockAdjustment} className="bg-blue-600 hover:bg-blue-700">
+                Update Stock
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity</Label>
-              <Input
-                id="quantity"
-                type="number"
-                value={adjustmentQuantity}
-                onChange={(e) => setAdjustmentQuantity(e.target.value)}
-                placeholder="Enter quantity"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="reason">Reason</Label>
-              <Select value={adjustmentReason} onValueChange={setAdjustmentReason}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select reason" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="restock">Restock</SelectItem>
-                  <SelectItem value="sale">Sale</SelectItem>
-                  <SelectItem value="damage">Damage</SelectItem>
-                  <SelectItem value="return">Return</SelectItem>
-                  <SelectItem value="correction">Stock Correction</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setIsAdjustDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={processStockAdjustment} className="bg-blue-600 hover:bg-blue-700">
-              Update Stock
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </DashboardLayout>
   )
 }
