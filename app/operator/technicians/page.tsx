@@ -190,48 +190,112 @@ export default function TechnicianManagement() {
     fetchTasks()
   }, [])
 
-  const fetchTechnicians = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const response = await operatorApi.getTechnicians()
-      console.log('Technicians response:', response)
+  // const fetchTechnicians = async () => {
+  //   try {
+  //     setLoading(true)
+  //     setError(null)
+  //     const response = await operatorApi.getTechnicians()
+  //     console.log('Technicians response:', response)
       
-      let technicianData: Technician[] = []
+  //     let technicianData: Technician[] = []
       
-      if (Array.isArray(response)) {
-        technicianData = response
-      } else if (response?.data && Array.isArray(response.data)) {
-        technicianData = response.data
-      } else if (response?.success && Array.isArray(response.data)) {
-        technicianData = response.data
-      }
+  //     if (Array.isArray(response)) {
+  //       technicianData = response
+  //     } else if (response?.data && Array.isArray(response.data)) {
+  //       technicianData = response.data
+  //     } else if (response?.success && Array.isArray(response.data)) {
+  //       technicianData = response.data
+  //     }
       
-      setTechnicians(technicianData)
+  //     setTechnicians(technicianData)
       
-      if (technicianData.length === 0) {
-        toast({
-          title: "No Technicians",
-          description: "No technicians found. Add some technicians to get started.",
-        })
-      }
-    } catch (err: any) {
-      console.error('Fetch technicians error:', err)
-      setError('Failed to fetch technicians: ' + (err.message || 'Unknown error'))
-      toast({
-        title: "Error",
-        description: "Failed to fetch technicians. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+  //     if (technicianData.length === 0) {
+  //       toast({
+  //         title: "No Technicians",
+  //         description: "No technicians found. Add some technicians to get started.",
+  //       })
+  //     }
+  //   } catch (err: any) {
+  //     console.error('Fetch technicians error:', err)
+  //     setError('Failed to fetch technicians: ' + (err.message || 'Unknown error'))
+  //     toast({
+  //       title: "Error",
+  //       description: "Failed to fetch technicians. Please try again.",
+  //       variant: "destructive",
+  //     })
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
+  const fetchTechnicians = async () => {
+  try {
+    setLoading(true)
+    setError(null)
+    const response = await operatorApi.getTechnicians()
+    console.log('Technicians response:', response)
+    
+    let technicianData: Technician[] = []
+    
+    // Extract data based on different possible response structures
+    let rawData: any[] = []
+    if (Array.isArray(response)) {
+      rawData = response
+    } else if (response?.data && Array.isArray(response.data)) {
+      rawData = response.data
+    } else if (response?.success && Array.isArray(response.data)) {
+      rawData = response.data
+    }
+    
+    // Map the API response to your expected Technician interface
+    technicianData = rawData.map((tech: any) => ({
+      userId: tech.user_id || tech.userId || '',
+      email: tech.email || '',
+      profileDetail: {
+        name: tech.profileDetail?.name || 'Unknown',
+        phone: tech.profileDetail?.phone || 'N/A',
+        area: tech.profileDetail?.area || 'Not Assigned',
+        specialization: tech.profileDetail?.specialization || 'General',
+        salary: typeof tech.profileDetail?.salary === 'string' 
+          ? parseInt(tech.profileDetail.salary) || 0 
+          : tech.profileDetail?.salary || 0,
+        assignedOperatorId: tech.profileDetail?.assignedOperatorId || ''
+      },
+      status: tech.status || 'active',
+      attendance: tech.attendance || 'present',
+      checkInTime: tech.checkInTime,
+      checkOutTime: tech.checkOutTime,
+      tasksCompleted: tech.tasksCompleted || 0,
+      tasksAssigned: tech.tasksAssigned || 0,
+      avgRating: tech.profileDetail?.rating || tech.avgRating || 0,
+      lastActive: tech.lastActive,
+      joinDate: tech.createdAt || tech.joinDate
+    }))
+    
+    setTechnicians(technicianData)
+    
+    if (technicianData.length === 0) {
+      toast({
+        title: "No Technicians",
+        description: "No technicians found. Add some technicians to get started.",
+      })
+    }
+  } catch (err: any) {
+    console.error('Fetch technicians error:', err)
+    setError('Failed to fetch technicians: ' + (err.message || 'Unknown error'))
+    toast({
+      title: "Error",
+      description: "Failed to fetch technicians. Please try again.",
+      variant: "destructive",
+    })
+  } finally {
+    setLoading(false)
+  }
+}
   const fetchTasks = async () => {
     try {
       setTasksLoading(true)
-      const response = await taskApi.getAll()
+      const response = await taskApi.getCreated(user?.user_id)
       console.log('Tasks response:', response)
       
       let taskData: Task[] = []
@@ -263,172 +327,344 @@ export default function TechnicianManagement() {
     }
   }
 
+  // const handleAddTechnician = async () => {
+  //   try {
+  //     if (!newTechnician.name.trim() || !newTechnician.email.trim() || !newTechnician.phone.trim()) {
+  //       toast({
+  //         title: "Validation Error",
+  //         description: "Please fill in all required fields (Name, Email, Phone).",
+  //         variant: "destructive",
+  //       })
+  //       return
+  //     }
+
+  //     if (!user?.userId) {
+  //       toast({
+  //         title: "Authentication Error",
+  //         description: "User not authenticated. Please login again.",
+  //         variant: "destructive",
+  //       })
+  //       return
+  //     }
+
+  //     const technicianData = {
+  //       email: newTechnician.email.trim(),
+  //       password: newTechnician.password,
+  //       profileDetail: {
+  //         name: newTechnician.name.trim(),
+  //         phone: newTechnician.phone.trim(),
+  //         area: newTechnician.area.trim() || "Not Assigned",
+  //         specialization: newTechnician.specialization || "General",
+  //         salary: parseInt(newTechnician.salary) || 0,
+  //         assignedOperatorId: user.userId
+  //       }
+  //     }
+
+  //     console.log('Adding technician with data:', technicianData)
+      
+  //     const response = await operatorApi.registerTechnician(technicianData)
+  //     console.log('Add technician response:', response)
+      
+  //     toast({
+  //       title: "Success",
+  //       description: `Technician ${newTechnician.name} added successfully!`,
+  //     })
+      
+  //     setIsAddTechDialogOpen(false)
+  //     setNewTechnician({
+  //       name: "",
+  //       phone: "",
+  //       email: "",
+  //       area: "",
+  //       specialization: "",
+  //       salary: "",
+  //       password: "default123"
+  //     })
+      
+  //     // Refresh the list
+  //     await fetchTechnicians()
+  //   } catch (err: any) {
+  //     console.error('Add technician error:', err)
+  //     toast({
+  //       title: "Error",
+  //       description: "Failed to add technician: " + (err.message || 'Please try again.'),
+  //       variant: "destructive",
+  //     })
+  //   }
+  // }
+
   const handleAddTechnician = async () => {
-    try {
-      if (!newTechnician.name.trim() || !newTechnician.email.trim() || !newTechnician.phone.trim()) {
-        toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields (Name, Email, Phone).",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!user?.userId) {
-        toast({
-          title: "Authentication Error",
-          description: "User not authenticated. Please login again.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const technicianData = {
-        email: newTechnician.email.trim(),
-        password: newTechnician.password,
-        profileDetail: {
-          name: newTechnician.name.trim(),
-          phone: newTechnician.phone.trim(),
-          area: newTechnician.area.trim() || "Not Assigned",
-          specialization: newTechnician.specialization || "General",
-          salary: parseInt(newTechnician.salary) || 0,
-          assignedOperatorId: user.userId
-        }
-      }
-
-      console.log('Adding technician with data:', technicianData)
-      
-      const response = await operatorApi.registerTechnician(technicianData)
-      console.log('Add technician response:', response)
-      
+  try {
+    if (!newTechnician.name.trim() || !newTechnician.email.trim() || !newTechnician.phone.trim()) {
       toast({
-        title: "Success",
-        description: `Technician ${newTechnician.name} added successfully!`,
-      })
-      
-      setIsAddTechDialogOpen(false)
-      setNewTechnician({
-        name: "",
-        phone: "",
-        email: "",
-        area: "",
-        specialization: "",
-        salary: "",
-        password: "default123"
-      })
-      
-      // Refresh the list
-      await fetchTechnicians()
-    } catch (err: any) {
-      console.error('Add technician error:', err)
-      toast({
-        title: "Error",
-        description: "Failed to add technician: " + (err.message || 'Please try again.'),
+        title: "Validation Error",
+        description: "Please fill in all required fields (Name, Email, Phone).",
         variant: "destructive",
       })
+      return
     }
-  }
 
-  const handleCreateTask = async () => {
-    try {
-      if (!newTask.title.trim() || !newTask.technicianId || !newTask.dueDate) {
-        toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields (Title, Technician, Due Date).",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!user?.userId) {
-        toast({
-          title: "Authentication Error",
-          description: "User not authenticated. Please login again.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const taskData = {
-        title: newTask.title.trim(),
-        description: newTask.description.trim(),
-        priority: newTask.priority,
-        status: 'pending' as const,
-        assignTo: newTask.technicianId,
-        customerName: newTask.customerName.trim(),
-        customerPhone: newTask.customerPhone.trim(),
-        address: newTask.address.trim(),
-        dueDate: new Date(newTask.dueDate).toISOString(),
-        assignedDate: new Date().toISOString()
-      }
-
-      console.log('Creating task with data:', taskData)
-      
-      const response = await taskApi.create(user.userId, taskData)
-      console.log('Create task response:', response)
-      
+    if (!user?.userId) {
       toast({
-        title: "Success",
-        description: `Task "${newTask.title}" created and assigned successfully!`,
-      })
-      
-      setIsCreateTaskDialogOpen(false)
-      setNewTask({
-        title: "",
-        description: "",
-        technicianId: "",
-        priority: "medium",
-        customerName: "",
-        customerPhone: "",
-        address: "",
-        dueDate: ""
-      })
-      
-      // Refresh the tasks list
-      await fetchTasks()
-    } catch (err: any) {
-      console.error('Create task error:', err)
-      toast({
-        title: "Error",
-        description: "Failed to create task: " + (err.message || 'Please try again.'),
+        title: "Authentication Error",
+        description: "User not authenticated. Please login again.",
         variant: "destructive",
       })
+      return
     }
-  }
 
-  const handleStatusUpdate = (techId: string, newStatus: string) => {
-    setConfirmDialog({
-      open: true,
-      title: "Update Technician Status",
-      description: `Are you sure you want to change the status to "${newStatus}"?`,
-      action: async () => {
-        try {
-          await operatorApi.updateTechnicianProfile(techId, { 
-            profileDetail: { 
-              assignedOperatorId: user?.userId || "" 
-            } 
-          })
-          
-          setTechnicians(prev => prev.map((tech) => 
-            (tech.userId === techId ? { ...tech, status: newStatus } : tech)
-          ))
-          
-          toast({
-            title: "Success",
-            description: "Technician status updated successfully!",
-          })
-        } catch (err: any) {
-          console.error('Status update error:', err)
-          toast({
-            title: "Error",
-            description: "Failed to update status: " + (err.message || 'Please try again.'),
-            variant: "destructive",
-          })
-        }
-      }
+    const technicianData = {
+      email: newTechnician.email.trim(),
+      password: newTechnician.password,
+      profileDetail: {
+        name: newTechnician.name.trim(),
+        phone: newTechnician.phone.trim(),
+        area: newTechnician.area.trim() || "Not Assigned",
+        specialization: newTechnician.specialization || "General",
+        salary: parseInt(newTechnician.salary) || 0,
+        assignedOperatorId: user.userId
+      },
+      role: "technician" // Make sure to include the role
+    }
+
+    console.log('Adding technician with data:', technicianData)
+    
+    const response = await operatorApi.registerTechnician(technicianData)
+    console.log('Add technician response:', response)
+    
+    toast({
+      title: "Success",
+      description: `Technician ${newTechnician.name} added successfully!`,
+    })
+    
+    setIsAddTechDialogOpen(false)
+    setNewTechnician({
+      name: "",
+      phone: "",
+      email: "",
+      area: "",
+      specialization: "",
+      salary: "",
+      password: "default123"
+    })
+    
+    // Refresh the list
+    await fetchTechnicians()
+  } catch (err: any) {
+    console.error('Add technician error:', err)
+    toast({
+      title: "Error",
+      description: "Failed to add technician: " + (err.message || 'Please try again.'),
+      variant: "destructive",
     })
   }
+}
+  // const handleCreateTask = async () => {
+  //   try {
+  //     if (!newTask.title.trim() || !newTask.technicianId || !newTask.dueDate) {
+  //       toast({
+  //         title: "Validation Error",
+  //         description: "Please fill in all required fields (Title, Technician, Due Date).",
+  //         variant: "destructive",
+  //       })
+  //       return
+  //     }
 
+  //     if (!user?.user_id) {
+  //       toast({
+  //         title: "Authentication Error",
+  //         description: "User not authenticated. Please login again.",
+  //         variant: "destructive",
+  //       })
+  //       return
+  //     }
+
+  //   const taskData = {
+  //     title: newTask.title.trim(),
+  //     description: newTask.description.trim(),
+  //     priority: "HIGH",
+  //     status: 'Pending', // Capital P as required by API
+  //     assignTo: newTask.technicianId,
+  //     customerName: newTask.customerName.trim(),
+  //     customerPhone: newTask.customerPhone.trim(),
+  //     address: newTask.address.trim(),
+  //     dueDate: new Date(newTask.dueDate).toISOString(),
+  //     category: "Maintenance" // Default category
+  //   }
+  //     console.log('Creating task with data:', taskData)
+      
+  //     const response = await taskApi.create(user.userId, taskData)
+  //     console.log('Create task response:', response)
+      
+  //     toast({
+  //       title: "Success",
+  //       description: `Task "${newTask.title}" created and assigned successfully!`,
+  //     })
+      
+  //     setIsCreateTaskDialogOpen(false)
+  //     setNewTask({
+  //       title: "",
+  //       description: "",
+  //       technicianId: "",
+  //       priority: "medium",
+  //       customerName: "",
+  //       customerPhone: "",
+  //       address: "",
+  //       dueDate: ""
+  //     })
+      
+  //     // Refresh the tasks list
+  //     await fetchTasks()
+  //   } catch (err: any) {
+  //     console.error('Create task error:', err)
+  //     toast({
+  //       title: "Error",
+  //       description: "Failed to create task: " + (err.message || 'Please try again.'),
+  //       variant: "destructive",
+  //     })
+  //   }
+  // }
+
+  // const handleStatusUpdate = (techId: string, newStatus: string) => {
+  //   setConfirmDialog({
+  //     open: true,
+  //     title: "Update Technician Status",
+  //     description: `Are you sure you want to change the status to "${newStatus}"?`,
+  //     action: async () => {
+  //       try {
+  //         await operatorApi.updateTechnicianProfile(techId, { 
+  //           profileDetail: { 
+  //             assignedOperatorId: user?.userId || "" 
+  //           } 
+  //         })
+          
+  //         setTechnicians(prev => prev.map((tech) => 
+  //           (tech.userId === techId ? { ...tech, status: newStatus } : tech)
+  //         ))
+          
+  //         toast({
+  //           title: "Success",
+  //           description: "Technician status updated successfully!",
+  //         })
+  //       } catch (err: any) {
+  //         console.error('Status update error:', err)
+  //         toast({
+  //           title: "Error",
+  //           description: "Failed to update status: " + (err.message || 'Please try again.'),
+  //           variant: "destructive",
+  //         })
+  //       }
+  //     }
+  //   })
+  // }
+
+  const handleCreateTask = async () => {
+  try {
+    if (!newTask.title.trim() || !newTask.technicianId || !newTask.dueDate) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields (Title, Technician, Due Date).",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!user?.user_id) {
+      toast({
+        title: "Authentication Error",
+        description: "User not authenticated. Please login again.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Format priority and status to match API expectations
+    const formatPriority = (priority: string) => {
+      switch (priority) {
+        case 'low': return 'Low'
+        case 'medium': return 'Medium'
+        case 'high': return 'High'
+        default: return 'Medium'
+      }
+    }
+
+    const taskData = {
+      title: newTask.title.trim(),
+      description: newTask.description.trim(),
+      priority: formatPriority(newTask.priority),
+      status: 'Pending', // Capital P as required by API
+      assignTo: newTask.technicianId,
+      customerName: newTask.customerName.trim(),
+      customerPhone: newTask.customerPhone.trim(),
+      address: newTask.address.trim(),
+      dueDate: new Date(newTask.dueDate).toISOString(),
+      category: "Maintenance" // Default category
+    }
+
+    console.log('Creating task with data:', taskData)
+    
+    const response = await taskApi.create(user.user_id, taskData)
+    console.log('Create task response:', response)
+    
+    toast({
+      title: "Success",
+      description: `Task "${newTask.title}" created and assigned successfully!`,
+    })
+    
+    setIsCreateTaskDialogOpen(false)
+    setNewTask({
+      title: "",
+      description: "",
+      technicianId: "",
+      priority: "medium",
+      customerName: "",
+      customerPhone: "",
+      address: "",
+      dueDate: ""
+    })
+    
+    // Refresh the tasks list
+    await fetchTasks()
+  } catch (err: any) {
+    console.error('Create task error:', err)
+    toast({
+      title: "Error",
+      description: "Failed to create task: " + (err.message || 'Please try again.'),
+      variant: "destructive",
+    })
+  }
+}
+const handleStatusUpdate = (techId: string, newStatus: string) => {
+  setConfirmDialog({
+    open: true,
+    title: "Update Technician Status",
+    description: `Are you sure you want to change the status to "${newStatus}"?`,
+    action: async () => {
+      try {
+        // Update the status field directly
+        await operatorApi.updateTechnicianProfile(techId, { 
+          status: newStatus
+        })
+        
+        setTechnicians(prev => prev.map((tech) => 
+          (tech.userId === techId ? { ...tech, status: newStatus } : tech)
+        ))
+        
+        toast({
+          title: "Success",
+          description: "Technician status updated successfully!",
+        })
+      } catch (err: any) {
+        console.error('Status update error:', err)
+        toast({
+          title: "Error",
+          description: "Failed to update status: " + (err.message || 'Please try again.'),
+          variant: "destructive",
+        })
+      }
+    }
+  })
+}
   const handleTaskStatusUpdate = (taskId: string, newStatus: Task['status']) => {
     setConfirmDialog({
       open: true,
@@ -1336,7 +1572,7 @@ export default function TechnicianManagement() {
                                           <div>
                                             <div className="font-medium text-gray-900 truncate">{task.title}</div>
                                             <div className="text-sm text-gray-500 truncate">
-                                              {task.description}
+                                              {task.taskId}    {task?.technicianName}
                                             </div>
                                           </div>
                                         </TableCell>
@@ -1346,7 +1582,7 @@ export default function TechnicianManagement() {
                                               <User className="h-3 w-3 text-green-600" />
                                             </div>
                                             <span className="text-sm font-medium truncate">
-                                              {task.technicianName || 'Assigned'}
+                                              {task?.technicianName}
                                             </span>
                                           </div>
                                         </TableCell>
@@ -1359,7 +1595,7 @@ export default function TechnicianManagement() {
                                         <TableCell className="py-4">
                                           <div className="text-sm">
                                             <div className="font-medium truncate">{task.customerName || 'N/A'}</div>
-                                            <div className="text-gray-500 truncate">{task.customerPhone || 'N/A'}</div>
+                                     
                                           </div>
                                         </TableCell>
                                         <TableCell className="py-4">
