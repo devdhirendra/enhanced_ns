@@ -104,6 +104,8 @@ interface Task {
   completedDate?: string
   createdBy: string
   technicianName?: string
+  technicianId : string
+  customerId : string
 }
 
 const TechnicianSkeleton = () => (
@@ -120,7 +122,7 @@ const TechnicianSkeleton = () => (
 )
 
 export default function TechnicianManagement() {
-  const { user } = useAuth()
+  const { user, isLoading: authLoading } = useAuth() 
   const { toast } = useToast()
   
   // State Management
@@ -186,50 +188,26 @@ export default function TechnicianManagement() {
 
   // Fetch Data
   useEffect(() => {
-    fetchTechnicians()
-    fetchTasks()
-  }, [])
+    if (user?.user_id) {
+      fetchTechnicians()
+      fetchTasks()
+    } else if (!authLoading) {
+      // If auth is done loading but no user ID
+      setError("User not authenticated. Please login again.")
+      setLoading(false)
+      setTasksLoading(false)
+    }
+  }, [user, authLoading])
 
-  // const fetchTechnicians = async () => {
-  //   try {
-  //     setLoading(true)
-  //     setError(null)
-  //     const response = await operatorApi.getTechnicians()
-  //     console.log('Technicians response:', response)
-      
-  //     let technicianData: Technician[] = []
-      
-  //     if (Array.isArray(response)) {
-  //       technicianData = response
-  //     } else if (response?.data && Array.isArray(response.data)) {
-  //       technicianData = response.data
-  //     } else if (response?.success && Array.isArray(response.data)) {
-  //       technicianData = response.data
-  //     }
-      
-  //     setTechnicians(technicianData)
-      
-  //     if (technicianData.length === 0) {
-  //       toast({
-  //         title: "No Technicians",
-  //         description: "No technicians found. Add some technicians to get started.",
-  //       })
-  //     }
-  //   } catch (err: any) {
-  //     console.error('Fetch technicians error:', err)
-  //     setError('Failed to fetch technicians: ' + (err.message || 'Unknown error'))
-  //     toast({
-  //       title: "Error",
-  //       description: "Failed to fetch technicians. Please try again.",
-  //       variant: "destructive",
-  //     })
-  //   } finally {
-  //     setLoading(false)
-  //   }
-  // }
 
   const fetchTechnicians = async () => {
-  try {
+    if (!user?.user_id) {
+      setError("User ID not available")
+      setLoading(false)
+      return
+    }
+    
+    try {
     setLoading(true)
     setError(null)
     const response = await operatorApi.getTechnicians()
@@ -307,14 +285,9 @@ export default function TechnicianManagement() {
       } else if (response?.success && Array.isArray(response.data)) {
         taskData = response.data
       }
+
       
-      // Add technician names to tasks
-      const tasksWithNames = taskData.map(task => ({
-        ...task,
-        technicianName: technicians.find(t => t.userId === task.assignTo)?.profileDetail?.name || 'Unknown'
-      }))
-      
-      setTasks(tasksWithNames)
+      setTasks(taskData)
     } catch (err: any) {
       console.error('Fetch tasks error:', err)
       toast({
@@ -422,7 +395,7 @@ export default function TechnicianManagement() {
         area: newTechnician.area.trim() || "Not Assigned",
         specialization: newTechnician.specialization || "General",
         salary: parseInt(newTechnician.salary) || 0,
-        assignedOperatorId: user.userId
+        assignedOperatorId: user?.userId
       },
       role: "technician" // Make sure to include the role
     }
@@ -459,104 +432,6 @@ export default function TechnicianManagement() {
     })
   }
 }
-  // const handleCreateTask = async () => {
-  //   try {
-  //     if (!newTask.title.trim() || !newTask.technicianId || !newTask.dueDate) {
-  //       toast({
-  //         title: "Validation Error",
-  //         description: "Please fill in all required fields (Title, Technician, Due Date).",
-  //         variant: "destructive",
-  //       })
-  //       return
-  //     }
-
-  //     if (!user?.user_id) {
-  //       toast({
-  //         title: "Authentication Error",
-  //         description: "User not authenticated. Please login again.",
-  //         variant: "destructive",
-  //       })
-  //       return
-  //     }
-
-  //   const taskData = {
-  //     title: newTask.title.trim(),
-  //     description: newTask.description.trim(),
-  //     priority: "HIGH",
-  //     status: 'Pending', // Capital P as required by API
-  //     assignTo: newTask.technicianId,
-  //     customerName: newTask.customerName.trim(),
-  //     customerPhone: newTask.customerPhone.trim(),
-  //     address: newTask.address.trim(),
-  //     dueDate: new Date(newTask.dueDate).toISOString(),
-  //     category: "Maintenance" // Default category
-  //   }
-  //     console.log('Creating task with data:', taskData)
-      
-  //     const response = await taskApi.create(user.userId, taskData)
-  //     console.log('Create task response:', response)
-      
-  //     toast({
-  //       title: "Success",
-  //       description: `Task "${newTask.title}" created and assigned successfully!`,
-  //     })
-      
-  //     setIsCreateTaskDialogOpen(false)
-  //     setNewTask({
-  //       title: "",
-  //       description: "",
-  //       technicianId: "",
-  //       priority: "medium",
-  //       customerName: "",
-  //       customerPhone: "",
-  //       address: "",
-  //       dueDate: ""
-  //     })
-      
-  //     // Refresh the tasks list
-  //     await fetchTasks()
-  //   } catch (err: any) {
-  //     console.error('Create task error:', err)
-  //     toast({
-  //       title: "Error",
-  //       description: "Failed to create task: " + (err.message || 'Please try again.'),
-  //       variant: "destructive",
-  //     })
-  //   }
-  // }
-
-  // const handleStatusUpdate = (techId: string, newStatus: string) => {
-  //   setConfirmDialog({
-  //     open: true,
-  //     title: "Update Technician Status",
-  //     description: `Are you sure you want to change the status to "${newStatus}"?`,
-  //     action: async () => {
-  //       try {
-  //         await operatorApi.updateTechnicianProfile(techId, { 
-  //           profileDetail: { 
-  //             assignedOperatorId: user?.userId || "" 
-  //           } 
-  //         })
-          
-  //         setTechnicians(prev => prev.map((tech) => 
-  //           (tech.userId === techId ? { ...tech, status: newStatus } : tech)
-  //         ))
-          
-  //         toast({
-  //           title: "Success",
-  //           description: "Technician status updated successfully!",
-  //         })
-  //       } catch (err: any) {
-  //         console.error('Status update error:', err)
-  //         toast({
-  //           title: "Error",
-  //           description: "Failed to update status: " + (err.message || 'Please try again.'),
-  //           variant: "destructive",
-  //         })
-  //       }
-  //     }
-  //   })
-  // }
 
   const handleCreateTask = async () => {
   try {
@@ -1571,31 +1446,38 @@ const handleStatusUpdate = (techId: string, newStatus: string) => {
                                         <TableCell className="py-4">
                                           <div>
                                             <div className="font-medium text-gray-900 truncate">{task.title}</div>
-                                            <div className="text-sm text-gray-500 truncate">
-                                              {task.taskId}    {task?.technicianName}
+                                            <div className="text-sm text-gray-500 fetchTasks">
+                                              {task.taskId}    
                                             </div>
                                           </div>
                                         </TableCell>
-                                        <TableCell className="py-4">
-                                          <div className="flex items-center space-x-2">
-                                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                                              <User className="h-3 w-3 text-green-600" />
-                                            </div>
+                                         <TableCell className="py-4">
+                                        <div className="flex items-center space-x-2">
+                                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                                            <User className="h-3 w-3 text-green-600" />
+                                          </div>
+                                          <div className="flex flex-col">
                                             <span className="text-sm font-medium truncate">
-                                              {task?.technicianName}
+                                              {task.technicianName}
+                                            </span>
+                                            <span className="text-xs text-gray-500 truncate">
+                                              {task.technicianId}
                                             </span>
                                           </div>
-                                        </TableCell>
+                                        </div>
+                                      </TableCell>
                                         <TableCell className="py-4">
                                           {getPriorityBadge(task.priority)}
                                         </TableCell>
                                         <TableCell className="py-4">
                                           {getTaskStatusBadge(task.status)}
                                         </TableCell>
-                                        <TableCell className="py-4">
-                                          <div className="text-sm">
-                                            <div className="font-medium truncate">{task.customerName || 'N/A'}</div>
-                                     
+                                       <TableCell className="py-4">
+                                          <div>
+                                            <div className="font-medium text-gray-900 truncate">{task.customerName}</div>
+                                            <div className="text-sm text-gray-500 fetchTasks">
+                                              {task.customerId}    
+                                            </div>
                                           </div>
                                         </TableCell>
                                         <TableCell className="py-4">
@@ -1838,7 +1720,7 @@ const handleStatusUpdate = (techId: string, newStatus: string) => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Card className="border border-gray-200">
                           <CardHeader className="pb-3">
-                            <CardTitle className="text-sm font-semibold flex items-center">
+                            <CardTitle className="text-sm fontfetchTasks-semibold flex items-center">
                               <Target className="h-4 w-4 mr-2" />
                               Task Information
                             </CardTitle>

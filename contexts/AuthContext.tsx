@@ -41,7 +41,6 @@ export interface User {
   lastLogin?: string
 }
 
-// In AuthContext.tsx, update the Operator interface:
 export interface Operator extends User {
   id: string
   companyName: string
@@ -60,19 +59,19 @@ export interface Operator extends User {
   businessType: string
   serviceCapacity: {
     connections: number
-    olts: number // Add this to match OperatorDetailsView
-    bandwidth?: string // Keep existing if needed
+    olts: number
+    bandwidth?: string
   }
   apiAccess: any
   status: "active" | "inactive" | "suspended"
   createdAt: string
   updatedAt: string
-  // Add the missing properties that OperatorDetailsView expects:
   technicianCount: number
   expiryDate: string
   lastRenewed: string
   nextBillDate: string
 }
+
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<void>
@@ -82,12 +81,50 @@ interface AuthContextType {
   fetchUserProfile: () => Promise<void>
 }
 
+// Cookie utility functions
+const cookieUtils = {
+  // Set cookie with proper encoding for complex data
+  setCookie: (name: string, value: any, days: number = 7) => {
+    try {
+      const encodedValue = encodeURIComponent(JSON.stringify(value))
+      const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString()
+      document.cookie = `${name}=${encodedValue}; expires=${expires}; path=/; SameSite=Lax; Secure=${window.location.protocol === 'https:'}`
+    } catch (error) {
+      console.error(`Error setting cookie ${name}:`, error)
+    }
+  },
+
+  // Get cookie with proper decoding
+  getCookie: (name: string): any => {
+    try {
+      const value = document.cookie
+        .split('; ')
+        .find(row => row.startsWith(`${name}=`))
+        ?.split('=')[1]
+      
+      if (!value) return null
+      return JSON.parse(decodeURIComponent(value))
+    } catch (error) {
+      console.error(`Error getting cookie ${name}:`, error)
+      return null
+    }
+  },
+
+  // Delete cookie
+  deleteCookie: (name: string) => {
+    document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`
+  },
+
+  // Check if we're on client side
+  isClient: () => typeof window !== 'undefined'
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isClient, setIsClient] = useState(false) // Add client-side check
+  const [isClient, setIsClient] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -95,25 +132,118 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsClient(true)
   }, [])
 
+  const storeUserData = (userData: User, token: string) => {
+    try {
+      // Store in localStorage as backup
+      localStorage.setItem("auth_token", token)
+      localStorage.setItem("user_data", JSON.stringify(userData))
+      localStorage.setItem("user_id", userData.user_id)
+      localStorage.setItem("user_role", userData.role)
+
+      // Store everything in cookies for 100% persistence
+      if (cookieUtils.isClient()) {
+        cookieUtils.setCookie("auth_token", token, 7)
+        cookieUtils.setCookie("user_data", userData, 7)
+        cookieUtils.setCookie("user_id", userData.user_id, 7)
+        cookieUtils.setCookie("user_role", userData.role, 7)
+        cookieUtils.setCookie("user_email", userData.email, 7)
+        cookieUtils.setCookie("user_name", userData.profileDetail?.name || '', 7)
+        
+        // Store additional profile data
+        cookieUtils.setCookie("user_profile", {
+          phone: userData.profileDetail?.phone,
+          companyName: userData.profileDetail?.companyName,
+          address: userData.profileDetail?.address,
+          status: userData.status,
+          permissions: userData.Permissions,
+          lastLogin: userData.lastLogin
+        }, 7)
+      }
+
+      console.log("[v0] User data stored in both localStorage and cookies")
+    } catch (error) {
+      console.error("Error storing user data:", error)
+    }
+  }
+
+  const clearUserData = () => {
+    try {
+      // Clear localStorage
+      localStorage.removeItem("auth_token")
+      localStorage.removeItem("user_data")
+      localStorage.removeItem("user_id")
+      localStorage.removeItem("user_role")
+
+      // Clear all cookies
+      if (cookieUtils.isClient()) {
+        cookieUtils.deleteCookie("auth_token")
+        cookieUtils.deleteCookie("user_data")
+        cookieUtils.deleteCookie("user_id")
+        cookieUtils.deleteCookie("user_role")
+        cookieUtils.deleteCookie("user_email")
+        cookieUtils.deleteCookie("user_name")
+        cookieUtils.deleteCookie("user_profile")
+      }
+
+      // Clear API client token
+      apiClient.clearToken()
+      
+      console.log("[v0] All user data cleared from localStorage and cookies")
+    } catch (error) {
+      console.error("Error clearing user data:", error)
+    }
+  }
+
+  const getUserDataFromStorage = (): { user: User | null, token: string | null } => {
+    if (!isClient) return { user: null, token: null }
+
+    try {
+      // Try to get from localStorage first
+      let token = localStorage.getItem("auth_token")
+      let userData = localStorage.getItem("user_data")
+
+      // If not in localStorage, try cookies
+      if (!token || !userData) {
+        token = cookieUtils.getCookie("auth_token")
+        const cookieUserData = cookieUtils.getCookie("user_data")
+        
+        if (cookieUserData) {
+          userData = JSON.stringify(cookieUserData)
+          
+          // Restore to localStorage if found in cookies
+          if (token && userData) {
+            localStorage.setItem("auth_token", token)
+            localStorage.setItem("user_data", userData)
+            localStorage.setItem("user_id", cookieUserData.user_id)
+            localStorage.setItem("user_role", cookieUserData.role)
+          }
+        }
+      }
+
+      if (token && userData) {
+        const parsedUser = JSON.parse(userData)
+        return { user: parsedUser, token }
+      }
+    } catch (error) {
+      console.error("Error getting user data from storage:", error)
+    }
+
+    return { user: null, token: null }
+  }
+
   const fetchUserProfile = async (): Promise<User | null> => {
-    if (!isClient) return null // Don't access localStorage on server
+    if (!isClient) return null
 
-    const token = localStorage.getItem("auth_token")
-    const userId = localStorage.getItem("user_id")
-    const userRole = localStorage.getItem("user_role")
+    const { token, user: storedUser } = getUserDataFromStorage()
 
-    if (!token || !userId || !userRole) {
+    if (!token || !storedUser) {
       return null
     }
 
     // Check if token is still valid
     if (!apiClient.isTokenValid()) {
       console.log("[v0] Token expired, clearing auth data")
-      localStorage.removeItem("auth_token")
-      localStorage.removeItem("user_data")
-      localStorage.removeItem("user_id")
-      localStorage.removeItem("user_role")
-      apiClient.clearToken()
+      clearUserData()
       setUser(null)
       return null
     }
@@ -122,26 +252,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Set token in API client
       apiClient.setToken(token)
 
-      // Try to fetch user profile based on stored user data
+      // Fetch fresh user data
       let freshUserData: User
-      switch (userRole) {
+      switch (storedUser.role) {
         case "admin":
-          freshUserData = await apiClient.getAdmin(userId)
+          freshUserData = await apiClient.getAdmin(storedUser.user_id)
           break
         case "operator":
-          freshUserData = await apiClient.getOperatorProfile(userId)
+          freshUserData = await apiClient.getOperatorProfile(storedUser.user_id)
           break
         case "technician":
-          freshUserData = await apiClient.getTechnicianProfile(userId)
+          freshUserData = await apiClient.getTechnicianProfile(storedUser.user_id)
           break
         case "staff":
-          freshUserData = await apiClient.getStaffProfile(userId)
+          freshUserData = await apiClient.getStaffProfile(storedUser.user_id)
           break
         case "vendor":
-          freshUserData = await apiClient.getVendorProfile(userId)
+          freshUserData = await apiClient.getVendorProfile(storedUser.user_id)
           break
         case "customer":
-          freshUserData = await apiClient.getCustomerProfile(userId)
+          freshUserData = await apiClient.getCustomerProfile(storedUser.user_id)
           break
         default:
           throw new Error("Invalid user role")
@@ -149,25 +279,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const updatedUser = {
         ...freshUserData,
-        role: userRole, // Ensure role consistency
+        role: storedUser.role,
         status: "active" as const,
         lastLogin: new Date().toISOString(),
       }
 
       setUser(updatedUser)
-      localStorage.setItem("user_data", JSON.stringify(updatedUser))
+      storeUserData(updatedUser, token)
       return updatedUser
     } catch (error) {
       console.error("[v0] Error fetching user profile:", error)
       if (error instanceof Error && error.message === "AUTHENTICATION_FAILED") {
         console.log("[v0] Authentication failed, clearing auth data")
-        localStorage.removeItem("auth_token")
-        localStorage.removeItem("user_data")
-        localStorage.removeItem("user_id")
-        localStorage.removeItem("user_role")
-        apiClient.clearToken()
+        clearUserData()
         setUser(null)
-        // Redirect to login
         router.push("/")
       }
     }
@@ -175,46 +300,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    if (!isClient) return // Wait for client-side hydration
+    if (!isClient) return
 
     const initAuth = async () => {
       console.log("[v0] Initializing auth on client side")
 
-      // Check for stored auth token
-      const token = localStorage.getItem("auth_token")
-      const userData = localStorage.getItem("user_data")
-      const userRole = localStorage.getItem("user_role")
+      const { user: storedUser, token } = getUserDataFromStorage()
 
-      if (token && userData && userRole) {
+      if (token && storedUser) {
         try {
           if (!apiClient.isTokenValid()) {
             console.log("[v0] Stored token is expired, clearing auth data")
-            localStorage.removeItem("auth_token")
-            localStorage.removeItem("user_data")
-            localStorage.removeItem("user_id")
-            localStorage.removeItem("user_role")
-            apiClient.clearToken()
+            clearUserData()
             setLoading(false)
             return
           }
 
-          const parsedUser = JSON.parse(userData)
-
           // Set token in API client
           apiClient.setToken(token)
 
-          console.log("[v0] Setting user from stored data:", parsedUser.role)
-          setUser(parsedUser)
+          console.log("[v0] Setting user from stored data:", storedUser.role)
+          setUser(storedUser)
 
           // Fetch fresh user data in background
           fetchUserProfile()
         } catch (error) {
           console.error("[v0] Error parsing user data:", error)
-          localStorage.removeItem("auth_token")
-          localStorage.removeItem("user_data")
-          localStorage.removeItem("user_id")
-          localStorage.removeItem("user_role")
-          apiClient.clearToken()
+          clearUserData()
         }
       }
 
@@ -222,7 +334,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     initAuth()
-  }, [isClient]) // Only depend on isClient, not pathname/router
+  }, [isClient])
 
   const login = async (email: string, password: string) => {
     setLoading(true)
@@ -237,16 +349,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: loginResponse.role,
       })
 
-      localStorage.setItem("auth_token", loginResponse.token)
-      localStorage.setItem("user_id", loginResponse.user_id)
-      localStorage.setItem("user_role", loginResponse.role)
-
-      // Set cookie for middleware
-      document.cookie = `auth_token=${loginResponse.token}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`
-
       apiClient.setToken(loginResponse.token)
 
-      // Step 3: Fetch user profile data
+      // Step 2: Fetch user profile data
       console.log("[v0] Fetching user profile for role:", loginResponse.role)
 
       let userData: User | null = null
@@ -282,7 +387,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         userData = {
           ...userData,
-          role: loginResponse.role, // Use role from login response
+          role: loginResponse.role,
           status: "active" as const,
           lastLogin: new Date().toISOString(),
         }
@@ -294,18 +399,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           name: userData.profileDetail?.name,
         })
 
-        // Step 4: Update state and storage
+        // Step 3: Store user data in both localStorage and cookies
         setUser(userData)
-        localStorage.setItem("user_data", JSON.stringify(userData))
+        storeUserData(userData, loginResponse.token)
 
-        console.log("[v0] Login successful, user state updated")
+        console.log("[v0] Login successful, user state updated and stored in cookies")
       } catch (profileError) {
         console.error("[v0] Error fetching user profile:", profileError)
-        localStorage.removeItem("auth_token")
-        localStorage.removeItem("user_data")
-        localStorage.removeItem("user_id")
-        localStorage.removeItem("user_role")
-        apiClient.clearToken()
+        clearUserData()
 
         if (profileError instanceof Error && profileError.message.includes("AUTHENTICATION_FAILED")) {
           throw new Error("Session expired. Please login again.")
@@ -314,12 +415,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error("[v0] Login error:", error)
-      // Clear any partial auth data on error
-      localStorage.removeItem("auth_token")
-      localStorage.removeItem("user_data")
-      localStorage.removeItem("user_id")
-      localStorage.removeItem("user_role")
-      apiClient.clearToken()
+      clearUserData()
       setUser(null)
       throw error
     } finally {
@@ -329,20 +425,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     try {
-      // Clear user state and storage
+      // Clear user state
       setUser(null)
-      localStorage.removeItem("auth_token")
-      localStorage.removeItem("user_data")
-      localStorage.removeItem("user_id")
-      localStorage.removeItem("user_role")
-
-      document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
-
-      // Clear API client token
-      apiClient.clearToken()
+      
+      // Clear all stored data
+      clearUserData()
 
       // Clear any other cached data
       sessionStorage.clear()
+
+      console.log("[v0] Logout completed, all data cleared")
 
       // Force reload to clear all state and redirect to home
       window.location.replace("/")
@@ -360,7 +452,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         loading,
-        isAuthenticated: !!user && isClient, // Only authenticated on client side
+        isAuthenticated: !!user && isClient,
         fetchUserProfile: () => fetchUserProfile().then(() => {}),
       }}
     >
