@@ -358,7 +358,7 @@ export default function TasksPage() {
         setError(null)
         
         const result = await taskApi.getAssigned(user?.user_id)
-        
+          console.log(result)
         if (result?.data && Array.isArray(result.data)) {
           // Transform API data to component format
           const transformedTasks: Task[] = result.data.map((apiTask: any) => {

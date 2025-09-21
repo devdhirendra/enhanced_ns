@@ -83,6 +83,7 @@ const adminNavItems = [
       { title: "Marketplace Management", url: "/admin/marketplace", icon: ShoppingCart },
       { title: "Leave Management", url: "/admin/leave", icon: Calendar },
       { title: "Complaint Management", url: "/admin/complaints", icon: UserCog },
+      { title: "Tasks Management", url: "/admin/tasks", icon: UserCog },
     ],
   },
   {

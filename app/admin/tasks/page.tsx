@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 import {
   Dialog,
   DialogContent,
@@ -43,6 +44,7 @@ import {
   Users,
   TrendingUp,
   RefreshCw,
+  BarChart3,
   MoreHorizontal,
   Trash2,
   PlayCircle,
@@ -51,14 +53,7 @@ import {
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/AuthContext"
-import { 
-  taskApi, 
-  operatorApi, 
-  admintechnicianApi, 
-  staffApi, 
-  vendorApi,
-  User as ApiUser 
-} from "@/lib/api"
+import { taskApi } from "@/lib/api"
 
 interface AdminTask {
   id: string;
@@ -84,10 +79,9 @@ interface AdminTask {
   technicianName?: string;
   customerName?: string;
   staffName?: string;
-  staffId?: string;
-  technianId?: string;
+  staffId?: string,
+  technianId? :string,
 }
-
 interface TaskStats {
   totalTasks: number
   completedTasks: number
@@ -97,21 +91,21 @@ interface TaskStats {
   highPriorityTasks: number
 }
 
-interface RoleBasedUser {
-  id: string;
-  name: string;
-  role: string;
-  email?: string;
-  phone?: string;
-  area?: string;
-  specialization?: string;
-  companyName?: string;
-}
+const staffMembers = [
+  { id: "3812e5bf-1e42-4aa4-8ae8-095cff15d647", name: "John Smith", role: "Technical Lead" },
+  { id: "bb70302c-e47b-4a25-b0cd-635b63404029", name: "Sarah Johnson", role: "Field Engineer" },
+  { id: "admin-001", name: "Mike Wilson", role: "System Admin" },
+  { id: "support-001", name: "Lisa Chen", role: "Support Manager" },
+  { id: "sales-001", name: "David Brown", role: "Sales Manager" },
+]
+
 
 export default function AdminTasksPage() {
-  const { user } = useAuth()
+   const {user} = useAuth()
   const [tasks, setTasks] = useState<AdminTask[]>([])
   const [loading, setLoading] = useState(false)
+  const [priorityRange, setPriorityRange] = useState([1, 3])
+  const [progressRange, setProgressRange] = useState([0, 100])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedDepartment, setSelectedDepartment] = useState("all")
   const [selectedStatus, setSelectedStatus] = useState("all")
@@ -121,15 +115,9 @@ export default function AdminTasksPage() {
   const [selectedTask, setSelectedTask] = useState<AdminTask | null>(null)
 
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
-  const [assignmentType, setAssignmentType] = useState<"technician" | "operator" | "staff" | "vendor">("technician")
+  const [assignmentType, setAssignmentType] = useState<"technician" | "staff">("technician")
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<AdminTask | null>(null)
   const [selectedAssignee, setSelectedAssignee] = useState("")
-
-  // Role-based user lists
-  const [operators, setOperators] = useState<RoleBasedUser[]>([])
-  const [technicians, setTechnicians] = useState<RoleBasedUser[]>([])
-  const [staff, setStaff] = useState<RoleBasedUser[]>([])
-  const [vendors, setVendors] = useState<RoleBasedUser[]>([])
 
   const [newTask, setNewTask] = useState({
     title: "",
@@ -140,210 +128,92 @@ export default function AdminTasksPage() {
     dueDate: "",
     category: "Fiber Installation" as const,
     estimatedHours: 8,
-    department: "technician" as const,
+    department: "Technical" as const,
   })
   const { toast } = useToast()
 
-  // Fetch users based on role
-  const fetchUserAsRole = async (role: string) => {
-    try {
-      let data;
-      if (role === "technician") {
-        data = await admintechnicianApi.getAll()
-      } else if (role === "operator") {
-        data = await operatorApi.getAll()
-      } else if (role === "staff") {
-        data = await staffApi.getAll()
-      } else if (role === "vendor") {
-        data = await vendorApi.getAll()
-      }
-      return data || []
-    } catch (error) {
-      console.error(`Error fetching ${role} data:`, error)
-      toast({
-        title: "Error",
-        description: `Failed to load ${role} users`,
-        variant: "destructive",
-      })
-      return []
-    }
+
+
+useEffect(() => {
+ 
+
+  if (user?.user_id) {
+    console.log(user.user_id)
+    fetchTasks(user?.user_id);
   }
+}, [user]);  // ✅ correct
 
-  // Fetch all role-based users
-  const fetchRoleBasedUsers = async () => {
-    try {
-      setLoading(true)
-      
-      // Fetch operators
-      const operatorsData = await fetchUserAsRole("operator")
-      const mappedOperators: RoleBasedUser[] = operatorsData.map((op: any) => ({
-        id: op.user_id,
-        name: op.profileDetail?.name || 'Unknown',
-        role: 'operator',
-        email: op.email,
-        phone: op.profileDetail?.phone,
-        companyName: op.profileDetail?.companyName
-      }))
-      
-      // Fetch technicians
-      const techniciansData = await fetchUserAsRole("technician")
-      const mappedTechnicians: RoleBasedUser[] = techniciansData.map((tech: any) => ({
-        id: tech.user_id,
-        name: tech.profileDetail?.name || 'Unknown',
-        role: 'technician',
-        email: tech.email,
-        phone: tech.profileDetail?.phone,
-        area: tech.profileDetail?.area,
-        specialization: tech.profileDetail?.specialization
-      }))
-      
-      // Fetch staff
-      const staffData = await fetchUserAsRole("staff")
-      const mappedStaff: RoleBasedUser[] = staffData.map((s: any) => ({
-        id: s.user_id,
-        name: s.profileDetail?.name || 'Unknown',
-        role: 'staff',
-        email: s.email,
-        phone: s.profileDetail?.phone
-      }))
-      
-      // Fetch vendors
-      const vendorsData = await fetchUserAsRole("vendor")
-      const mappedVendors: RoleBasedUser[] = vendorsData.map((vendor: any) => ({
-        id: vendor.user_id,
-        name: vendor.profileDetail?.name || 'Unknown',
-        role: 'vendor',
-        email: vendor.email,
-        phone: vendor.profileDetail?.phone,
-        companyName: vendor.profileDetail?.companyName
-      }))
-      
-      setOperators(mappedOperators)
-      setTechnicians(mappedTechnicians)
-      setStaff(mappedStaff)
-      setVendors(mappedVendors)
-      
-    } catch (error) {
-      console.error('Error fetching role-based users:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load users for assignment",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+
+const fetchTasks = async (id: string) => {
+  try {
+    const result = await taskApi.getCreated(id);
+    console.log(result?.data);
+    
+    // Transform API data to match your component structure
+   const transformedTasks = result?.data.map((task: any) => ({
+  id: task.taskId, // React key
+  taskId: task.taskId,
+  title: task.title,
+  description: task.description,
+  category: task.category,
+  priority: task.priority,
+  status: task.status,
+  createdDate: task.createdAt,
+  updatedDate: task.updatedAt,
+  dueDate: task.dueDate,
+
+  // progress calculation
+  progress:
+    task.status === "Completed" ? 100 :
+    task.status === "In Progress" ? 50 : 0,
+
+  // assignment
+  assignTo: task.assignTo,
+  assignFor: task.assignFor || "",
+  assignRole: task.assignRole || "",
+
+  // role-based fields
+  // ✅ Operator
+  operaterId: task.operaterId || null,
+  OperatorName: task.OperatorName || "",
+  OperatorNotes: task.OperatorNotes || "",
+
+  // ✅ Staff
+  staffId: task.staffId || null,
+  staffName: task.staffName || "",
+  staffNotes: task.staffNotes || "",
+
+  // ✅ Technician
+  technianId: task.technianId || null,
+  technicianName: task.technicianName || "",
+  technicianNote: task.technicianNote || "",
+
+  // ✅ Admin
+  adminID: task.adminID || null,
+  AdminName: task.AdminName || "",
+
+  // ✅ Customer (when operator or staff assigns)
+  customerId: task.customerId || null,
+  customerName: task.customerName || "",
+  customerFeedback: task.customerFeedback || "",
+  CustomerRate: task.CustomerRate || 0,
+
+  // Defaults (since not in API directly)
+  estimatedHours: task.estimatedHours || 8,
+  actualHours: task.actualHours || 0,
+  department: task.department || "Technical",
+
+  // creator info
+  createdBy: task.createdBy,
+}));
+
+    
+    setTasks(transformedTasks);
+  } catch (err) {
+    console.error(err);
   }
-
-  // Fetch users for specific role dynamically
-  const fetchUsersForRole = async (role: string) => {
-    try {
-      setLoading(true)
-      const userData = await fetchUserAsRole(role)
-      const mappedUsers: RoleBasedUser[] = userData.map((user: any) => ({
-        id: user.user_id,
-        name: user.profileDetail?.name || 'Unknown',
-        role: role,
-        email: user.email,
-        phone: user.profileDetail?.phone,
-        area: user.profileDetail?.area,
-        specialization: user.profileDetail?.specialization,
-        companyName: user.profileDetail?.companyName
-      }))
-
-      // Update the specific role state
-      switch (role) {
-        case "technician":
-          setTechnicians(mappedUsers)
-          break
-        case "operator":
-          setOperators(mappedUsers)
-          break
-        case "staff":
-          setStaff(mappedUsers)
-          break
-        case "vendor":
-          setVendors(mappedUsers)
-          break
-      }
-    } catch (error) {
-      console.error(`Error fetching ${role} users:`, error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchRoleBasedUsers()
-  }, [])
-
-  useEffect(() => {
-    if (user?.user_id) {
-      fetchTasks(user.user_id);
-    }
-  }, [user]);
-
-  const fetchTasks = async (id: string) => {
-    try {
-      setLoading(true)
-      const result = await taskApi.getCreated(id);
-      
-      const transformedTasks = result?.data.map((task: any) => ({
-        id: task.taskId,
-        taskId: task.taskId,
-        title: task.title,
-        description: task.description,
-        category: task.category,
-        priority: task.priority,
-        status: task.status,
-        createdDate: task.createdAt,
-        updatedDate: task.updatedAt,
-        dueDate: task.dueDate,
-        progress: task.status === "Completed" ? 100 : task.status === "In Progress" ? 50 : 0,
-        assignTo: task.assignTo,
-        assignFor: task.assignFor || "",
-        assignRole: task.assignRole || "",
-        
-        // Role-based fields
-        operaterId: task.operaterId || null,
-        OperatorName: task.OperatorName || "",
-        OperatorNotes: task.OperatorNotes || "",
-        
-        staffId: task.staffId || null,
-        staffName: task.staffName || "",
-        staffNotes: task.staffNotes || "",
-        
-        technianId: task.technianId || null,
-        technicianName: task.technicianName || "",
-        technicianNote: task.technicianNote || "",
-        
-        adminID: task.adminID || null,
-        AdminName: task.AdminName || "",
-        
-        customerId: task.customerId || null,
-        customerName: task.customerName || "",
-        customerFeedback: task.customerFeedback || "",
-        CustomerRate: task.CustomerRate || 0,
-        
-        estimatedHours: task.estimatedHours || 8,
-        actualHours: task.actualHours || 0,
-        department: task.department || "Technical",
-        createdBy: task.createdBy,
-      }));
-      
-      setTasks(transformedTasks);
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Error",
-        description: "Failed to fetch tasks",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  };
-
+};
+   
   const taskStats: TaskStats = {
     totalTasks: tasks.length,
     completedTasks: tasks.filter((t) => t.status === "Completed").length,
@@ -396,7 +266,7 @@ export default function AdminTasksPage() {
     }
   }
 
-  const handleCreateTask = async () => {
+  const handleCreateTask = () => {
     if (!newTask.title || !newTask.description || !newTask.assignTo) {
       toast({
         title: "Error",
@@ -406,52 +276,40 @@ export default function AdminTasksPage() {
       return
     }
 
-    try {
-      setLoading(true)
-      const taskData = {
-        title: newTask.title,
-        description: newTask.description,
-        priority: newTask.priority,
-        assignTo: newTask.assignTo,
-        assignFor: newTask.assignFor || null,
-        dueDate: newTask.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        category: newTask.category,
-        status: "Pending" as const
-      }
-
-      await taskApi.create(user?.user_id!, taskData)
-      
-      // Refresh tasks
-      await fetchTasks(user?.user_id!)
-      
-      // Reset form
-      setNewTask({
-        title: "",
-        description: "",
-        priority: "Medium",
-        assignTo: "",
-        assignFor: "",
-        dueDate: "",
-        category: "Fiber Installation",
-        estimatedHours: 8,
-        department: "technician",
-      })
-      
-      setIsCreateDialogOpen(false)
-      toast({
-        title: "Success",
-        description: "Task created successfully",
-      })
-    } catch (error) {
-      console.error('Error creating task:', error)
-      toast({
-        title: "Error",
-        description: "Failed to create task",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+    const task: AdminTask = {
+      id: Date.now().toString(),
+      title: newTask.title,
+      description: newTask.description,
+      priority: newTask.priority,
+      status: "Pending",
+      progress: 0,
+      assignTo: newTask.assignTo,
+      assignFor: newTask.assignFor || "general-task",
+      createdDate: new Date().toISOString(),
+      dueDate: newTask.dueDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      category: newTask.category,
+      estimatedHours: newTask.estimatedHours,
+      actualHours: 0,
+      department: newTask.department,
     }
+
+    setTasks((prev) => [task, ...prev])
+    setNewTask({
+      title: "",
+      description: "",
+      priority: "Medium",
+      assignTo: "",
+      assignFor: "",
+      dueDate: "",
+      category: "Fiber Installation",
+      estimatedHours: 8,
+      department: "Technical",
+    })
+    setIsCreateDialogOpen(false)
+    toast({
+      title: "Success",
+      description: "Task created successfully",
+    })
   }
 
   const handleViewTask = (task: AdminTask) => {
@@ -464,98 +322,59 @@ export default function AdminTasksPage() {
     setIsEditDialogOpen(true)
   }
 
-  const handleUpdateTask = async () => {
+  const handleUpdateTask = () => {
     if (!selectedTask) return
 
-    try {
-      setLoading(true)
-      await taskApi.update(selectedTask.taskId, {
-        title: selectedTask.title,
-        description: selectedTask.description,
-        priority: selectedTask.priority,
-        status: selectedTask.status
-      })
-      
-      // Refresh tasks
-      await fetchTasks(user?.user_id!)
-      
-      setIsEditDialogOpen(false)
-      setSelectedTask(null)
-      toast({
-        title: "Success",
-        description: "Task updated successfully",
-      })
-    } catch (error) {
-      console.error('Error updating task:', error)
-      toast({
-        title: "Error",
-        description: "Failed to update task",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+    setTasks((prev) => prev.map((task) => (task.id === selectedTask.id ? selectedTask : task)))
+    setIsEditDialogOpen(false)
+    setSelectedTask(null)
+    toast({
+      title: "Success",
+      description: "Task updated successfully",
+    })
   }
 
-  const handleDeleteTask = async (taskId: string) => {
-    try {
-      setLoading(true)
-      await taskApi.delete(taskId)
-      
-      // Refresh tasks
-      await fetchTasks(user?.user_id!)
-      
-      toast({
-        title: "Success",
-        description: "Task deleted successfully",
-      })
-    } catch (error) {
-      console.error('Error deleting task:', error)
-      toast({
-        title: "Error",
-        description: "Failed to delete task",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+  const handleDeleteTask = (taskId: string) => {
+    setTasks((prev) => prev.filter((task) => task.id !== taskId))
+    toast({
+      title: "Success",
+      description: "Task deleted successfully",
+    })
   }
 
-  const handleStatusUpdate = async (taskId: string, newStatus: AdminTask["status"]) => {
-    try {
-      setLoading(true)
-      await taskApi.updateStatus(taskId, newStatus)
-      
-      // Refresh tasks
-      await fetchTasks(user?.user_id!)
-      
-      toast({
-        title: "Success",
-        description: `Task status updated to ${newStatus}`,
-      })
-    } catch (error) {
-      console.error('Error updating task status:', error)
-      toast({
-        title: "Error",
-        description: "Failed to update task status",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+  const handleStatusUpdate = (taskId: string, newStatus: AdminTask["status"]) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              status: newStatus,
+              progress: newStatus === "Completed" ? 100 : task.progress,
+            }
+          : task,
+      ),
+    )
+    toast({
+      title: "Success",
+      description: `Task status updated to ${newStatus}`,
+    })
   }
 
-  const handleAssignTo = async (task: AdminTask, type: "technician" | "operator" | "staff" | "vendor") => {
+  const handleAssignToTechnician = (task: AdminTask) => {
     setSelectedTaskForAssignment(task)
-    setAssignmentType(type)
+    setAssignmentType("technician")
     setSelectedAssignee("")
     setIsAssignDialogOpen(true)
-    
-    // Fetch users for the selected role when opening dialog
-    await fetchUsersForRole(type)
   }
 
-  const handleConfirmAssignment = async () => {
+  const handleAssignToStaff = (task: AdminTask) => {
+    setSelectedTaskForAssignment(task)
+    setAssignmentType("staff")
+    setSelectedAssignee("")
+    setIsAssignDialogOpen(true)
+  }
+
+  const handleConfirmAssignment = () => {
     if (!selectedTaskForAssignment || !selectedAssignee) {
       toast({
         title: "Error",
@@ -565,80 +384,36 @@ export default function AdminTasksPage() {
       return
     }
 
-    try {
-      setLoading(true)
-      await taskApi.assign(selectedTaskForAssignment.taskId, selectedAssignee)
-      
-      // Refresh tasks
-      await fetchTasks(user?.user_id!)
-      
-      const assigneeName = getAssigneeName(selectedAssignee)
-      toast({
-        title: "Success",
-        description: `Task assigned to ${assigneeName} successfully`,
-      })
-      
-      setIsAssignDialogOpen(false)
-      setSelectedTaskForAssignment(null)
-      setSelectedAssignee("")
-    } catch (error) {
-      console.error('Error assigning task:', error)
-      toast({
-        title: "Error",
-        description: "Failed to assign task",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
+    setTasks((prev) =>
+      prev.map((task) => (task.id === selectedTaskForAssignment.id ? { ...task, assignTo: selectedAssignee } : task)),
+    )
+
+    const assigneeName = staffMembers.find((member) => member.id === selectedAssignee)?.name
+    toast({
+      title: "Success",
+      description: `Task assigned to ${assigneeName} successfully`,
+    })
+
+    setIsAssignDialogOpen(false)
+    setSelectedTaskForAssignment(null)
+    setSelectedAssignee("")
   }
 
-  const getFilteredUsers = () => {
-    switch (assignmentType) {
-      case "technician":
-        return technicians
-      case "operator":
-        return operators
-      case "staff":
-        return staff
-      case "vendor":
-        return vendors
-      default:
-        return []
-    }
-  }
-
-  const getAssigneeName = (userId: string) => {
-    const allUsers = [...operators, ...technicians, ...staff, ...vendors]
-    return allUsers.find(user => user.id === userId)?.name || userId
-  }
-
-  const getAssigneeDisplay = (task: AdminTask) => {
-    if (task.assignRole === "operator" && task.OperatorName) {
-      return {
-        name: task.OperatorName,
-        id: task.operaterId,
-        role: "operator"
-      }
-    }
-    if (task.assignRole === "staff" && task.staffName) {
-      return {
-        name: task.staffName,
-        id: task.staffId,
-        role: "staff"
-      }
-    }
-    if (task.assignRole === "technician" && task.technicianName) {
-      return {
-        name: task.technicianName,
-        id: task.technianId,
-        role: "technician"
-      }
-    }
-    return {
-      name: "Unassigned",
-      id: "",
-      role: "unknown"
+  const getFilteredStaffMembers = () => {
+    if (assignmentType === "technician") {
+      return staffMembers.filter(
+        (member) =>
+          member.role.toLowerCase().includes("technical") ||
+          member.role.toLowerCase().includes("engineer") ||
+          member.role.toLowerCase().includes("field"),
+      )
+    } else {
+      return staffMembers.filter(
+        (member) =>
+          member.role.toLowerCase().includes("admin") ||
+          member.role.toLowerCase().includes("manager") ||
+          member.role.toLowerCase().includes("support"),
+      )
     }
   }
 
@@ -646,11 +421,17 @@ export default function AdminTasksPage() {
     const matchesSearch =
       task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       task.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesDepartment = selectedDepartment === "all" || task.assignRole === selectedDepartment
+    const matchesDepartment = selectedDepartment === "all" || task.department === selectedDepartment
     const matchesStatus = selectedStatus === "all" || task.status.toLowerCase().replace(" ", "-") === selectedStatus
+    const matchesPriority =
+      priorityRange[0] <= (task.priority === "High" ? 3 : task.priority === "Medium" ? 2 : 1) &&
+      (task.priority === "High" ? 3 : task.priority === "Medium" ? 2 : 1) <= priorityRange[1]
+    const matchesProgress = task.progress >= progressRange[0] && task.progress <= progressRange[1]
 
-    return matchesSearch && matchesDepartment && matchesStatus
+    return matchesSearch && matchesDepartment && matchesStatus && matchesPriority && matchesProgress
   })
+
+
 
   return (
     <DashboardLayout title="Task Management" description="Manage administrative tasks and assignments">
@@ -764,17 +545,18 @@ export default function AdminTasksPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="department">Assigned Role</Label>
+                    <Label htmlFor="department">Department</Label>
                     <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Roles</SelectItem>
-                        <SelectItem value="technician">Technician</SelectItem>
-                        <SelectItem value="operator">Operator</SelectItem>
-                        <SelectItem value="staff">Staff</SelectItem>
-                        <SelectItem value="vendor">Vendor</SelectItem>
+                        <SelectItem value="all">All Departments</SelectItem>
+                        <SelectItem value="technician">Admin</SelectItem>
+                        <SelectItem value="staff">Technical</SelectItem>
+                        <SelectItem value="Operator">Support</SelectItem>
+                        <SelectItem value="Vendpor">Sales</SelectItem>
+                        <SelectItem value="Operations">Operations</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -794,15 +576,7 @@ export default function AdminTasksPage() {
                     </Select>
                   </div>
                   <div className="flex items-end">
-                    <Button 
-                      variant="outline" 
-                      className="w-full bg-transparent"
-                      onClick={() => {
-                        setSearchTerm("")
-                        setSelectedDepartment("all")
-                        setSelectedStatus("all")
-                      }}
-                    >
+                    <Button variant="outline" className="w-full bg-transparent">
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Reset Filters
                     </Button>
@@ -859,7 +633,6 @@ export default function AdminTasksPage() {
                                 <SelectItem value="Analytics">Analytics</SelectItem>
                                 <SelectItem value="Security">Security</SelectItem>
                                 <SelectItem value="Maintenance">Maintenance</SelectItem>
-                                <SelectItem value="Inspection">Inspection</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -879,32 +652,23 @@ export default function AdminTasksPage() {
                                 <SelectItem value="Low">Low</SelectItem>
                                 <SelectItem value="Medium">Medium</SelectItem>
                                 <SelectItem value="High">High</SelectItem>
-                                <SelectItem value="Critical">Critical</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="department">Assign To Role</Label>
+                            <Label htmlFor="department">Department</Label>
                             <Select
                               value={newTask.department}
-                              onValueChange={async (value) => {
-                                setNewTask((prev) => ({ 
-                                  ...prev, 
-                                  department: value as any,
-                                  assignTo: "" // Reset assignTo when role changes
-                                }))
-                                // Fetch users for the selected role
-                                await fetchUsersForRole(value)
-                              }}
+                              onValueChange={(value) => setNewTask((prev) => ({ ...prev, department: value as any }))}
                             >
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="technician">Technician</SelectItem>
                                 <SelectItem value="operator">Operator</SelectItem>
+                                <SelectItem value="techinican">Techinican</SelectItem>
                                 <SelectItem value="staff">Staff</SelectItem>
-                                <SelectItem value="vendor">Vendor</SelectItem>
+                                <SelectItem value="vendor">Vender</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -928,40 +692,25 @@ export default function AdminTasksPage() {
 
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="assignTo">Assign To User *</Label>
+                            <Label htmlFor="assignTo">Assign To *</Label>
                             <Select
                               value={newTask.assignTo}
                               onValueChange={(value) => setNewTask((prev) => ({ ...prev, assignTo: value }))}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select user" />
+                                <SelectValue placeholder="Select team member" />
                               </SelectTrigger>
                               <SelectContent>
-                                {newTask.department === "technician" && technicians.map((tech) => (
-                                  <SelectItem key={tech.id} value={tech.id}>
-                                    {tech.name} ({tech.specialization || 'Technician'})
-                                  </SelectItem>
-                                ))}
-                                {newTask.department === "operator" && operators.map((op) => (
-                                  <SelectItem key={op.id} value={op.id}>
-                                    {op.name} ({op.companyName || 'Operator'})
-                                  </SelectItem>
-                                ))}
-                                {newTask.department === "staff" && staff.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>
-                                    {s.name} (Staff)
-                                  </SelectItem>
-                                ))}
-                                {newTask.department === "vendor" && vendors.map((vendor) => (
-                                  <SelectItem key={vendor.id} value={vendor.id}>
-                                    {vendor.name} ({vendor.companyName || 'Vendor'})
+                                {staffMembers.map((member) => (
+                                  <SelectItem key={member.id} value={member.id}>
+                                    {member.name} ({member.role})
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="assignFor">Assign For (Optional)</Label>
+                            <Label htmlFor="assignFor">Assign For</Label>
                             <Input
                               id="assignFor"
                               placeholder="Customer ID or reference"
@@ -993,9 +742,9 @@ export default function AdminTasksPage() {
                         </div>
 
                         <div className="flex space-x-4">
-                          <Button onClick={handleCreateTask} className="flex-1" disabled={loading}>
+                          <Button onClick={handleCreateTask} className="flex-1">
                             <Plus className="h-4 w-4 mr-2" />
-                            {loading ? "Creating..." : "Create Task"}
+                            Create Task
                           </Button>
                           <Button
                             variant="outline"
@@ -1021,151 +770,139 @@ export default function AdminTasksPage() {
                         <TableHead>Status</TableHead>
                         <TableHead>Progress</TableHead>
                         <TableHead>Due Date</TableHead>
-                        <TableHead>Role</TableHead>
+                        <TableHead>Department</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {loading ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8">
-                            Loading tasks...
+                      {filteredTasks.map((task) => (
+                        <TableRow key={task.id}>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="font-medium">{task.title}</div>
+                              <div className="text-sm text-gray-500">{task.category}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                                <User className="h-4 w-4 text-gray-400" />
+                                <div className="flex flex-col">
+                                {task.assignRole === "operator" && (
+                                    <>
+                                    <span className="text-sm font-medium">{task.assignRole}</span>
+                                    <span className="text-xs text-gray-600">{task.operaterId}</span>
+                                    </>
+                                )}
+                                {task.assignRole === "staff" && (
+                                    <>
+                                    <span className="text-sm font-medium">{task.assignRole}</span>
+                                    <span className="text-xs text-gray-600">{task.staffId}</span>
+                                    </>
+                                )}
+                                {task.assignRole === "technician" && (
+                                    <>
+                                    <span className="text-sm font-medium">{task.assignRole}</span>
+                                    <span className="text-xs text-gray-600">{task.technianId}</span>
+                                    {console.log(task)}
+                                    </>
+                                )}
+                                </div>
+                            </div>
+                            </TableCell>
+
+                          <TableCell>
+                            <Badge variant="outline" className={getPriorityColor(task.priority)}>
+                              {task.priority}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              {getStatusIcon(task.status)}
+                              <Badge variant="outline" className={getStatusColor(task.status)}>
+                                {task.status}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">{task.progress}%</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                  style={{ width: `${task.progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">{formatDate(task.dueDate)}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{task.department}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <span className="sr-only">Open menu</span>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => handleViewTask(task)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEditTask(task)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit Task
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleAssignToTechnician(task)}>
+                                  <UserCheck className="mr-2 h-4 w-4" />
+                                  Assign to Technician
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleAssignToStaff(task)}>
+                                  <Users className="mr-2 h-4 w-4" />
+                                  Assign to Staff
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleStatusUpdate(task.id, "In Progress")}>
+                                  <PlayCircle className="mr-2 h-4 w-4" />
+                                  Start Task
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusUpdate(task.id, "Completed")}>
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Mark Complete
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusUpdate(task.id, "On Hold")}>
+                                  <Pause className="mr-2 h-4 w-4" />
+                                  Put On Hold
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleDeleteTask(task.id)} className="text-red-600">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete Task
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
-                      ) : filteredTasks.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                            No tasks found
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredTasks.map((task) => {
-                          const assigneeInfo = getAssigneeDisplay(task)
-                          return (
-                            <TableRow key={task.id}>
-                              <TableCell>
-                                <div className="space-y-1">
-                                  <div className="font-medium">{task.title}</div>
-                                  <div className="text-sm text-gray-500">{task.category}</div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center space-x-2">
-                                  <User className="h-4 w-4 text-gray-400" />
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-medium">{assigneeInfo.name}</span>
-                                    {assigneeInfo.id && (
-                                      <span className="text-xs text-gray-600">ID: {assigneeInfo.id}</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className={getPriorityColor(task.priority)}>
-                                  {task.priority}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center space-x-2">
-                                  {getStatusIcon(task.status)}
-                                  <Badge variant="outline" className={getStatusColor(task.status)}>
-                                    {task.status}
-                                  </Badge>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">{task.progress}%</span>
-                                  </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-2">
-                                    <div
-                                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                      style={{ width: `${task.progress}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="text-sm">{formatDate(task.dueDate)}</div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="capitalize">
-                                  {task.assignRole || "Unassigned"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="h-8 w-8 p-0">
-                                      <span className="sr-only">Open menu</span>
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                    <DropdownMenuItem onClick={() => handleViewTask(task)}>
-                                      <Eye className="mr-2 h-4 w-4" />
-                                      View Details
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleEditTask(task)}>
-                                      <Edit className="mr-2 h-4 w-4" />
-                                      Edit Task
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => handleAssignTo(task, "technician")}>
-                                      <UserCheck className="mr-2 h-4 w-4" />
-                                      Assign to Technician
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleAssignTo(task, "operator")}>
-                                      <Users className="mr-2 h-4 w-4" />
-                                      Assign to Operator
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleAssignTo(task, "staff")}>
-                                      <Users className="mr-2 h-4 w-4" />
-                                      Assign to Staff
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleAssignTo(task, "vendor")}>
-                                      <Users className="mr-2 h-4 w-4" />
-                                      Assign to Vendor
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => handleStatusUpdate(task.taskId, "In Progress")}>
-                                      <PlayCircle className="mr-2 h-4 w-4" />
-                                      Start Task
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusUpdate(task.taskId, "Completed")}>
-                                      <CheckCircle className="mr-2 h-4 w-4" />
-                                      Mark Complete
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusUpdate(task.taskId, "On Hold")}>
-                                      <Pause className="mr-2 h-4 w-4" />
-                                      Put On Hold
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem 
-                                      onClick={() => handleDeleteTask(task.taskId)} 
-                                      className="text-red-600"
-                                    >
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Delete Task
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })
-                      )}
+                      ))}
                     </TableBody>
                   </Table>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
+
+
+         
         </Tabs>
 
-        {/* View Task Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -1205,11 +942,13 @@ export default function AdminTasksPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Assigned To</Label>
-                    <p className="text-sm">{getAssigneeDisplay(selectedTask).name}</p>
+                    <p className="text-sm">
+                      {staffMembers.find((m) => m.id === selectedTask.assignTo)?.name || selectedTask.assignTo}
+                    </p>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-gray-500">Role</Label>
-                    <p className="text-sm capitalize">{selectedTask.assignRole || "Unassigned"}</p>
+                    <Label className="text-sm font-medium text-gray-500">Department</Label>
+                    <p className="text-sm">{selectedTask.department}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1226,18 +965,11 @@ export default function AdminTasksPage() {
                   <Label className="text-sm font-medium text-gray-500">Description</Label>
                   <p className="text-sm mt-1">{selectedTask.description}</p>
                 </div>
-                {selectedTask.assignFor && (
-                  <div>
-                    <Label className="text-sm font-medium text-gray-500">Assigned For</Label>
-                    <p className="text-sm mt-1">{selectedTask.assignFor}</p>
-                  </div>
-                )}
               </div>
             )}
           </DialogContent>
         </Dialog>
 
-        {/* Edit Task Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -1274,7 +1006,6 @@ export default function AdminTasksPage() {
                         <SelectItem value="Analytics">Analytics</SelectItem>
                         <SelectItem value="Security">Security</SelectItem>
                         <SelectItem value="Maintenance">Maintenance</SelectItem>
-                        <SelectItem value="Inspection">Inspection</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1295,7 +1026,6 @@ export default function AdminTasksPage() {
                         <SelectItem value="Low">Low</SelectItem>
                         <SelectItem value="Medium">Medium</SelectItem>
                         <SelectItem value="High">High</SelectItem>
-                        <SelectItem value="Critical">Critical</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1315,7 +1045,6 @@ export default function AdminTasksPage() {
                         <SelectItem value="In Progress">In Progress</SelectItem>
                         <SelectItem value="Completed">Completed</SelectItem>
                         <SelectItem value="On Hold">On Hold</SelectItem>
-                        <SelectItem value="Cancelled">Cancelled</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1347,9 +1076,9 @@ export default function AdminTasksPage() {
                   />
                 </div>
                 <div className="flex space-x-4">
-                  <Button onClick={handleUpdateTask} className="flex-1" disabled={loading}>
+                  <Button onClick={handleUpdateTask} className="flex-1">
                     <Edit className="h-4 w-4 mr-2" />
-                    {loading ? "Updating..." : "Update Task"}
+                    Update Task
                   </Button>
                   <Button
                     variant="outline"
@@ -1364,11 +1093,10 @@ export default function AdminTasksPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Assignment Dialog */}
         <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Assign Task to {assignmentType}</DialogTitle>
+              <DialogTitle>Assign Task to {assignmentType === "technician" ? "Technician" : "Staff"}</DialogTitle>
               <DialogDescription>
                 Select a {assignmentType} to assign "{selectedTaskForAssignment?.title}" to.
               </DialogDescription>
@@ -1376,84 +1104,26 @@ export default function AdminTasksPage() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="assignee">
-                  Select {assignmentType}
+                  Select {assignmentType === "technician" ? "Technician" : "Staff Member"}
                 </Label>
-                <Select 
-                  value={selectedAssignee} 
-                  onValueChange={(userId) => {
-                    setSelectedAssignee(userId)
-                    console.log("Selected user ID:", userId) // Debug log
-                  }}
-                >
+                <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
                   <SelectTrigger>
                     <SelectValue placeholder={`Choose a ${assignmentType}`} />
                   </SelectTrigger>
                   <SelectContent>
-                    {loading ? (
-                      <SelectItem value="loading" disabled>
-                        Loading {assignmentType}s...
+                    {getFilteredStaffMembers().map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        <div className="flex items-center space-x-2">
+                          <span>{member.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {member.role}
+                          </Badge>
+                        </div>
                       </SelectItem>
-                    ) : (
-                      getFilteredUsers().map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex flex-col">
-                              <span className="font-medium">{user.name}</span>
-                              {user.specialization && (
-                                <span className="text-xs text-gray-500">{user.specialization}</span>
-                              )}
-                              {user.companyName && (
-                                <span className="text-xs text-gray-500">{user.companyName}</span>
-                              )}
-                              {user.area && (
-                                <span className="text-xs text-gray-500">Area: {user.area}</span>
-                              )}
-                            </div>
-                            <Badge variant="outline" className="text-xs capitalize ml-2">
-                              {user.role}
-                            </Badge>
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Show selected user details */}
-              {selectedAssignee && (
-                <div className="space-y-2">
-                  <Label>Selected User Details</Label>
-                  <div className="p-3 bg-muted rounded-lg">
-                    {(() => {
-                      const selectedUser = getFilteredUsers().find(u => u.id === selectedAssignee)
-                      return selectedUser ? (
-                        <div className="space-y-1">
-                          <p className="font-medium">{selectedUser.name}</p>
-                          <p className="text-sm text-gray-600">ID: {selectedUser.id}</p>
-                          <p className="text-sm text-gray-600">Role: {selectedUser.role}</p>
-                          {selectedUser.email && (
-                            <p className="text-sm text-gray-600">Email: {selectedUser.email}</p>
-                          )}
-                          {selectedUser.phone && (
-                            <p className="text-sm text-gray-600">Phone: {selectedUser.phone}</p>
-                          )}
-                          {selectedUser.specialization && (
-                            <p className="text-sm text-gray-600">Specialization: {selectedUser.specialization}</p>
-                          )}
-                          {selectedUser.companyName && (
-                            <p className="text-sm text-gray-600">Company: {selectedUser.companyName}</p>
-                          )}
-                          {selectedUser.area && (
-                            <p className="text-sm text-gray-600">Area: {selectedUser.area}</p>
-                          )}
-                        </div>
-                      ) : null
-                    })()}
-                  </div>
-                </div>
-              )}
-
               {selectedTaskForAssignment && (
                 <div className="space-y-2">
                   <Label>Task Details</Label>
@@ -1469,18 +1139,10 @@ export default function AdminTasksPage() {
               )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setIsAssignDialogOpen(false)
-                setSelectedAssignee("")
-              }}>
+              <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button 
-                onClick={handleConfirmAssignment} 
-                disabled={loading || !selectedAssignee}
-              >
-                {loading ? "Assigning..." : "Assign Task"}
-              </Button>
+              <Button onClick={handleConfirmAssignment}>Assign Task</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
