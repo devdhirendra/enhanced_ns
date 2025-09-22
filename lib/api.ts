@@ -1966,50 +1966,53 @@
     approveLeaveRequest: (id: string) => apiClient.approveOperatorLeaveRequest(id),
     rejectLeaveRequest: (id: string) => apiClient.rejectOperatorLeaveRequest(id),
   }
-  export const taskApi = {
-    // Task Management
-    create: (userId: string, taskData: Omit<Task, 'taskId' | 'createdBy' | 'createdAt' | 'updatedAt'>) => 
-      apiClient.createTask(userId, taskData),
-    
-    getAll: (filters?: TaskFilters) => 
-      apiClient.getAllTasks(filters),
-    
-    getAssigned: (userId: string) => 
-      apiClient.getAssignedTasks(userId),
-    
-    getCreated: (userId: string) => 
-      apiClient.getCreatedTasks(userId),
-    
-    getById: (taskId: string) => 
-      apiClient.getTask(taskId),
-    
-    update: (taskId: string, taskData: Partial<Omit<Task, 'taskId' | 'createdBy' | 'createdAt' | 'updatedAt'>>) => 
-      apiClient.updateTask(taskId, taskData),
-    
-    delete: (taskId: string) => 
-      apiClient.deleteTask(taskId),
-    
-    assign: (taskId: string, assignTo: string) => 
-      apiClient.assignTask(taskId, assignTo),
-    
-    updateStatus: (taskId: string, status: Task['status']) => 
-      apiClient.updateTaskStatus(taskId, status),
-    
-    getStats: () => 
-      apiClient.getTaskStatistics(),
-    
-    // Logging
-    getLogs: (taskId: string, filters?: Pick<LogFilters, 'limit' | 'operation'>) => 
-      apiClient.getTaskLogs(taskId, filters),
-    
-    getAllLogs: (filters?: LogFilters) => 
-      apiClient.getAllSystemLogs(filters),
-  }
+export const taskApi = {
+  // Task Management
+  create: (userId: string, taskData: any) => 
+    apiClient.createTask(userId, taskData),
+  
+  getAll: (filters?: any) => 
+    apiClient.getAllTasks(filters),
+  
+  getAssigned: (userId: string) => 
+    apiClient.getAssignedTasks(userId),
+  
+  getCreated: (userId: string) => 
+    apiClient.getCreatedTasks(userId),
+  
+  getById: (taskId: string) => 
+    apiClient.getTask(taskId),
+  
+  update: (taskId: string, taskData: any) => 
+    apiClient.updateTask(taskId, taskData),
+  
+  delete: (taskId: string) => 
+    apiClient.deleteTask(taskId),
+  
+  assign: (taskId: string, assignTo: string) => 
+    apiClient.assignTask(taskId, assignTo),
+  
+  updateStatus: (taskId: string, status: string) => 
+    apiClient.updateTaskStatus(taskId, status),
+  
+  getStats: () => 
+    apiClient.getTaskStatistics(),
+  
+  // Logging
+  getLogs: (taskId: string, filters?: any) => 
+    apiClient.getTaskLogs(taskId, filters),
+  
+  getAllLogs: (filters?: any) => 
+    apiClient.getAllSystemLogs(filters),
+}
+
+
+
 
 
   export const technicianApi = {
     // Profile
-
+    getAll: () => apiClient.getOperatorTechnicians(),
     getProfile: (id: string) => apiClient.getTechnicianProfile(id),
     updateProfile: (id: string, data: any) => apiClient.updateTechnicianProfile(id, data),
 
@@ -2087,6 +2090,7 @@
   }
 
   export const staffApi = {
+    getAll1: () => apiClient.request("/staff/all", { method: "GET" }),
     getAll: () => apiClient.getAllStaff(),
     add: (data: any) => apiClient.addStaff(data),
     get: (id: string) => apiClient.getStaff(id),
@@ -2106,6 +2110,7 @@
 
 
   export const vendorApi = {
+    getAll1: () => apiClient.request("/vendor/all", { method: "GET" }),
     getAll: () => apiClient.getAllVendors(),  // only admin can access
     add: (data: any) => apiClient.addVendor(data), /// only admin can access
     get: (id: string) => apiClient.getVendor(id), /// only admin can access
@@ -2122,6 +2127,7 @@
   }
 
   export const customerApi = {
+    getAll1: () => apiClient.getOperatorCustomers(),
     getAll: () => apiClient.getAllCustomers(),
     add: (data: any) => apiClient.addCustomer(data),
     get: (id: string) => apiClient.getCustomer(id),

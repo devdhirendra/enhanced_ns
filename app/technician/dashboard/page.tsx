@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
-import { technicianApi, inventoryApi, complaintApi } from "@/lib/api"
+import { technicianApi, inventoryApi, complaintApi, taskApi } from "@/lib/api"
 import {
   CheckCircle,
   Clock,
@@ -67,13 +67,17 @@ export default function TechnicianDashboardPage() {
       setLoading(true)
       console.log("[Dashboard] Fetching technician dashboard data...")
 
-      // Fetch technician's assigned complaints (tasks)
+      // Fetch technician's assigned complaints and tasks
       const technicianId = user.profileDetail?.technicianId || user.user_id
 
-      const [assignedComplaints, technicianStock] = await Promise.all([
+      const [assignedComplaints, assignedTasks, technicianStock] = await Promise.all([
         technicianApi.getAssignedComplaints(technicianId).catch((err) => {
           console.warn("[Dashboard] Failed to fetch complaints:", err)
           return []
+        }),
+        taskApi.getAssigned(user.user_id).catch((err) => {
+          console.warn("[Dashboard] Failed to fetch tasks:", err)
+          return { data: [] }
         }),
         inventoryApi.getTechnicianStock(technicianId).catch((err) => {
           console.warn("[Dashboard] Failed to fetch inventory:", err)
@@ -82,27 +86,75 @@ export default function TechnicianDashboardPage() {
       ])
 
       console.log("[Dashboard] Fetched complaints:", assignedComplaints)
+      console.log("[Dashboard] Fetched tasks:", assignedTasks)
       console.log("[Dashboard] Fetched inventory:", technicianStock)
 
-      // Transform complaints to tasks format
-      const transformedTasks = Array.isArray(assignedComplaints)
-        ? assignedComplaints.map((complaint) => ({
-            id: complaint.complaint_id || complaint.id,
-            type: complaint.type || "repair",
-            title: complaint.description || "Service Request",
-            customer: {
-              name: complaint.customerName || "Unknown Customer",
-              phone: complaint.customerPhone || "N/A",
-              address: complaint.Area || "Unknown Location",
-            },
-            priority: complaint.priority || "medium",
-            status: mapComplaintStatus(complaint.status), // Use mapping function
-            dueTime: new Date().toLocaleTimeString(),
-            estimatedDuration: "2 hours",
-            location: { lat: 30.7333, lng: 76.7794 },
-            originalStatus: complaint.status, // Keep original for API calls
-          }))
+      // Filter out resolved complaints and only show active ones (open, assigned, in-progress)
+      const activeComplaints = Array.isArray(assignedComplaints)
+        ? assignedComplaints
+            .filter((complaint) => {
+              const status = complaint.status?.toLowerCase()
+              return status === 'open' || status === 'assigned' || status === 'in-progress'
+            })
         : []
+
+      // Filter out completed tasks and only show active ones (Pending, In Progress)
+      const activeTasks = Array.isArray(assignedTasks?.data)
+        ? assignedTasks.data
+            .filter((task) => {
+              const status = task.status?.toLowerCase()
+              return status === 'pending' || status === 'in progress'
+            })
+        : []
+
+      // Transform active complaints to unified task format
+      const transformedComplaints = activeComplaints.map((complaint) => ({
+        id: complaint.complaint_id || complaint.id,
+        type: complaint.type || "repair",
+        title: complaint.description || "Service Request",
+        customer: {
+          name: complaint.customerName || "Unknown Customer",
+          phone: complaint.customerPhone || "N/A",
+          address: complaint.Area || complaint.customerAddress || "Unknown Location",
+        },
+        priority: complaint.priority?.toLowerCase() || "medium",
+        status: mapComplaintStatus(complaint.status),
+        dueTime: new Date(complaint.createdAt).toLocaleTimeString(),
+        estimatedDuration: "2 hours",
+        location: { lat: 30.7333, lng: 76.7794 },
+        originalStatus: complaint.status,
+        createdAt: complaint.createdAt,
+        category: complaint.category || "General",
+        technicianNotes: complaint.technicianNotes || "",
+        dataSource: "complaint", // Flag to identify source
+      }))
+
+      // Transform active tasks to unified task format
+      const transformedTasks = activeTasks.map((task) => ({
+        id: task.taskId,
+        type: mapTaskCategory(task.category),
+        title: task.title || "Task Assignment",
+        customer: {
+          name: "Assigned Customer", // Tasks might not have customer info directly
+          phone: "N/A",
+          address: "Task Location",
+        },
+        priority: task.priority?.toLowerCase() || "medium",
+        status: mapTaskStatus(task.status),
+        dueTime: new Date(task.dueDate || task.createdAt).toLocaleTimeString(),
+        estimatedDuration: `${task.estimatedHours || 2} hours`,
+        location: { lat: 30.7333, lng: 76.7794 },
+        originalStatus: task.status,
+        createdAt: task.createdAt,
+        category: task.category || "General",
+        technicianNotes: task.description || "",
+        dataSource: "task", // Flag to identify source
+        taskData: task, // Keep original task data for updates
+      }))
+
+      // Combine both complaints and tasks, then sort by creation date
+      const allActiveTasks = [...transformedComplaints, ...transformedTasks]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
       // Transform inventory data
       const transformedInventory = Array.isArray(technicianStock)
@@ -119,42 +171,50 @@ export default function TechnicianDashboardPage() {
             { name: "Splitters", stock: 0, minStock: 3, status: "out" },
           ]
 
-      // Calculate stats from real data
+      // Calculate stats from all active tasks (complaints + tasks)
       const calculatedStats = {
-        tasksCompleted: transformedTasks.filter((t) => t.status === "completed" || t.status === "resolved").length,
-        tasksInProgress: transformedTasks.filter((t) => t.status === "in_progress").length,
-        tasksPending: transformedTasks.filter((t) => t.status === "assigned" || t.status === "open").length,
+        tasksCompleted: 0, // Only count from historical data, not current active tasks
+        tasksInProgress: allActiveTasks.filter((t) => t.status === "in_progress").length,
+        tasksPending: allActiveTasks.filter((t) => t.status === "assigned" || t.status === "open").length,
         customersSatisfied: 45, // This would come from a separate API
         avgResponseTime: "25 min",
         completionRate: 94,
         monthlyTarget: 50,
-        currentMonth: transformedTasks.filter((t) => t.status === "completed" || t.status === "resolved").length,
+        currentMonth: 0, // Only count completed tasks, not active ones
       }
 
-      // Generate recent activities from tasks
-      const activities = transformedTasks.slice(0, 4).map((task, index) => ({
-        id: index + 1,
-        type:
-          index === 0
-            ? "task_completed"
-            : index === 1
-              ? "inventory_used"
-              : index === 2
-                ? "task_started"
-                : "customer_call",
-        description:
-          index === 0
-            ? `Completed ${task.title}`
-            : index === 1
-              ? "Used fiber cable for installation"
-              : index === 2
-                ? `Started ${task.title}`
-                : `Received call from ${task.customer.name}`,
-        time: `${index + 1} hour${index === 0 ? "" : "s"} ago`,
-        customer: task.customer.name,
-      }))
+      // Generate recent activities from all active tasks (show task assignments and starts)
+      const activities = allActiveTasks.slice(0, 4).map((task, index) => {
+        const createdDate = new Date(task.createdAt)
+        const now = new Date()
+        const hoursDiff = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60))
+        const daysDiff = Math.floor(hoursDiff / 24)
+        
+        let timeAgo = ""
+        if (daysDiff > 0) {
+          timeAgo = `${daysDiff} day${daysDiff === 1 ? "" : "s"} ago`
+        } else if (hoursDiff > 0) {
+          timeAgo = `${hoursDiff} hour${hoursDiff === 1 ? "" : "s"} ago`
+        } else {
+          timeAgo = "Less than an hour ago"
+        }
 
-      setTasks(transformedTasks)
+        return {
+          id: index + 1,
+          type: task.status === "in_progress" ? "task_started" : "task_assigned",
+          description: task.status === "in_progress" 
+            ? `Started working on: ${task.title}` 
+            : `New ${task.dataSource} assigned: ${task.title}`,
+          time: timeAgo,
+          customer: task.customer.name,
+          dataSource: task.dataSource,
+        }
+      })
+
+      console.log("[Dashboard] Combined active tasks loaded:", allActiveTasks.length)
+      console.log("[Dashboard] Complaints:", transformedComplaints.length, "Tasks:", transformedTasks.length)
+
+      setTasks(allActiveTasks)
       setInventory(transformedInventory)
       setStats(calculatedStats)
       setRecentActivities(activities)
@@ -185,15 +245,45 @@ export default function TechnicianDashboardPage() {
   const mapComplaintStatus = (status: string) => {
     switch (status?.toLowerCase()) {
       case "open":
+        return "assigned"
       case "assigned":
         return "assigned"
       case "in-progress":
         return "in_progress"
-      case "resolved":
-      case "closed":
-        return "resolved"
       default:
         return "assigned"
+    }
+  }
+
+  // Helper function to map task status to display status
+  const mapTaskStatus = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "pending":
+        return "assigned"
+      case "in progress":
+        return "in_progress"
+      case "completed":
+        return "completed"
+      default:
+        return "assigned"
+    }
+  }
+
+  // Helper function to map task category to type
+  const mapTaskCategory = (category: string) => {
+    switch (category?.toLowerCase()) {
+      case "fiber installation":
+        return "installation"
+      case "maintenance":
+        return "maintenance"
+      case "repair":
+        return "repair"
+      case "network setup":
+        return "installation"
+      case "troubleshooting":
+        return "repair"
+      default:
+        return "repair"
     }
   }
 
@@ -204,8 +294,6 @@ export default function TechnicianDashboardPage() {
         return "assigned"
       case "in_progress":
         return "in-progress"
-      case "resolved":
-        return "resolved"
       default:
         return displayStatus
     }
@@ -250,7 +338,10 @@ export default function TechnicianDashboardPage() {
       case "maintenance":
         return <Wrench className="h-4 w-4" />
       case "repair":
+      case "service issue":
         return <AlertTriangle className="h-4 w-4" />
+      case "billing":
+        return <User className="h-4 w-4" />
       default:
         return <Activity className="h-4 w-4" />
     }
@@ -272,12 +363,18 @@ export default function TechnicianDashboardPage() {
   const handleStartTask = async (task: any) => {
     try {
       const taskId = task.id
-      console.log("[Dashboard] Starting task:", taskId)
+      console.log("[Dashboard] Starting task:", taskId, "Source:", task.dataSource)
 
-      // Use the working complaint status change endpoint
-      const updateResult = await complaintApi.changestatus(taskId, {
-        status: "in-progress"
-      })
+      let updateResult
+      if (task.dataSource === "complaint") {
+        // Update complaint status
+        updateResult = await complaintApi.changestatus(taskId, {
+          status: "in-progress"
+        })
+      } else if (task.dataSource === "task") {
+        // Update task status
+        updateResult = await taskApi.updateStatus(taskId, "In Progress")
+      }
 
       console.log("[Dashboard] Update result:", updateResult)
 
@@ -303,13 +400,13 @@ export default function TechnicianDashboardPage() {
 
       toast({
         title: "Task Started",
-        description: "Task has been marked as in progress.",
+        description: `${task.dataSource === "complaint" ? "Complaint" : "Task"} has been marked as in progress.`,
       })
     } catch (error) {
       console.error("[Dashboard] Error starting task:", error)
       toast({
         title: "Error",
-        description: `Failed to start task: ${error.message || 'Please check network connection'}`,
+        description: `Failed to start ${task.dataSource}: ${error.message || 'Please check network connection'}`,
         variant: "destructive",
       })
     }
@@ -318,44 +415,41 @@ export default function TechnicianDashboardPage() {
   const handleCompleteTask = async (task: any) => {
     try {
       const taskId = task.id
-      console.log("[Dashboard] Completing task:", taskId)
+      console.log("[Dashboard] Completing task:", taskId, "Source:", task.dataSource)
 
-      // Use the working complaint status change endpoint
-      const updateResult = await complaintApi.changestatus(taskId, {
-        status: "resolved"
-      })
+      let updateResult
+      if (task.dataSource === "complaint") {
+        // Update complaint status
+        updateResult = await complaintApi.changestatus(taskId, {
+          status: "resolved"
+        })
+      } else if (task.dataSource === "task") {
+        // Update task status
+        updateResult = await taskApi.updateStatus(taskId, "Completed")
+      }
 
       console.log("[Dashboard] Complete result:", updateResult)
 
-      // Update local state optimistically
-      setTasks((prevTasks) =>
-        prevTasks.map((t) =>
-          t.id === taskId
-            ? { 
-                ...t, 
-                status: "resolved",
-                completedAt: new Date().toLocaleTimeString() 
-              }
-            : t
-        )
-      )
+      // Remove the task from local state since it's now completed
+      setTasks((prevTasks) => prevTasks.filter(t => t.id !== taskId))
 
       // Update stats
       setStats(prevStats => ({
         ...prevStats,
         tasksCompleted: prevStats.tasksCompleted + 1,
-        tasksInProgress: Math.max(0, prevStats.tasksInProgress - 1)
+        tasksInProgress: Math.max(0, prevStats.tasksInProgress - 1),
+        currentMonth: prevStats.currentMonth + 1
       }))
 
       toast({
-        title: "Task Completed",
-        description: "Task has been marked as completed.",
+        title: `${task.dataSource === "complaint" ? "Complaint" : "Task"} Completed`,
+        description: `${task.dataSource === "complaint" ? "Complaint" : "Task"} has been marked as completed and removed from active list.`,
       })
     } catch (error) {
       console.error("[Dashboard] Error completing task:", error)
       toast({
         title: "Error",
-        description: `Failed to complete task: ${error.message || 'Please check network connection'}`,
+        description: `Failed to complete ${task.dataSource}: ${error.message || 'Please check network connection'}`,
         variant: "destructive",
       })
     }
@@ -375,9 +469,24 @@ export default function TechnicianDashboardPage() {
   const refreshTasks = async () => {
     await fetchDashboardData()
     toast({
-      title: "Tasks Refreshed",
-      description: "Task list has been updated with latest data.",
+      title: "Work Items Refreshed",
+      description: "Active tasks and complaints list has been updated with latest data.",
     })
+  }
+
+  const formatCreatedDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+    const diffInDays = Math.floor(diffInHours / 24)
+
+    if (diffInDays > 0) {
+      return `${diffInDays} day${diffInDays === 1 ? "" : "s"} ago`
+    } else if (diffInHours > 0) {
+      return `${diffInHours} hour${diffInHours === 1 ? "" : "s"} ago`
+    } else {
+      return "Just now"
+    }
   }
 
   if (loading) {
@@ -455,32 +564,32 @@ export default function TechnicianDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-900">{stats.tasksPending}</div>
-            <p className="text-xs text-orange-600 mt-1">Assigned tasks</p>
+            <p className="text-xs text-orange-600 mt-1">Awaiting start</p>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-800">Completion Rate</CardTitle>
+            <CardTitle className="text-sm font-medium text-purple-800">Active Tasks</CardTitle>
             <Target className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-900">{stats.completionRate}%</div>
-            <p className="text-xs text-purple-600 mt-1">Success rate</p>
+            <div className="text-2xl font-bold text-purple-900">{tasks.length}</div>
+            <p className="text-xs text-purple-600 mt-1">Total active</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today's Tasks */}
+        {/* Today's Active Tasks */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
                 <div>
-                  <CardTitle>Today's Tasks</CardTitle>
-                  <CardDescription>Your scheduled tasks for today</CardDescription>
+                  <CardTitle>Active Work Items</CardTitle>
+                  <CardDescription>Your current active tasks and complaints (excluding resolved)</CardDescription>
                 </div>
               </div>
               <Button 
@@ -497,8 +606,8 @@ export default function TechnicianDashboardPage() {
             {tasks.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 <Activity className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>No tasks assigned for today</p>
-                <p className="text-sm">Check back later for new assignments</p>
+                <p>No active work items assigned</p>
+                <p className="text-sm">All tasks and complaints are either completed or none are assigned</p>
               </div>
             ) : (
               tasks.map((task) => (
@@ -512,6 +621,15 @@ export default function TechnicianDashboardPage() {
                         {getTaskTypeIcon(task.type)}
                         <h3 className="font-medium text-gray-900">{task.title}</h3>
                         <Badge className={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                        <Badge variant="outline" className="text-xs">
+                          ID: {task.id}
+                        </Badge>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs ${task.dataSource === "complaint" ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}
+                        >
+                          {task.dataSource === "complaint" ? "Complaint" : "Task"}
+                        </Badge>
                       </div>
 
                       <div className="space-y-2 text-sm text-gray-600">
@@ -531,12 +649,12 @@ export default function TechnicianDashboardPage() {
                         </div>
                         <div className="flex items-center space-x-4">
                           <div className="flex items-center space-x-1">
-                            <Clock className="h-4 w-4" />
-                            <span>Due: {task.dueTime}</span>
+                            <Calendar className="h-4 w-4" />
+                            <span>Created: {formatCreatedDate(task.createdAt)}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <Activity className="h-4 w-4" />
-                            <span>Est: {task.estimatedDuration}</span>
+                            <span>Category: {task.category}</span>
                           </div>
                           {task.startedAt && (
                             <div className="flex items-center space-x-1">
@@ -544,13 +662,12 @@ export default function TechnicianDashboardPage() {
                               <span className="text-blue-600">Started: {task.startedAt}</span>
                             </div>
                           )}
-                          {task.completedAt && (
-                            <div className="flex items-center space-x-1">
-                              <CheckCircle className="h-4 w-4 text-green-600" />
-                              <span className="text-green-600">Completed: {task.completedAt}</span>
-                            </div>
-                          )}
                         </div>
+                        {task.technicianNotes && (
+                          <div className="bg-yellow-50 p-2 rounded text-xs">
+                            <strong>Notes:</strong> {task.technicianNotes}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -704,23 +821,29 @@ export default function TechnicianDashboardPage() {
               <Activity className="h-5 w-5" />
               Recent Activities
             </CardTitle>
-            <CardDescription>Your latest work activities</CardDescription>
+            <CardDescription>Your latest work activities (active tasks only)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {recentActivities.length === 0 ? (
                 <div className="text-center text-gray-500 py-4">
                   <p className="text-sm">No recent activities</p>
+                  <p className="text-xs">Activities will appear when you start working on tasks</p>
                 </div>
               ) : (
                 recentActivities.map((activity) => (
                   <div key={activity.id} className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full mt-2"></div>
+                      <div className={`w-2 h-2 rounded-full mt-2 ${
+                        activity.type === "task_started" ? "bg-blue-500" : "bg-orange-500"
+                      }`}></div>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900">{activity.description}</p>
                       <p className="text-xs text-gray-500">{activity.time}</p>
+                      {activity.customer && (
+                        <p className="text-xs text-gray-400">Customer: {activity.customer}</p>
+                      )}
                     </div>
                   </div>
                 ))
