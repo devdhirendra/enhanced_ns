@@ -228,7 +228,6 @@ export default function StaffTasksPage() {
       })
       return
     }
-
     toast({
       title: "Task Created",
       description: "New task has been created and assigned successfully.",
@@ -253,7 +252,7 @@ export default function StaffTasksPage() {
 
   const myTasks = tasks.filter((task) => task.assignedTo === "John Smith")
   const allTasks = tasks
-
+  // return something
   return (
     <DashboardLayout title="My Tasks" description="Manage your assigned tasks and create new ones">
       <div className="space-y-6">
