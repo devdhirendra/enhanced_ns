@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import Link from "next/link"
 import {
   Wifi,
   CreditCard,
@@ -243,82 +244,92 @@ export default function CustomerDashboard() {
       <div className="space-y-8">
         {/* Account Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="metric-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Connection Status</CardTitle>
-              <Wifi
-                className={`h-5 w-5 ${networkStatus.connectionStatus === "online" ? "text-green-600" : "text-red-600"}`}
-              />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900 capitalize">{networkStatus.connectionStatus}</div>
-              <div className="flex items-center space-x-2 mt-2">
-                <Badge
-                  className={networkStatus.connectionStatus === "online" ? "status-active" : "bg-red-100 text-red-800"}
-                >
-                  {networkStatus.signalStrength}% signal
-                </Badge>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">{networkStatus.uptime} uptime</p>
-            </CardContent>
-          </Card>
-
-          <Card className="metric-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Current Plan</CardTitle>
-              <Zap className="h-5 w-5 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{planDetails.planName}</div>
-              <p className="text-sm text-gray-600 mt-1">
-                {planDetails.speed.download} Mbps / {planDetails.dataLimit}
-              </p>
-              <div className="flex items-center mt-2">
-                <Calendar className="h-4 w-4 text-blue-600 mr-1" />
-                <span className="text-sm text-blue-600 font-medium">{planDetails.daysLeft} days left</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="metric-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Monthly Bill</CardTitle>
-              <CreditCard className="h-5 w-5 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">₹{planDetails.monthlyRate}</div>
-              {pendingBill ? (
-                <div className="flex items-center mt-2">
-                  <AlertCircle className="h-4 w-4 text-red-600 mr-1" />
-                  <span className="text-sm text-red-600 font-medium">Payment due</span>
+          <Link href="/customer/support" className="block">
+            <Card className="metric-card hover:shadow-lg cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Connection Status</CardTitle>
+                <Wifi
+                  className={`h-5 w-5 ${networkStatus.connectionStatus === "online" ? "text-green-600" : "text-red-600"}`}
+                />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900 capitalize">{networkStatus.connectionStatus}</div>
+                <div className="flex items-center space-x-2 mt-2">
+                  <Badge
+                    className={
+                      networkStatus.connectionStatus === "online" ? "status-active" : "bg-red-100 text-red-800"
+                    }
+                  >
+                    {networkStatus.signalStrength}% signal
+                  </Badge>
                 </div>
-              ) : (
-                <div className="flex items-center mt-2">
-                  <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                  <span className="text-sm text-green-600 font-medium">Paid</span>
-                </div>
-              )}
-              <p className="text-xs text-gray-500 mt-1">Due: {planDetails.nextRenewal}</p>
-            </CardContent>
-          </Card>
+                <p className="text-xs text-gray-500 mt-1">{networkStatus.uptime} uptime</p>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card className="metric-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Support Tickets</CardTitle>
-              <LifeBuoy className="h-5 w-5 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{supportTickets.length}</div>
-              <div className="flex items-center space-x-2 mt-2">
-                <Badge className="bg-red-100 text-red-800 text-xs">
-                  {supportTickets.filter((t) => t.status === "open").length} open
-                </Badge>
-                <Badge className="status-active text-xs">
-                  {supportTickets.filter((t) => t.status === "resolved").length} resolved
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/customer/plan" className="block">
+            <Card className="metric-card hover:shadow-lg cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Current Plan</CardTitle>
+                <Zap className="h-5 w-5 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900">{planDetails.planName}</div>
+                <p className="text-sm text-gray-600 mt-1">
+                  {planDetails.speed.download} Mbps / {planDetails.dataLimit}
+                </p>
+                <div className="flex items-center mt-2">
+                  <Calendar className="h-4 w-4 text-blue-600 mr-1" />
+                  <span className="text-sm text-blue-600 font-medium">{planDetails.daysLeft} days left</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/customer/bills" className="block">
+            <Card className="metric-card hover:shadow-lg cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Monthly Bill</CardTitle>
+                <CreditCard className="h-5 w-5 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900">₹{planDetails.monthlyRate}</div>
+                {pendingBill ? (
+                  <div className="flex items-center mt-2">
+                    <AlertCircle className="h-4 w-4 text-red-600 mr-1" />
+                    <span className="text-sm text-red-600 font-medium">Payment due</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center mt-2">
+                    <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                    <span className="text-sm text-green-600 font-medium">Paid</span>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-1">Due: {planDetails.nextRenewal}</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/customer/complaints" className="block">
+            <Card className="metric-card hover:shadow-lg cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Support Tickets</CardTitle>
+                <LifeBuoy className="h-5 w-5 text-orange-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900">{supportTickets.length}</div>
+                <div className="flex items-center space-x-2 mt-2">
+                  <Badge className="bg-red-100 text-red-800 text-xs">
+                    {supportTickets.filter((t) => t.status === "open").length} open
+                  </Badge>
+                  <Badge className="status-active text-xs">
+                    {supportTickets.filter((t) => t.status === "resolved").length} resolved
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* Plan Customization with Sliders */}
@@ -884,22 +895,51 @@ export default function CustomerDashboard() {
 
         {/* Quick Actions */}
         <div className="grid md:grid-cols-4 gap-4">
-          <Button className="h-16 flex flex-col items-center justify-center space-y-2">
-            <CreditCard className="h-5 w-5" />
-            <span>Pay Bill</span>
-          </Button>
-          <Button variant="outline" className="h-16 flex flex-col items-center justify-center space-y-2 bg-transparent">
-            <LifeBuoy className="h-5 w-5" />
-            <span>Get Support</span>
-          </Button>
-          <Button variant="outline" className="h-16 flex flex-col items-center justify-center space-y-2 bg-transparent">
-            <Zap className="h-5 w-5" />
-            <span>Upgrade Plan</span>
-          </Button>
-          <Button variant="outline" className="h-16 flex flex-col items-center justify-center space-y-2 bg-transparent">
-            <FileText className="h-5 w-5" />
-            <span>Download Invoice</span>
-          </Button>
+          <Link
+            href="/customer/dashboard/pay-bill"
+            className="h-16 flex flex-col items-center justify-center space-y-2"
+          >
+            <Button className="h-16 flex flex-col items-center justify-center space-y-2">
+              <CreditCard className="h-5 w-5" />
+              <span>Pay Bill</span>
+            </Button>
+          </Link>
+          <Link
+            href="/customer/dashboard/get-support"
+            className="h-16 flex flex-col items-center justify-center space-y-2"
+          >
+            <Button
+              variant="outline"
+              className="h-16 flex flex-col items-center justify-center space-y-2 bg-transparent"
+            >
+              <LifeBuoy className="h-5 w-5" />
+              <span>Get Support</span>
+            </Button>
+          </Link>
+          <Link
+            href="/customer/dashboard/upgrade-plan"
+            className="h-16 flex flex-col items-center justify-center space-y-2"
+          >
+            <Button
+              variant="outline"
+              className="h-16 flex flex-col items-center justify-center space-y-2 bg-transparent"
+            >
+              <Zap className="h-5 w-5" />
+              <span>Upgrade Plan</span>
+            </Button>
+          </Link>
+          <Link
+            href="/customer/dashboard/download-invoice"
+            className="h-16 flex flex-col items-center justify-center space-y-2"
+          >
+            <Button
+              variant="outline"
+              className="h-16 flex flex-col items-center justify-center space-y-2 bg-transparent"
+            >
+              <FileText className="h-5 w-5" />
+              <span>Download Invoice</span>
+            </Button>
+          </Link>
         </div>
       </div>
     </DashboardLayout>

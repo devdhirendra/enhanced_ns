@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
-import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -18,17 +17,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import Link from "next/link"
 import {
   ClipboardList,
   Headphones,
   CheckCircle,
   Clock,
-  AlertTriangle,
   TrendingUp,
   Phone,
   UserCheck,
-  Building2,
   ShoppingCart,
   BarChart3,
   Eye,
@@ -39,13 +36,9 @@ import {
   Plus,
   Users,
   Settings,
-  Filter,
   Search,
   Download,
-  Shield,
-  Activity,
 } from "lucide-react"
-import { getStatusColor } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 
 interface StaffStats {
@@ -417,72 +410,82 @@ export default function StaffDashboardPage() {
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-indigo-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">My Tasks</CardTitle>
-              <div className="p-2 bg-indigo-500 rounded-lg">
-                <ClipboardList className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{staffStats.totalTasks}</div>
-              <div className="flex items-center mt-2">
-                <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
-                <span className="text-sm text-green-600 font-medium">{staffStats.completedTasks} completed</span>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/staff/tasks" className="block">
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-indigo-50 to-indigo-100 hover:shadow-xl cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-700">My Tasks</CardTitle>
+                <div className="p-2 bg-indigo-500 rounded-lg">
+                  <ClipboardList className="h-5 w-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-gray-900">{staffStats.totalTasks}</div>
+                <div className="flex items-center mt-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                  <span className="text-sm text-green-600 font-medium">{staffStats.completedTasks} completed</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Support Tickets</CardTitle>
-              <div className="p-2 bg-blue-500 rounded-lg">
-                <Headphones className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{staffStats.pendingTickets}</div>
-              <div className="flex items-center mt-2">
-                <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                <span className="text-sm text-green-600 font-medium">{staffStats.resolvedTickets} resolved</span>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/staff/tickets" className="block">
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100 hover:shadow-xl cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-700">Support Tickets</CardTitle>
+                <div className="p-2 bg-blue-500 rounded-lg">
+                  <Headphones className="h-5 w-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-gray-900">{staffStats.pendingTickets}</div>
+                <div className="flex items-center mt-2">
+                  <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
+                  <span className="text-sm text-green-600 font-medium">{staffStats.resolvedTickets} resolved</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Customer Satisfaction</CardTitle>
-              <div className="p-2 bg-green-500 rounded-lg">
-                <Star className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{staffStats.customerSatisfaction}/5.0</div>
-              <div className="flex items-center mt-2">
-                <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                <span className="text-sm text-green-600 font-medium">Above target</span>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/staff/satisfaction" className="block">
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-100 hover:shadow-xl cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-700">Customer Satisfaction</CardTitle>
+                <div className="p-2 bg-green-500 rounded-lg">
+                  <Star className="h-5 w-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-gray-900">{staffStats.customerSatisfaction}/5.0</div>
+                <div className="flex items-center mt-2">
+                  <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
+                  <span className="text-sm text-green-600 font-medium">Above target</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-violet-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Performance</CardTitle>
-              <div className="p-2 bg-purple-500 rounded-lg">
-                <BarChart3 className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{staffStats.monthlyPerformance}%</div>
-              <div className="flex items-center mt-2">
-                <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                <span className="text-sm text-green-600 font-medium">This month</span>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/staff/performance" className="block">
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-violet-100 hover:shadow-xl cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <BarChart3 className="h-5 w-5 mr-2 text-indigo-600" />
+                      Performance
+                    </CardTitle>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-gray-900">{staffStats.monthlyPerformance}%</div>
+                <div className="flex items-center mt-2">
+                  <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
+                  <span className="text-sm text-green-600 font-medium">This month</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
-
-     
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-4">
@@ -678,10 +681,7 @@ export default function StaffDashboardPage() {
               </div>
             </CardContent>
           </Card>
-
-          
         </div>
-
 
         {/* Quick Actions */}
         <Card>

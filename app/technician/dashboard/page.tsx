@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 import { technicianApi, inventoryApi, complaintApi, taskApi } from "@/lib/api"
+import Link from "next/link"
 import {
   CheckCircle,
   Clock,
@@ -91,20 +92,18 @@ export default function TechnicianDashboardPage() {
 
       // Filter out resolved complaints and only show active ones (open, assigned, in-progress)
       const activeComplaints = Array.isArray(assignedComplaints)
-        ? assignedComplaints
-            .filter((complaint) => {
-              const status = complaint.status?.toLowerCase()
-              return status === 'open' || status === 'assigned' || status === 'in-progress'
-            })
+        ? assignedComplaints.filter((complaint) => {
+            const status = complaint.status?.toLowerCase()
+            return status === "open" || status === "assigned" || status === "in-progress"
+          })
         : []
 
       // Filter out completed tasks and only show active ones (Pending, In Progress)
       const activeTasks = Array.isArray(assignedTasks?.data)
-        ? assignedTasks.data
-            .filter((task) => {
-              const status = task.status?.toLowerCase()
-              return status === 'pending' || status === 'in progress'
-            })
+        ? assignedTasks.data.filter((task) => {
+            const status = task.status?.toLowerCase()
+            return status === "pending" || status === "in progress"
+          })
         : []
 
       // Transform active complaints to unified task format
@@ -153,8 +152,9 @@ export default function TechnicianDashboardPage() {
       }))
 
       // Combine both complaints and tasks, then sort by creation date
-      const allActiveTasks = [...transformedComplaints, ...transformedTasks]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      const allActiveTasks = [...transformedComplaints, ...transformedTasks].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
 
       // Transform inventory data
       const transformedInventory = Array.isArray(technicianStock)
@@ -189,7 +189,7 @@ export default function TechnicianDashboardPage() {
         const now = new Date()
         const hoursDiff = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60))
         const daysDiff = Math.floor(hoursDiff / 24)
-        
+
         let timeAgo = ""
         if (daysDiff > 0) {
           timeAgo = `${daysDiff} day${daysDiff === 1 ? "" : "s"} ago`
@@ -202,9 +202,10 @@ export default function TechnicianDashboardPage() {
         return {
           id: index + 1,
           type: task.status === "in_progress" ? "task_started" : "task_assigned",
-          description: task.status === "in_progress" 
-            ? `Started working on: ${task.title}` 
-            : `New ${task.dataSource} assigned: ${task.title}`,
+          description:
+            task.status === "in_progress"
+              ? `Started working on: ${task.title}`
+              : `New ${task.dataSource} assigned: ${task.title}`,
           time: timeAgo,
           customer: task.customer.name,
           dataSource: task.dataSource,
@@ -369,7 +370,7 @@ export default function TechnicianDashboardPage() {
       if (task.dataSource === "complaint") {
         // Update complaint status
         updateResult = await complaintApi.changestatus(taskId, {
-          status: "in-progress"
+          status: "in-progress",
         })
       } else if (task.dataSource === "task") {
         // Update task status
@@ -382,20 +383,20 @@ export default function TechnicianDashboardPage() {
       setTasks((prevTasks) =>
         prevTasks.map((t) =>
           t.id === taskId
-            ? { 
-                ...t, 
+            ? {
+                ...t,
                 status: "in_progress",
-                startedAt: new Date().toLocaleTimeString() 
+                startedAt: new Date().toLocaleTimeString(),
               }
-            : t
-        )
+            : t,
+        ),
       )
 
       // Update stats
-      setStats(prevStats => ({
+      setStats((prevStats) => ({
         ...prevStats,
         tasksInProgress: prevStats.tasksInProgress + 1,
-        tasksPending: Math.max(0, prevStats.tasksPending - 1)
+        tasksPending: Math.max(0, prevStats.tasksPending - 1),
       }))
 
       toast({
@@ -406,7 +407,7 @@ export default function TechnicianDashboardPage() {
       console.error("[Dashboard] Error starting task:", error)
       toast({
         title: "Error",
-        description: `Failed to start ${task.dataSource}: ${error.message || 'Please check network connection'}`,
+        description: `Failed to start ${task.dataSource}: ${error.message || "Please check network connection"}`,
         variant: "destructive",
       })
     }
@@ -421,7 +422,7 @@ export default function TechnicianDashboardPage() {
       if (task.dataSource === "complaint") {
         // Update complaint status
         updateResult = await complaintApi.changestatus(taskId, {
-          status: "resolved"
+          status: "resolved",
         })
       } else if (task.dataSource === "task") {
         // Update task status
@@ -431,14 +432,14 @@ export default function TechnicianDashboardPage() {
       console.log("[Dashboard] Complete result:", updateResult)
 
       // Remove the task from local state since it's now completed
-      setTasks((prevTasks) => prevTasks.filter(t => t.id !== taskId))
+      setTasks((prevTasks) => prevTasks.filter((t) => t.id !== taskId))
 
       // Update stats
-      setStats(prevStats => ({
+      setStats((prevStats) => ({
         ...prevStats,
         tasksCompleted: prevStats.tasksCompleted + 1,
         tasksInProgress: Math.max(0, prevStats.tasksInProgress - 1),
-        currentMonth: prevStats.currentMonth + 1
+        currentMonth: prevStats.currentMonth + 1,
       }))
 
       toast({
@@ -449,7 +450,7 @@ export default function TechnicianDashboardPage() {
       console.error("[Dashboard] Error completing task:", error)
       toast({
         title: "Error",
-        description: `Failed to complete ${task.dataSource}: ${error.message || 'Please check network connection'}`,
+        description: `Failed to complete ${task.dataSource}: ${error.message || "Please check network connection"}`,
         variant: "destructive",
       })
     }
@@ -504,7 +505,10 @@ export default function TechnicianDashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
           <div className="flex items-center space-x-4">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={user.profileDetail?.avatar || "/placeholder.svg"} alt={user.profileDetail?.name || "User"} />
+              <AvatarImage
+                src={user.profileDetail?.avatar || "/placeholder.svg"}
+                alt={user.profileDetail?.name || "User"}
+              />
               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
                 {(user.profileDetail?.name || "User")
                   .split(" ")
@@ -514,7 +518,9 @@ export default function TechnicianDashboardPage() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user.profileDetail?.name || "Technician"}!</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Welcome back, {user.profileDetail?.name || "Technician"}!
+              </h1>
               <p className="text-gray-600">
                 {currentTime.toLocaleDateString("en-IN", {
                   weekday: "long",
@@ -535,49 +541,61 @@ export default function TechnicianDashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-800">Tasks Completed</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-900">{stats.tasksCompleted}</div>
-            <p className="text-xs text-green-600 mt-1">This month</p>
-          </CardContent>
-        </Card>
+        <Link href="/technician/tasks" className="block">
+          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+            {/* Tasks Completed */}
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-green-800">Tasks Completed</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-900">{stats.tasksCompleted}</div>
+              <p className="text-xs text-green-600 mt-1">This month</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-800">In Progress</CardTitle>
-            <Activity className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-900">{stats.tasksInProgress}</div>
-            <p className="text-xs text-blue-600 mt-1">Active tasks</p>
-          </CardContent>
-        </Card>
+        <Link href="/technician/tasks" className="block">
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+            {/* In Progress */}
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-blue-800">In Progress</CardTitle>
+              <Activity className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-900">{stats.tasksInProgress}</div>
+              <p className="text-xs text-blue-600 mt-1">Active tasks</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-800">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-900">{stats.tasksPending}</div>
-            <p className="text-xs text-orange-600 mt-1">Awaiting start</p>
-          </CardContent>
-        </Card>
+        <Link href="/technician/tasks" className="block">
+          <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 hover:shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+            {/* Pending */}
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-orange-800">Pending</CardTitle>
+              <Clock className="h-4 w-4 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-900">{stats.tasksPending}</div>
+              <p className="text-xs text-orange-600 mt-1">Awaiting start</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-800">Active Tasks</CardTitle>
-            <Target className="h-4 w-4 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-900">{tasks.length}</div>
-            <p className="text-xs text-purple-600 mt-1">Total active</p>
-          </CardContent>
-        </Card>
+        <Link href="/technician/tasks" className="block">
+          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 hover:shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+            {/* Active Tasks */}
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-purple-800">Active Tasks</CardTitle>
+              <Target className="h-4 w-4 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-900">{tasks.length}</div>
+              <p className="text-xs text-purple-600 mt-1">Total active</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -592,12 +610,7 @@ export default function TechnicianDashboardPage() {
                   <CardDescription>Your current active tasks and complaints (excluding resolved)</CardDescription>
                 </div>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={refreshTasks}
-                disabled={loading}
-              >
+              <Button variant="outline" size="sm" onClick={refreshTasks} disabled={loading}>
                 {loading ? "Refreshing..." : "Refresh"}
               </Button>
             </div>
@@ -611,111 +624,110 @@ export default function TechnicianDashboardPage() {
               </div>
             ) : (
               tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-300 bg-gradient-to-r from-white to-gray-50"
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        {getTaskTypeIcon(task.type)}
-                        <h3 className="font-medium text-gray-900">{task.title}</h3>
-                        <Badge className={getPriorityColor(task.priority)}>{task.priority}</Badge>
-                        <Badge variant="outline" className="text-xs">
-                          ID: {task.id}
-                        </Badge>
-                        <Badge 
-                          variant="outline" 
-                          className={`text-xs ${task.dataSource === "complaint" ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}
-                        >
-                          {task.dataSource === "complaint" ? "Complaint" : "Task"}
-                        </Badge>
-                      </div>
+                <Link href={`/task/${task.id}`} key={task.id}>
+                  <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-300 bg-gradient-to-r from-white to-gray-50">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          {getTaskTypeIcon(task.type)}
+                          <h3 className="font-medium text-gray-900">{task.title}</h3>
+                          <Badge className={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                          <Badge variant="outline" className="text-xs">
+                            ID: {task.id}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={`text-xs ${task.dataSource === "complaint" ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}
+                          >
+                            {task.dataSource === "complaint" ? "Complaint" : "Task"}
+                          </Badge>
+                        </div>
 
-                      <div className="space-y-2 text-sm text-gray-600">
-                        <div className="flex items-center space-x-2">
-                          <User className="h-4 w-4" />
-                          <span>{task.customer?.name || "Unknown"}</span>
-                        </div>
-                        {task.customer?.phone && task.customer.phone !== "N/A" && (
+                        <div className="space-y-2 text-sm text-gray-600">
                           <div className="flex items-center space-x-2">
-                            <Phone className="h-4 w-4" />
-                            <span>{task.customer.phone}</span>
+                            <User className="h-4 w-4" />
+                            <span>{task.customer?.name || "Unknown"}</span>
                           </div>
-                        )}
-                        <div className="flex items-center space-x-2">
-                          <MapPin className="h-4 w-4" />
-                          <span>{task.customer?.address || "Location not specified"}</span>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-4 w-4" />
-                            <span>Created: {formatCreatedDate(task.createdAt)}</span>
+                          {task.customer?.phone && task.customer.phone !== "N/A" && (
+                            <div className="flex items-center space-x-2">
+                              <Phone className="h-4 w-4" />
+                              <span>{task.customer.phone}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-4 w-4" />
+                            <span>{task.customer?.address || "Location not specified"}</span>
                           </div>
-                          <div className="flex items-center space-x-1">
-                            <Activity className="h-4 w-4" />
-                            <span>Category: {task.category}</span>
-                          </div>
-                          {task.startedAt && (
+                          <div className="flex items-center space-x-4">
                             <div className="flex items-center space-x-1">
-                              <Play className="h-4 w-4 text-blue-600" />
-                              <span className="text-blue-600">Started: {task.startedAt}</span>
+                              <Calendar className="h-4 w-4" />
+                              <span>Created: {formatCreatedDate(task.createdAt)}</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <Activity className="h-4 w-4" />
+                              <span>Category: {task.category}</span>
+                            </div>
+                            {task.startedAt && (
+                              <div className="flex items-center space-x-1">
+                                <Play className="h-4 w-4 text-blue-600" />
+                                <span className="text-blue-600">Started: {task.startedAt}</span>
+                              </div>
+                            )}
+                          </div>
+                          {task.technicianNotes && (
+                            <div className="bg-yellow-50 p-2 rounded text-xs">
+                              <strong>Notes:</strong> {task.technicianNotes}
                             </div>
                           )}
                         </div>
-                        {task.technicianNotes && (
-                          <div className="bg-yellow-50 p-2 rounded text-xs">
-                            <strong>Notes:</strong> {task.technicianNotes}
-                          </div>
-                        )}
                       </div>
-                    </div>
 
-                    <div className="flex flex-col space-y-2 lg:ml-4">
-                      <Badge className={getStatusColor(task.status)}>
-                        {task.status === "in_progress" ? "IN PROGRESS" : task.status.toUpperCase()}
-                      </Badge>
+                      <div className="flex flex-col space-y-2 lg:ml-4">
+                        <Badge className={getStatusColor(task.status)}>
+                          {task.status === "in_progress" ? "IN PROGRESS" : task.status.toUpperCase()}
+                        </Badge>
 
-                      <div className="flex flex-wrap gap-2">
-                        {task.status === "assigned" && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleStartTask(task)}
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            <Play className="h-4 w-4 mr-1" />
-                            Start
-                          </Button>
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {task.status === "assigned" && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleStartTask(task)}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              <Play className="h-4 w-4 mr-1" />
+                              Start
+                            </Button>
+                          )}
 
-                        {task.status === "in_progress" && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleCompleteTask(task)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Complete
-                          </Button>
-                        )}
+                          {task.status === "in_progress" && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleCompleteTask(task)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Complete
+                            </Button>
+                          )}
 
-                        {task.location && (
-                          <Button size="sm" variant="outline" onClick={() => handleNavigate(task.location)}>
-                            <Navigation className="h-4 w-4 mr-1" />
-                            Navigate
-                          </Button>
-                        )}
+                          {task.location && (
+                            <Button size="sm" variant="outline" onClick={() => handleNavigate(task.location)}>
+                              <Navigation className="h-4 w-4 mr-1" />
+                              Navigate
+                            </Button>
+                          )}
 
-                        {task.customer?.phone && task.customer.phone !== "N/A" && (
-                          <Button size="sm" variant="outline" onClick={() => handleCallCustomer(task.customer.phone)}>
-                            <Phone className="h-4 w-4 mr-1" />
-                            Call
-                          </Button>
-                        )}
+                          {task.customer?.phone && task.customer.phone !== "N/A" && (
+                            <Button size="sm" variant="outline" onClick={() => handleCallCustomer(task.customer.phone)}>
+                              <Phone className="h-4 w-4 mr-1" />
+                              Call
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))
             )}
           </CardContent>
@@ -834,16 +846,16 @@ export default function TechnicianDashboardPage() {
                 recentActivities.map((activity) => (
                   <div key={activity.id} className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
-                      <div className={`w-2 h-2 rounded-full mt-2 ${
-                        activity.type === "task_started" ? "bg-blue-500" : "bg-orange-500"
-                      }`}></div>
+                      <div
+                        className={`w-2 h-2 rounded-full mt-2 ${
+                          activity.type === "task_started" ? "bg-blue-500" : "bg-orange-500"
+                        }`}
+                      ></div>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900">{activity.description}</p>
                       <p className="text-xs text-gray-500">{activity.time}</p>
-                      {activity.customer && (
-                        <p className="text-xs text-gray-400">Customer: {activity.customer}</p>
-                      )}
+                      {activity.customer && <p className="text-xs text-gray-400">Customer: {activity.customer}</p>}
                     </div>
                   </div>
                 ))
