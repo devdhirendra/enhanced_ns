@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { use, useEffect, useState } from "react"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -29,8 +29,38 @@ import {
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { taskApi } from "@/lib/api"
+import { useAuth } from "@/contexts/AuthContext"
+
+interface AssignedTask {
+  assignRole: string;
+  staffNotes: string;
+  taskId: string;
+  dueDate: string;
+  status: "Pending" | "In Progress" | "Completed" | "Cancelled";
+  priority: "Low" | "Medium" | "High" | "Critical";
+  createdAt: string;
+  createdBy: string;
+  assignFor: string | null;
+  assignTo: string;
+  staffName: string;
+  updatedAt: string;
+  category: string;
+  adminID: string;
+  description: string;
+  AdminName: string;
+  title: string;
+  estimatedHours?: number;
+  actualHours?: number;
+  progress?: number;
+}
+
 
 export default function StaffTasksPage() {
+  const {user} = useAuth()
+   const [assignTasks, setAssignTasks] = useState<AssignedTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const {createdTask, setCreatedTask} = useState([])
   const [priorityRange, setPriorityRange] = useState([1, 5])
   const [progressRange, setProgressRange] = useState([0, 100])
   const [searchTerm, setSearchTerm] = useState("")
@@ -63,7 +93,7 @@ export default function StaffTasksPage() {
     {
       id: "TSK-2024-002",
       title: "Handle customer complaint escalation",
-      description: "Resolve billing dispute for customer ID CUST001234",
+      description: "Resolve billing dispute for customer ID CUS T001234",
       priority: "high",
       status: "pending",
       progress: 0,
@@ -106,6 +136,34 @@ export default function StaffTasksPage() {
       actualHours: 1,
     },
   ]
+
+  useEffect(() => {
+    const fetchAssignTasks = async () => {
+      try {
+        if (!user?.user_id) return; // safeguard
+        const taskAssignRes = await taskApi.getAssigned(user.user_id);
+        console.log(taskAssignRes);
+        setAssignTask(taskAssignRes)
+      } catch (err) {
+        console.error("Error fetching tasks:", err);
+      }
+    };
+     const fetchCreatedTasks = async () => {
+      try {
+        if (!user?.user_id) return; // safeguard
+        const taskCreatedRes = await taskApi.getCreated(user.user_id);
+        console.log(taskCreatedRes);
+         setCreatedTask(taskCreatedRes)
+      } catch (err) {
+        console.error("Error fetching tasks:", err);
+      }
+    };
+    fetchCreatedTasks()
+    fetchAssignTasks(); // ✅ call the function
+  }, [user?.user_id]); // will run whenever user_id changes
+
+
+    console.log(user?.user_id)
 
   const getStatusIcon = (status: string) => {
     switch (status) {
