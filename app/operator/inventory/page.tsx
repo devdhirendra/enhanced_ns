@@ -191,7 +191,7 @@ export default function InventoryManagement() {
 
       const [inventoryData, issuanceData, technicianData] = await Promise.all([
         inventoryApi.getAllProducts(),
-        inventoryApi.getAllIssuances(),
+        inventoryApi.getAllIssuancess(),
         inventoryApi.getalltechnician(),
       ])
 
