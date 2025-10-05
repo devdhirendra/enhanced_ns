@@ -179,18 +179,40 @@ export default function LeaveManagementPage() {
     }
   }
 
-  const fetchLeaveRequests = async () => {
-    try {
-      setRequestsLoading(true)
-      const requests = await leaveApi.getAll()
-      setLeaveRequestsData(requests)
-    } catch (err) {
-      console.error('Error fetching leave requests:', err)
-      toast.error('Failed to load leave requests')
-    } finally {
-      setRequestsLoading(false)
-    }
+const fetchLeaveRequests = async () => {
+  try {
+    setRequestsLoading(true)
+    const response = await leaveApi.getAll()
+    
+    // Transform the API response to match your interface
+    const requests = response.map((item: any) => ({
+      id: item.leave_id || '',
+      employeeId: item.technicianId || item.employee_id || '',
+      employeeName: item.employeeName || item.employee_name || item.name || 'Unknown Employee',
+      employeeRole: item.employeeRole || item.role || item.employee_role || 'Technician',
+      operator: item.operator || item.operator_name || 'Unknown Operator',
+      leaveType: item.leaveType || item.leave_type || 'annual',
+      startDate: item.startDate || item.start_date || new Date().toISOString(),
+      endDate: item.endDate || item.end_date || new Date().toISOString(),
+      days: item.days || item.total_days || 0,
+      reason: item.reason || item.leave_reason || 'No reason provided',
+      status: item.status || 'pending',
+      appliedDate: item.appliedDate || item.applied_date || item.created_at || new Date().toISOString(),
+      approvedBy: item.approvedBy || item.approved_by || null,
+      approvedDate: item.approvedDate || item.approved_date || null,
+      documents: item.documents || item.attachments || []
+    }))
+
+    setLeaveRequestsData(requests)
+  } catch (err) {
+    console.error('Error fetching leave requests:', err)
+    toast.error('Failed to load leave requests')
+    // Set empty array as fallback
+    setLeaveRequestsData([])
+  } finally {
+    setRequestsLoading(false)
   }
+}
 
   const fetchLeavePolicies = async () => {
     try {
@@ -276,14 +298,20 @@ export default function LeaveManagementPage() {
     }
   }
 
-  const filteredRequests = leaveRequestsData.filter((request) => {
-    const matchesSearch =
-      request.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.id.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || request.status === statusFilter
-    const matchesRole = roleFilter === "all" || request.employeeRole === roleFilter
-    return matchesSearch && matchesStatus && matchesRole
-  })
+const filteredRequests = leaveRequestsData.filter((request) => {
+  const searchTermLower = searchTerm.toLowerCase()
+  const employeeName = request.employeeName?.toLowerCase() || ''
+  const requestId = request.id?.toLowerCase() || ''
+  
+  const matchesSearch =
+    employeeName.includes(searchTermLower) ||
+    requestId.includes(searchTermLower)
+  
+  const matchesStatus = statusFilter === "all" || request.status === statusFilter
+  const matchesRole = roleFilter === "all" || request.employeeRole === roleFilter
+  
+  return matchesSearch && matchesStatus && matchesRole
+})
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -630,11 +658,10 @@ export default function LeaveManagementPage() {
                           <TableRow key={request.id} className="hover:bg-gray-50">
                             <TableCell>
                               <div>
-                                <div className="font-medium text-gray-900 text-sm md:text-base">
-                                  {request.employeeName}
-                                </div>
-                                <div className="text-xs md:text-sm text-gray-500">{request.employeeRole}</div>
-                                <div className="text-xs md:text-sm text-gray-500">{request.operator}</div>
+<div className="font-medium text-gray-900 text-sm md:text-base">
+  {request.employeeId || 'N/A'}
+</div>
+<div className="text-xs md:text-sm text-gray-500">{request.employeeRole || 'N/A'}</div>
                               </div>
                             </TableCell>
                             <TableCell>

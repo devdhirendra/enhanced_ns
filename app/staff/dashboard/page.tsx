@@ -264,6 +264,7 @@ export default function StaffDashboardPage() {
     role: "Support Agent",
     permissions: [] as string[],
   })
+  const [isSatisfactionDialogOpen, setIsSatisfactionDialogOpen] = useState(false) // added local state to control the Satisfaction dialog
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -446,23 +447,62 @@ export default function StaffDashboardPage() {
             </Card>
           </Link>
 
-          <Link href="/staff/satisfaction" className="block">
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-100 hover:shadow-xl cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-700">Customer Satisfaction</CardTitle>
-                <div className="p-2 bg-green-500 rounded-lg">
-                  <Star className="h-5 w-5 text-white" />
+          {/* Customer Satisfaction Dialog */}
+          <Dialog open={isSatisfactionDialogOpen} onOpenChange={setIsSatisfactionDialogOpen}>
+            <DialogTrigger asChild>
+              <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-100 hover:shadow-xl cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-700">Customer Satisfaction</CardTitle>
+                  <div className="p-2 bg-green-500 rounded-lg">
+                    <Star className="h-5 w-5 text-white" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-gray-900">{staffStats.customerSatisfaction}/5.0</div>
+                  <div className="flex items-center mt-2">
+                    <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
+                    <span className="text-sm text-green-600 font-medium">Above target</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Customer Satisfaction Overview</DialogTitle>
+                <DialogDescription>
+                  Current CSAT is {staffStats.customerSatisfaction}/5.0. Keep response time low and first-call
+                  resolution high to maintain trends.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="p-3 rounded-md bg-emerald-50">
+                    <div className="text-xs text-gray-600">Target</div>
+                    <div className="text-lg font-semibold text-gray-900">4.5</div>
+                  </div>
+                  <div className="p-3 rounded-md bg-emerald-50">
+                    <div className="text-xs text-gray-600">Trend</div>
+                    <div className="flex items-center gap-1 text-emerald-700">
+                      <TrendingUp className="h-4 w-4" />
+                      <span className="text-lg font-semibold">Up</span>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-md bg-emerald-50">
+                    <div className="text-xs text-gray-600">NPS (mock)</div>
+                    <div className="text-lg font-semibold text-gray-900">62</div>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-gray-900">{staffStats.customerSatisfaction}/5.0</div>
-                <div className="flex items-center mt-2">
-                  <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                  <span className="text-sm text-green-600 font-medium">Above target</span>
+                <div className="flex items-center justify-end gap-2">
+                  <Link href="/staff/performance">
+                    <Button className="bg-indigo-600 hover:bg-indigo-700">View Performance</Button>
+                  </Link>
+                  <Button variant="outline" onClick={() => setIsSatisfactionDialogOpen(false)}>
+                    Close
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </Link>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <Link href="/staff/performance" className="block">
             <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-violet-100 hover:shadow-xl cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500">

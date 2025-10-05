@@ -914,7 +914,7 @@
     }
 
     async getAllLeaveRequests(): Promise<any[]> {
-      const response = await this.request<any[]>("/leave/requests")
+      const response = await this.request<any[]>("/admin/leave/requests")
       return response.data || (response as any[])
     }
 
@@ -1049,33 +1049,33 @@
       return response.data || (response as any[])
     }
 
-    async addStockItem(data: {
-      itemName: string
-      quantity: number
-      supplier: string
-      unitPrice: number
-      category: string
-      brand: string
-      phoneNumber?: string
-      description?: string
-      specification?: string
-      ModelNumber?: string
-      costPrice?: number
-      sellingPrice?: number
-      ProductImage?: string
-      warantyInfo?: string
-      discount?: string
-      rating?: number
-      unitType?: string
-      sold?: number
-      status?: string
-      role: string
-    }): Promise<ApiResponse> {
-      return this.request("/inventory/stock/add", {
-        method: "POST",
-        body: JSON.stringify(data),
-      })
-    }
+async addStockItem(data: {
+  itemName: string
+  quantity: number
+  supplier: string
+  unitPrice: number
+  category: string
+  brand: string
+  phoneNumber?: string
+  description?: string
+  specification?: string
+  ModelNumber?: string
+  costPrice?: number
+  sellingPrice?: number
+  ProductImage?: string
+  warantyInfo?: string
+  discount?: string
+  rating?: number
+  unitType?: string
+  sold?: number
+  status?: string
+  createID: string  // Changed from 'role' to 'createID'
+}): Promise<ApiResponse> {
+  return this.request("/inventory/stock/add", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+}
 
     async updateStockItem(
       id: string,

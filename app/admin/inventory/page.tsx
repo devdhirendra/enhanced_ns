@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import type React from "react"
+import { useAuth } from "@/contexts/AuthContext"
 
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -828,6 +829,7 @@ export default function InventoryPage() {
 
 
 function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { user } = useAuth() // Get the authenticated user
   const [formData, setFormData] = useState({
     itemName: "",
     quantity: 0,
@@ -845,9 +847,10 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     warantyInfo: "",
     discount: "",
     rating: 0,
-    unitType: "piece",
+    unitType: "pcs",
     sold: 0,
-    status: "Available",
+    status: "inactive",
+    // createID will be dynamically set from user.id
   })
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
@@ -855,22 +858,80 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Validate required fields
+    if (!formData.itemName || !formData.supplier || !formData.category || !formData.brand) {
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check if user is authenticated
+    if (!user?.user_id) {
+      toast({
+        title: "Authentication Error",
+        description: "Please log in to add inventory items.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setLoading(true)
-      console.log("[v0] Adding new stock item:", formData.itemName)
+      console.log("[v0] Adding new stock item:", formData)
+      console.log("[v0] User ID:", user.user_id)
 
-      await inventoryApi.addProduct({
-        ...formData,
-        createID: "Admin", // This should be replaced with actual user ID if available
-      })
+      // Prepare the data with the actual user ID
+      const apiData = {
+        itemName: formData.itemName,
+        quantity: formData.quantity,
+        supplier: formData.supplier,
+        unitPrice: formData.unitPrice,
+        unitType: formData.unitType,
+        category: formData.category,
+        brand: formData.brand,
+        phoneNumber: formData.phoneNumber,
+        status: formData.status,
+        description: formData.description,
+        specification: formData.specification,
+        ModelNumber: formData.ModelNumber,
+        costPrice: formData.costPrice,
+        sellingPrice: formData.sellingPrice,
+        ProductImage: formData.ProductImage,
+        warantyInfo: formData.warantyInfo,
+        discount: formData.discount,
+        rating: formData.rating,
+        sold: formData.sold,
+        createID: user.user_id, // Use the actual authenticated user ID
+      }
+
+      console.log("[v0] Sending data to API:", apiData)
+      
+      const response = await inventoryApi.addProduct(apiData)
+      console.log("[v0] API Response:", response)
 
       console.log("[v0] Stock item added successfully")
+      toast({
+        title: "Success",
+        description: "Inventory item has been added successfully!",
+      })
       onSuccess()
-    } catch (error) {
+    } catch (error: any) {
       console.error("[v0] Error adding stock item:", error)
+      
+      // More detailed error message
+      let errorMessage = "Failed to add inventory item. Please try again."
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
       toast({
         title: "Add Failed",
-        description: "Failed to add inventory item. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -880,6 +941,18 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* User Info Display */}
+      {user && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+          <div className="flex items-center space-x-2 text-sm text-blue-800">
+            <Users className="h-4 w-4" />
+            <span>
+              Adding item as: <strong>{user.name || user.email}</strong> (ID: {user.user_id})
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="itemName">Item Name *</Label>
@@ -889,6 +962,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
             required
             disabled={loading}
+            placeholder="e.g., FTTH ONU Device"
           />
         </div>
         <div>
@@ -899,6 +973,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
             required
             disabled={loading}
+            placeholder="e.g., Huawei"
           />
         </div>
       </div>
@@ -912,6 +987,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
             required
             disabled={loading}
+            placeholder="e.g., Networking"
           />
         </div>
         <div>
@@ -921,6 +997,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             value={formData.ModelNumber}
             onChange={(e) => setFormData({ ...formData, ModelNumber: e.target.value })}
             disabled={loading}
+            placeholder="e.g., HG8245Q2"
           />
         </div>
       </div>
@@ -931,6 +1008,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           <Input
             id="quantity"
             type="number"
+            min="0"
             value={formData.quantity}
             onChange={(e) => setFormData({ ...formData, quantity: Number.parseInt(e.target.value) || 0 })}
             required
@@ -943,6 +1021,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             id="unitPrice"
             type="number"
             step="0.01"
+            min="0"
             value={formData.unitPrice}
             onChange={(e) => setFormData({ ...formData, unitPrice: Number.parseFloat(e.target.value) || 0 })}
             required
@@ -955,6 +1034,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             id="costPrice"
             type="number"
             step="0.01"
+            min="0"
             value={formData.costPrice}
             onChange={(e) => setFormData({ ...formData, costPrice: Number.parseFloat(e.target.value) || 0 })}
             disabled={loading}
@@ -969,6 +1049,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             id="sellingPrice"
             type="number"
             step="0.01"
+            min="0"
             value={formData.sellingPrice}
             onChange={(e) => setFormData({ ...formData, sellingPrice: Number.parseFloat(e.target.value) || 0 })}
             disabled={loading}
@@ -979,12 +1060,13 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           <Select 
             value={formData.unitType} 
             onValueChange={(value) => setFormData({ ...formData, unitType: value })}
+            disabled={loading}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select unit type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="piece">Piece</SelectItem>
+              <SelectItem value="pcs">Pieces</SelectItem>
               <SelectItem value="box">Box</SelectItem>
               <SelectItem value="pack">Pack</SelectItem>
               <SelectItem value="set">Set</SelectItem>
@@ -1016,6 +1098,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
             required
             disabled={loading}
+            placeholder="e.g., Broadband Systems Ltd"
           />
         </div>
         <div>
@@ -1025,6 +1108,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             value={formData.phoneNumber}
             onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
             disabled={loading}
+            placeholder="e.g., 9876543210"
           />
         </div>
       </div>
@@ -1037,6 +1121,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             value={formData.warantyInfo}
             onChange={(e) => setFormData({ ...formData, warantyInfo: e.target.value })}
             disabled={loading}
+            placeholder="e.g., 2 Years Standard Warranty"
           />
         </div>
         <div>
@@ -1046,6 +1131,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             value={formData.discount}
             onChange={(e) => setFormData({ ...formData, discount: e.target.value })}
             disabled={loading}
+            placeholder="e.g., 8%"
           />
         </div>
       </div>
@@ -1070,6 +1156,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           rows={3}
           disabled={loading}
+          placeholder="Product description..."
         />
       </div>
 
@@ -1081,6 +1168,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           onChange={(e) => setFormData({ ...formData, specification: e.target.value })}
           rows={2}
           disabled={loading}
+          placeholder="Product specifications..."
         />
       </div>
 
@@ -1089,14 +1177,15 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         <Select 
           value={formData.status} 
           onValueChange={(value) => setFormData({ ...formData, status: value })}
+          disabled={loading}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Available">Available</SelectItem>
-            <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-            <SelectItem value="Discontinued">Discontinued</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="out_of_stock">Out of Stock</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -1105,14 +1194,13 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
           Cancel
         </Button>
-        <Button type="submit" disabled={loading}>
+        <Button type="submit" disabled={loading || !user?.user_id}>
           {loading ? "Adding..." : "Add Item"}
         </Button>
       </div>
     </form>
   )
 }
-
 function EditItemForm({ item, onClose, onSuccess }: { item: StockItem; onClose: () => void; onSuccess: () => void }) {
   const [formData, setFormData] = useState({
     itemName: item.itemName || "",
