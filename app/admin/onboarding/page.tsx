@@ -22,6 +22,7 @@ type OnboardingRow = {
   verify?: string
   createdAt: string
   updatedAt: string
+  doc?: Array<string | { type: string; url: string }>
 }
 
 export default function AdminOnboardingPage() {
@@ -33,6 +34,8 @@ export default function AdminOnboardingPage() {
   const [filter, setFilter] = useState<string>("all")
   const [selected, setSelected] = useState<any | null>(null)
   const [open, setOpen] = useState(false)
+  const [sortBy, setSortBy] = useState<"createdAt" | "status">("createdAt")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
 
   const fetchAll = async () => {
     setLoading(true)
@@ -54,8 +57,17 @@ export default function AdminOnboardingPage() {
     fetchAll()
   }, [])
 
+  const toggleSort = (key: "createdAt" | "status") => {
+    if (sortBy !== key) {
+      setSortBy(key)
+      setSortDir("asc")
+    } else {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    }
+  }
+
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    const base = rows.filter((r) => {
       const okSearch =
         !search ||
         r.profileName?.toLowerCase().includes(search.toLowerCase()) ||
@@ -64,7 +76,17 @@ export default function AdminOnboardingPage() {
       const okFilter = filter === "all" || r.processStatus === filter
       return okSearch && okFilter
     })
-  }, [rows, search, filter])
+    return [...base].sort((a, b) => {
+      if (sortBy === "createdAt") {
+        const cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        return sortDir === "asc" ? cmp : -cmp
+      } else {
+        const order = ["pending", "in-progress", "approved", "rejected"]
+        const cmp = order.indexOf(a.processStatus) - order.indexOf(b.processStatus)
+        return sortDir === "asc" ? cmp : -cmp
+      }
+    })
+  }, [rows, search, filter, sortBy, sortDir])
 
   const view = async (id: string) => {
     try {
@@ -140,66 +162,79 @@ export default function AdminOnboardingPage() {
                     <TableHead>Onboard ID</TableHead>
                     <TableHead>User ID</TableHead>
                     <TableHead>Profile</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                      Status {sortBy === "status" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                    </TableHead>
                     <TableHead>Verify</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("createdAt")}>
+                      Created {sortBy === "createdAt" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                    </TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {!loading &&
-                    filtered.map((r) => (
-                      <TableRow key={r.onboard_id}>
-                        <TableCell className="font-mono text-xs">{r.onboard_id}</TableCell>
-                        <TableCell className="font-mono text-xs">{r.userId}</TableCell>
-                        <TableCell>{r.profileName || "-"}</TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              r.processStatus === "approved"
-                                ? "bg-green-100 text-green-800"
-                                : r.processStatus === "rejected"
-                                  ? "bg-red-100 text-red-800"
-                                  : r.processStatus === "in-progress"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : "bg-yellow-100 text-yellow-800"
-                            }
-                          >
-                            {r.processStatus}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              r.verify === "success"
-                                ? "border-green-300 text-green-700"
-                                : r.verify === "failed"
-                                  ? "border-red-300 text-red-700"
-                                  : "border-yellow-300 text-yellow-700"
-                            }
-                          >
-                            {r.verify || "pending"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{new Date(r.createdAt).toLocaleString()}</TableCell>
-                        <TableCell className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => view(r.onboard_id)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" onClick={() => updateStatus(r.onboard_id, "approved")}>
-                            <Check className="h-4 w-4 mr-1" /> Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => updateStatus(r.onboard_id, "rejected")}
-                          >
-                            <X className="h-4 w-4 mr-1" /> Reject
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    filtered.map((r) => {
+                      const isApproved = r.processStatus === "approved"
+                      const isRejected = r.processStatus === "rejected"
+                      return (
+                        <TableRow key={r.onboard_id}>
+                          <TableCell className="font-mono text-xs">{r.onboard_id}</TableCell>
+                          <TableCell className="font-mono text-xs">{r.userId}</TableCell>
+                          <TableCell>{r.profileName || "-"}</TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                isApproved
+                                  ? "bg-green-100 text-green-800"
+                                  : isRejected
+                                    ? "bg-red-100 text-red-800"
+                                    : r.processStatus === "in-progress"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "bg-yellow-100 text-yellow-800"
+                              }
+                            >
+                              {r.processStatus}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={
+                                r.verify === "success"
+                                  ? "border-green-300 text-green-700"
+                                  : r.verify === "failed"
+                                    ? "border-red-300 text-red-700"
+                                    : "border-yellow-300 text-yellow-700"
+                              }
+                            >
+                              {r.verify || "pending"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{new Date(r.createdAt).toLocaleString()}</TableCell>
+                          <TableCell className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => view(r.onboard_id)}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => updateStatus(r.onboard_id, "approved")}
+                              disabled={isApproved}
+                            >
+                              <Check className="h-4 w-4 mr-1" /> Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => updateStatus(r.onboard_id, "rejected")}
+                              disabled={isRejected}
+                            >
+                              <X className="h-4 w-4 mr-1" /> Reject
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   {!loading && filtered.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-muted-foreground">
@@ -246,28 +281,52 @@ export default function AdminOnboardingPage() {
                 <div className="space-y-2">
                   <strong>Documents</strong>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {(selected.doc || []).map((u: string, i: number) => (
-                      <a
-                        key={i}
-                        href={u}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-2 rounded border p-2 hover:bg-accent"
-                      >
-                        <FileText className="h-4 w-4" /> <span className="truncate">{u}</span>
-                      </a>
-                    ))}
-                    {(!selected.doc || selected.doc.length === 0) && (
+                    {(selected.doc ?? []).length > 0 ? (
+                      (selected.doc as Array<string | { type: string; url: string }>).map((d, i) => {
+                        const url = typeof d === "string" ? d : d?.url
+                        const label =
+                          typeof d === "string"
+                            ? d.split("/").pop() || d
+                            : d?.type || d?.url?.split("/").pop() || d?.url
+
+                        if (!url) return null
+
+                        return (
+                          <a
+                            key={i}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded border p-2 hover:bg-accent"
+                          >
+                            <FileText className="h-4 w-4" /> <span className="truncate">{label}</span>
+                          </a>
+                        )
+                      })
+                    ) : (
                       <div className="text-muted-foreground">No documents</div>
                     )}
                   </div>
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <Button variant="secondary" onClick={() => updateStatus(selected.onboard_id, "in-progress")}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => updateStatus(selected.onboard_id, "in-progress")}
+                    disabled={selected.processStatus === "in-progress"}
+                  >
                     Mark In-Progress
                   </Button>
-                  <Button onClick={() => updateStatus(selected.onboard_id, "approved")}>Approve</Button>
-                  <Button variant="destructive" onClick={() => updateStatus(selected.onboard_id, "rejected")}>
+                  <Button
+                    onClick={() => updateStatus(selected.onboard_id, "approved")}
+                    disabled={selected.processStatus === "approved"}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => updateStatus(selected.onboard_id, "rejected")}
+                    disabled={selected.processStatus === "rejected"}
+                  >
                     Reject
                   </Button>
                 </div>

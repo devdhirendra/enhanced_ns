@@ -114,27 +114,6 @@ export default function LoginForm() {
         />
       </div>
 
-      {/* Onboarding Button - Top Left */}
-      <div className="absolute top-6 left-6 lg:top-8 lg:left-12 z-20">
-        <a
-          href="/onboarding"
-          className="inline-flex items-center gap-2 rounded-lg px-4 py-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow hover:opacity-90 transition"
-          aria-label="Start onboarding for operator, vendor, or staff"
-        >
-          {/* Simple plus icon using CSS to avoid new imports */}
-          <span className="inline-block w-4 h-4 relative">
-            <span
-              className="absolute inset-0 bg-[hsl(var(--primary-foreground))]"
-              style={{
-                clipPath:
-                  "polygon(45% 0,55% 0,55% 45%,100% 45%,100% 55%,55% 55%,55% 100%,45% 100%,45% 55%,0 55%,0 45%,45% 45%)",
-              }}
-            />
-          </span>
-          New Onboarding
-        </a>
-      </div>
-
       {/* Main Container */}
       <div className="relative z-10 w-full h-screen flex">
         {/* Left Side - Image Slider (55%) */}

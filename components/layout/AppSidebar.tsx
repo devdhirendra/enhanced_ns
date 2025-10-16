@@ -131,6 +131,7 @@ const operatorNavItems = [
       { title: "Technicians", url: "/operator/technicians", icon: HardHat },
       { title: "Inventory", url: "/operator/inventory", icon: Package },
       { title: "Network Map", url: "/operator/network-map", icon: MapPin },
+      { title: "Onboarding", url: "/operator/onboarding", icon: UserCheck },
     ],
   },
   {
@@ -158,6 +159,7 @@ const technicianNavItems = [
       { title: "Dashboard", url: "/technician/dashboard", icon: LayoutDashboard },
       { title: "My Tasks", url: "/technician/tasks", icon: ClipboardList },
       { title: "Complaints", url: "/technician/complaints", icon: Headphones },
+      { title: "Onboarding", url: "/technician/onboarding", icon: UserCheck },
     ],
   },
   {
@@ -227,6 +229,7 @@ const staffNavItems = [
       { title: "Dashboard", url: "/staff/dashboard", icon: LayoutDashboard },
       { title: "My Tasks", url: "/staff/tasks", icon: ClipboardList },
       { title: "Assigned Tickets", url: "/staff/tickets", icon: Headphones },
+      { title: "My Onboarding", url: "/staff/my-onboarding", icon: UserCheck },
     ],
   },
   {
@@ -263,6 +266,7 @@ const vendorNavItems = [
       { title: "Dashboard", url: "/vendor/dashboard", icon: LayoutDashboard },
       { title: "Product Management", url: "/vendor/products", icon: Package },
       { title: "Order Management", url: "/vendor/orders", icon: ShoppingCart },
+      { title: "Onboarding / KYC", url: "/vendor/onboarding", icon: UserCheck },
     ],
   },
   {
@@ -411,7 +415,7 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage src={user.profileDetail.avater || "/placeholder.svg"} alt={user.profileDetail.name} />
+                    <AvatarImage src={user.profileDetail.avatar || "/placeholder.svg"} alt={user.profileDetail.name} />
                     <AvatarFallback className="rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white">
                       {user.profileDetail.name
                         .split(" ")
@@ -423,12 +427,23 @@ export function AppSidebar({ user }: AppSidebarProps) {
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">{user.profileDetail.name}</span>
                     <span className="truncate text-xs">{user.email}</span>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Badge variant="secondary" className={`text-xs ${getRoleColor(user.role)}`}>
+                        {user.role}
+                      </Badge>
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${getStatusColor((user.status as string) || "active")}`}
+                      >
+                        {user.status || "active"}
+                      </Badge>
+                    </div>
                   </div>
                   <ChevronUp className="ml-auto size-4" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
                 side="bottom"
                 align="end"
                 sideOffset={4}
@@ -455,8 +470,11 @@ export function AppSidebar({ user }: AppSidebarProps) {
                         <Badge variant="secondary" className={`text-xs ${getRoleColor(user.role)}`}>
                           {user.role}
                         </Badge>
-                        <Badge variant="secondary" className={`text-xs ${getStatusColor(user.Permissions.status)}`}>
-                          {user.status}
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${getStatusColor((user.status as string) || "active")}`}
+                        >
+                          {user.status || "active"}
                         </Badge>
                       </div>
                     </div>

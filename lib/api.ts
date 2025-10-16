@@ -90,12 +90,14 @@ export interface LogFilters {
   endDate?: string
 }
 
-type OnboardingRecord = {
+export type OnboardingDoc = { type: string; url: string }
+
+export type OnboardingRecord = {
   onboard_id: string
   userId: string
   profileName?: string
-  doc?: string[]
-  processStatus: "pending" | "approved" | "rejected" | "in-progress"
+  doc: OnboardingDoc[]
+  processStatus: "pending" | "in-progress" | "approved" | "rejected"
   whoApproveUserId?: string
   whoApproveProfileName?: string
   verify?: "pending" | "success" | "failed"
@@ -1928,37 +1930,65 @@ class ApiClient {
     })
   }
 
-  async createOnboarding(data: { userId: string; doc: string[] }): Promise<ApiResponse<OnboardingRecord>> {
-    return this.request<OnboardingRecord>("/onboarding/create", {
+  async uploadOnboardingFile(file: File): Promise<{ fileUrl: string }> {
+    const form = new FormData()
+    form.append("file", file)
+    const res = await fetch(`${API_BASE_URL}/onboarding/upload`, {
+      method: "POST",
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : undefined,
+      body: form,
+    })
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+    return res.json()
+  }
+
+  async uploadOnboardingFiles(files: File[]): Promise<{ fileUrls: string[] }> {
+    const form = new FormData()
+    files.forEach((f) => form.append("files", f))
+    const res = await fetch(`${API_BASE_URL}/onboarding/upload/multiple`, {
+      method: "POST",
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : undefined,
+      body: form,
+    })
+    if (!res.ok) throw new Error(`Multi-upload failed: ${res.status}`)
+    return res.json()
+  }
+
+  async createOnboarding(data: { userId: string; doc: OnboardingDoc[] }): Promise<OnboardingRecord> {
+    const res = await this.request<OnboardingRecord>("/onboarding/create", {
       method: "POST",
       body: JSON.stringify(data),
     })
+    return res
   }
 
   async getAllOnboardings(): Promise<OnboardingRecord[]> {
     const res = await this.request<OnboardingRecord[]>("/onboarding/all", { method: "GET" })
-    return (res as any).data || (res as any)
+    return res
   }
 
   async getOnboardingById(id: string): Promise<OnboardingRecord> {
     const res = await this.request<OnboardingRecord>(`/onboarding/${id}`, { method: "GET" })
-    return (res as any).data || (res as any)
+    return res
   }
 
   async updateOnboardingStatus(
     id: string,
-    payload: { status: "approved" | "rejected" | "pending" | "in-progress"; whoApproveUserId?: string },
-  ): Promise<ApiResponse<{ message: string; updatedRecord: Partial<OnboardingRecord> }>> {
-    return this.request(`/onboarding/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    })
+    data: { status: "pending" | "in-progress" | "approved" | "rejected"; whoApproveUserId?: string },
+  ): Promise<{ message: string; updatedRecord: Partial<OnboardingRecord> }> {
+    const res = await this.request<{ message: string; updatedRecord: Partial<OnboardingRecord> }>(
+      `/onboarding/${id}/status`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      },
+    )
+    return res
   }
 
-  async deleteOnboarding(id: string): Promise<ApiResponse<{ message: string }>> {
-    return this.request(`/onboarding/${id}`, {
-      method: "DELETE",
-    })
+  async deleteOnboarding(id: string): Promise<{ message: string }> {
+    const res = await this.request<{ message: string }>(`/onboarding/${id}`, { method: "DELETE" })
+    return res
   }
 }
 
