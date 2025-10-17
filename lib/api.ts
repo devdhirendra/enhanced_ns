@@ -96,11 +96,13 @@ export type OnboardingRecord = {
   onboard_id: string
   userId: string
   profileName?: string
-  doc: OnboardingDoc[]
+  doc: string[]
   processStatus: "pending" | "in-progress" | "approved" | "rejected"
+  verify?: "pending" | "success" | "rejected"
+  comment?: string
+  rejectionReason?: string
   whoApproveUserId?: string
   whoApproveProfileName?: string
-  verify?: "pending" | "success" | "failed"
   createdAt: string
   updatedAt: string
 }
@@ -1954,7 +1956,7 @@ class ApiClient {
     return res.json()
   }
 
-  async createOnboarding(data: { userId: string; doc: OnboardingDoc[] }): Promise<OnboardingRecord> {
+  async createOnboarding(data: { userId: string; doc: string[] }): Promise<OnboardingRecord> {
     const res = await this.request<OnboardingRecord>("/onboarding/create", {
       method: "POST",
       body: JSON.stringify(data),
@@ -1974,13 +1976,32 @@ class ApiClient {
 
   async updateOnboardingStatus(
     id: string,
-    data: { status: "pending" | "in-progress" | "approved" | "rejected"; whoApproveUserId?: string },
+    data: {
+      status: "pending" | "in-progress" | "approved" | "rejected"
+      whoApproveUserId?: string
+      comment?: string
+      rejectionReason?: string
+    },
   ): Promise<{ message: string; updatedRecord: Partial<OnboardingRecord> }> {
     const res = await this.request<{ message: string; updatedRecord: Partial<OnboardingRecord> }>(
       `/onboarding/${id}/status`,
       {
         method: "PATCH",
         body: JSON.stringify(data),
+      },
+    )
+    return res
+  }
+
+  async updateOnboardingComment(
+    id: string,
+    comment: string,
+  ): Promise<{ message: string; updatedRecord: Partial<OnboardingRecord> }> {
+    const res = await this.request<{ message: string; updatedRecord: Partial<OnboardingRecord> }>(
+      `/onboarding/${id}/comment`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ comment }),
       },
     )
     return res
