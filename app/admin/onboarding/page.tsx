@@ -258,17 +258,13 @@ export default function AdminOnboardingPage() {
                             <Button size="sm" variant="outline" onClick={() => view(r.onboard_id)}>
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => updateStatus(r.onboard_id, "approved")}
-                              disabled={isApproved}
-                            >
+                            <Button size="sm" onClick={() => view(r.onboard_id)} disabled={isApproved}>
                               <Check className="h-4 w-4 mr-1" /> Approve
                             </Button>
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => updateStatus(r.onboard_id, "rejected")}
+                              onClick={() => view(r.onboard_id)}
                               disabled={isRejected}
                             >
                               <X className="h-4 w-4 mr-1" /> Reject
