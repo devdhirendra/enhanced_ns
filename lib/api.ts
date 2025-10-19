@@ -717,7 +717,7 @@ class ApiClient {
     vendorId: string
     status?: string
   }): Promise<ApiResponse> {
-    return this.request("/orders", {
+    return this.request("/orders/add", {
       method: "POST",
       body: JSON.stringify(data),
     })
@@ -732,12 +732,9 @@ class ApiClient {
     orderId: string,
     data: {
       status?: string
-      trackingNumber?: string
-      estimatedDelivery?: string
-      quantity?: number
     },
   ): Promise<ApiResponse> {
-    return this.request(`/orders/${orderId}`, {
+    return this.request(`/orders/${orderId}/status`, {
       method: "PUT",
       body: JSON.stringify(data),
     })
@@ -1008,13 +1005,12 @@ class ApiClient {
     orderId: string,
     data: {
       status: string
-      trackingNumber?: string
-      estimatedDelivery?: string
     },
   ): Promise<ApiResponse> {
     return this.request(`/orders/${orderId}/status`, {
       method: "PUT",
       body: JSON.stringify(data),
+
     })
   }
 

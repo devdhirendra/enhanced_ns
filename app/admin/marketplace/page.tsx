@@ -39,6 +39,7 @@ import {
   RefreshCw,
   Building2,
   Calendar,
+  MapPin,
 } from "lucide-react"
 import { formatCurrency, formatDate, exportToCSV } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -199,6 +200,17 @@ const VendorCardSkeleton = () => (
 )
 
 export default function MarketplacePage() {
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null)
+  const [showVendorDetails, setShowVendorDetails] = useState(false)
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [dateSort, setDateSort] = useState("newest")
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [showOrderDetails, setShowOrderDetails] = useState(false)
+  const [showTrackingDialog, setShowTrackingDialog] = useState(false)
+  const [trackingOrder, setTrackingOrder] = useState<Order | null>(null)
+  const [trackingNumber, setTrackingNumber] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [sortBy, setSortBy] = useState("popular")
@@ -209,11 +221,13 @@ export default function MarketplacePage() {
   const [loading, setLoading] = useState(true)
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
   const [showEditVendorDialog, setShowEditVendorDialog] = useState(false)
+  const [activeTab, setActiveTab] = useState("products")
 
   const [orders, setOrders] = useState<Order[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [operators, setOperators] = useState<Operator[]>([])
+  
 
   const { toast } = useToast()
 
@@ -342,12 +356,13 @@ export default function MarketplacePage() {
       description: `Viewing details for ${product.name}`,
     })
   }
-  const handleViewVendor = (vendor: Vendor) => {
-  toast({
-    title: "Vendor Details",
-    description: `Viewing details for ${vendor.profileDetail.companyName || vendor.profileDetail.name}`,
-  })
+  
+const handleViewVendor = (vendor: Vendor) => {
+  setSelectedVendor(vendor)
+  setShowVendorDetails(true)
 }
+
+
 const handleEditVendor = (vendor: Vendor) => {
   setEditingVendor(vendor)
   setShowEditVendorDialog(true)
@@ -389,46 +404,106 @@ const handleEditVendor = (vendor: Vendor) => {
       })
     }
   }
+  
 
   // Update handleUpdateOrderStatus
-  const handleUpdateOrderStatus = async (order: Order, newStatus: string) => {
-    try {
-      await marketplaceApi.updateOrder(order.orderId, {
-        status: newStatus,
-        trackingNumber: order.trackingNumber,
-        estimatedDelivery: order.estimatedDelivery,
-      });
+// Update handleUpdateOrderStatus function
+const handleUpdateOrderStatus = async (order: Order, newStatus: string) => {
+  try {
+    // Use orderApi instead of marketplaceApi
+    await orderApi.updateStatus(order.orderId, {
+      status: newStatus,
+    });
 
-      toast({
-        title: "Order Updated",
-        description: `Order ${order.orderId} status updated to ${newStatus}`,
-      });
+    toast({
+      title: "Order Updated",
+      description: `Order ${order.orderId} status updated to ${newStatus}`,
+    });
 
-      fetchMarketplaceData();
-    } catch (error) {
-      console.error("Error updating order:", error);
-      toast({
-        title: "Update Failed",
-        description: "Failed to update order status. Please try again.",
-        variant: "destructive",
-      });
-    }
+    fetchMarketplaceData();
+  } catch (error) {
+    console.error("Error updating order:", error);
+    toast({
+      title: "Update Failed",
+      description: "Failed to update order status. Please try again.",
+      variant: "destructive",
+    });
+  }
+}
+
+// Add this function to handle view order details
+const handleViewOrder = (order: Order) => {
+  setSelectedOrder(order)
+  setShowOrderDetails(true)
+}
+
+// Add this function to handle track order
+const handleTrackOrder = (order: Order) => {
+  if (order.trackingNumber) {
+    // If tracking number exists, open in new tab
+    window.open(`https://www.ekartlogistics.in/track-order`, '_blank')
+  } else {
+    // If no tracking number, open dialog to input one
+    setTrackingOrder(order)
+    setShowTrackingDialog(true)
+  }
+}
+
+// Add this function to handle tracking number submission
+const handleSubmitTracking = async () => {
+  if (!trackingOrder || !trackingNumber.trim()) {
+    toast({
+      title: "Invalid Input",
+      description: "Please enter a valid tracking number",
+      variant: "destructive",
+    })
+    return
   }
 
-  const handleViewOrder = (order: Order) => {
+  try {
+    await orderApi.updateStatus(trackingOrder.orderId, {
+      status: trackingOrder.status,
+      trackingNumber: trackingNumber,
+    })
+
     toast({
-      title: "Order Details",
-      description: `Viewing details for order ${order.orderId}`,
+      title: "Tracking Number Added",
+      description: `Tracking number ${trackingNumber} has been added to order ${trackingOrder.orderId}`,
+    })
+
+    setShowTrackingDialog(false)
+    setTrackingNumber("")
+    setTrackingOrder(null)
+    fetchMarketplaceData() // Refresh data
+  } catch (error) {
+    console.error("Error updating tracking number:", error)
+    toast({
+      title: "Update Failed",
+      description: "Failed to add tracking number. Please try again.",
+      variant: "destructive",
     })
   }
+}
 
-  const handleTrackOrder = (order: Order) => {
-    toast({
-      title: "Track Order",
-      description: `Tracking order ${order.orderId} - ${order.trackingNumber || "No tracking number"}`,
-    })
+// Update the filtered and sorted orders calculation
+const filteredOrders = orders.filter((order) => {
+  const matchesStatus = statusFilter === "all" || order.status === statusFilter
+  return matchesStatus
+})
+
+const sortedOrders = [...filteredOrders].sort((a, b) => {
+  const dateA = new Date(a.createdAt).getTime()
+  const dateB = new Date(b.createdAt).getTime()
+  
+  switch (dateSort) {
+    case "newest":
+      return dateB - dateA
+    case "oldest":
+      return dateA - dateB
+    default:
+      return 0
   }
-
+})
   const handleCreateOrderSuccess = () => {
     setShowCreateOrderDialog(false)
     fetchMarketplaceData() // Refresh the data
@@ -461,95 +536,162 @@ const handleEditVendor = (vendor: Vendor) => {
   const totalOrders = orders.length
   const totalRevenue = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0)
   const activeVendors = vendors.filter((v) => v.profileDetail).length
+  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedOrders = sortedOrders.slice(startIndex, startIndex + itemsPerPage)
 
   const categories = [...new Set(products.map((p) => p.category))].filter(Boolean)
+const Pagination = () => (
+  <div className="flex items-center justify-between px-2 py-4 border-t">
+    <div className="text-sm text-gray-500">
+      Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, sortedOrders.length)} of {sortedOrders.length} entries
+    </div>
+    <div className="flex items-center space-x-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+        disabled={currentPage === 1}
+      >
+        Previous
+      </Button>
+      <span className="text-sm text-gray-500">
+        Page {currentPage} of {totalPages}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+        disabled={currentPage === totalPages}
+      >
+        Next
+      </Button>
+      <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+        setItemsPerPage(Number(value))
+        setCurrentPage(1)
+      }}>
+        <SelectTrigger className="w-20">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="5">5</SelectItem>
+          <SelectItem value="10">10</SelectItem>
+          <SelectItem value="20">20</SelectItem>
+          <SelectItem value="50">50</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  </div>
+)
 
   return (
     <DashboardLayout title="Marketplace Management" description="Manage B2B marketplace for network equipment">
       <div className="space-y-6">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {loading ? (
-            <>
-              <StatsCardSkeleton />
-              <StatsCardSkeleton />
-              <StatsCardSkeleton />
-              <StatsCardSkeleton />
-            </>
-          ) : (
-            <>
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Total Products</CardTitle>
-                  <div className="p-2 bg-blue-500 rounded-lg">
-                    <Package className="h-5 w-5 text-white" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl md:text-3xl font-bold text-gray-900">{totalProducts}</div>
-                  <p className="text-xs md:text-sm text-gray-500 mt-2">Across all categories</p>
-                </CardContent>
-              </Card>
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+  {loading ? (
+    <>
+      <StatsCardSkeleton />
+      <StatsCardSkeleton />
+      <StatsCardSkeleton />
+      <StatsCardSkeleton />
+    </>
+  ) : (
+    <>
+      <Card 
+        className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100 cursor-pointer hover:shadow-xl transition-all duration-300"
+        onClick={() => setActiveTab("products")}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-700">Total Products</CardTitle>
+          <div className="p-2 bg-blue-500 rounded-lg">
+            <Package className="h-5 w-5 text-white" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl md:text-3xl font-bold text-gray-900">{totalProducts}</div>
+          <p className="text-xs md:text-sm text-gray-500 mt-2">Across all categories</p>
+        </CardContent>
+      </Card>
 
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Total Orders</CardTitle>
-                  <div className="p-2 bg-green-500 rounded-lg">
-                    <ShoppingCart className="h-5 w-5 text-white" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl md:text-3xl font-bold text-gray-900">{totalOrders}</div>
-                  <p className="text-xs md:text-sm text-gray-500 mt-2">All time orders</p>
-                </CardContent>
-              </Card>
+      <Card 
+        className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100 cursor-pointer hover:shadow-xl transition-all duration-300"
+        onClick={() => setActiveTab("orders")}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-700">Total Orders</CardTitle>
+          <div className="p-2 bg-green-500 rounded-lg">
+            <ShoppingCart className="h-5 w-5 text-white" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl md:text-3xl font-bold text-gray-900">{totalOrders}</div>
+          <p className="text-xs md:text-sm text-gray-500 mt-2">All time orders</p>
+        </CardContent>
+      </Card>
 
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-violet-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Total Revenue</CardTitle>
-                  <div className="p-2 bg-purple-500 rounded-lg">
-                    <DollarSign className="h-5 w-5 text-white" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl md:text-3xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</div>
-                  <div className="flex items-center mt-2">
-                    <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                    <span className="text-xs md:text-sm text-green-600 font-medium">+15.2%</span>
-                  </div>
-                </CardContent>
-              </Card>
+      <Card 
+        className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-violet-100 cursor-pointer hover:shadow-xl transition-all duration-300"
+        onClick={() => setActiveTab("orders")}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-700">Total Revenue</CardTitle>
+          <div className="p-2 bg-purple-500 rounded-lg">
+            <DollarSign className="h-5 w-5 text-white" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl md:text-3xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</div>
+          <div className="flex items-center mt-2">
+            <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
+            <span className="text-xs md:text-sm text-green-600 font-medium">+15.2%</span>
+          </div>
+        </CardContent>
+      </Card>
 
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Active Vendors</CardTitle>
-                  <div className="p-2 bg-orange-500 rounded-lg">
-                    <Users className="h-5 w-5 text-white" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl md:text-3xl font-bold text-gray-900">{activeVendors}</div>
-                  <p className="text-xs md:text-sm text-gray-500 mt-2">Verified suppliers</p>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
+      <Card 
+        className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100 cursor-pointer hover:shadow-xl transition-all duration-300"
+        onClick={() => setActiveTab("vendors")}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-gray-700">Active Vendors</CardTitle>
+          <div className="p-2 bg-orange-500 rounded-lg">
+            <Users className="h-5 w-5 text-white" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl md:text-3xl font-bold text-gray-900">{activeVendors}</div>
+          <p className="text-xs md:text-sm text-gray-500 mt-2">Verified suppliers</p>
+        </CardContent>
+      </Card>
+    </>
+  )}
+</div>
+
 
         {/* Main Content */}
-        <Tabs defaultValue="products" className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full max-w-lg grid-cols-3 bg-gray-100 p-1 rounded-lg">
-              <TabsTrigger value="products" className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm">
-                Products
-              </TabsTrigger>
-              <TabsTrigger value="orders" className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm">
-                Orders
-              </TabsTrigger>
-              <TabsTrigger value="vendors" className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm">
-                Vendors
-              </TabsTrigger>
-            </TabsList>
+<Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <TabsList className="grid w-full max-w-lg grid-cols-3 bg-gray-100 p-1 rounded-lg">
+      <TabsTrigger 
+        value="products" 
+        className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm"
+      >
+        Products
+      </TabsTrigger>
+      <TabsTrigger 
+        value="orders" 
+        className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm"
+      >
+        Orders
+      </TabsTrigger>
+      <TabsTrigger 
+        value="vendors" 
+        className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm"
+      >
+        Vendors
+      </TabsTrigger>
+    </TabsList>
             <div className="flex items-center gap-2 flex-wrap">
               <Button variant="outline" size="sm" onClick={fetchMarketplaceData} disabled={loading} className="text-xs sm:text-sm">
                 <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
@@ -725,95 +867,143 @@ const handleEditVendor = (vendor: Vendor) => {
             </div>
           </TabsContent>
 
-          <TabsContent value="orders" className="space-y-6">
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle className="text-xl font-bold text-gray-900">Marketplace Orders ({orders.length})</CardTitle>
-                <CardDescription>All orders placed by operators</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="max-h-[600px] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs sm:text-sm">Order ID</TableHead>
-                        <TableHead className="text-xs sm:text-sm">Operator</TableHead>
-                        <TableHead className="text-xs sm:text-sm">Product</TableHead>
-                        <TableHead className="text-xs sm:text-sm">Quantity</TableHead>
-                        <TableHead className="text-xs sm:text-sm">Amount</TableHead>
-                        <TableHead className="text-xs sm:text-sm">Status</TableHead>
-                        <TableHead className="text-xs sm:text-sm">Date</TableHead>
-                        <TableHead className="text-xs sm:text-sm">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
-                        Array.from({ length: 5 }).map((_, i) => <TableRowSkeleton key={i} />)
-                      ) : (
-                        orders.map((order) => (
-                          <TableRow key={order.orderId}>
-                            <TableCell className="font-medium text-xs sm:text-sm">{order.orderId}</TableCell>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium text-xs sm:text-sm">{order.operatorName || order.operatorId}</div>
-                                <div className="text-xs text-gray-500">{order.operatorId}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-medium text-xs sm:text-sm">{order.productName || order.productId}</div>
-                            </TableCell>
-                            <TableCell className="text-xs sm:text-sm">{order.quantity}</TableCell>
-                            <TableCell className="font-medium text-xs sm:text-sm">
-                              {order.totalAmount ? formatCurrency(order.totalAmount) : "N/A"}
-                            </TableCell>
-                            <TableCell>
-                              <Select
-                                value={order.status}
-                                onValueChange={(value) => handleUpdateOrderStatus(order, value)}
-                              >
-                                <SelectTrigger className="w-28 sm:w-32 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="pending">Pending</SelectItem>
-                                  <SelectItem value="shipped">Shipped</SelectItem>
-                                  <SelectItem value="delivered">Delivered</SelectItem>
-                                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center text-xs sm:text-sm">
-                                <Calendar className="h-4 w-4 mr-1 text-gray-400" />
-                                {formatDate(order.createdAt)}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-1">
-                                <Button variant="ghost" size="icon" onClick={() => handleViewOrder(order)} className="h-8 w-8">
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleTrackOrder(order)} className="h-8 w-8">
-                                  <Truck className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                      {!loading && orders.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center text-gray-500 py-8">
-                            No orders found.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+<TabsContent value="orders" className="space-y-6">
+  <Card className="border-0 shadow-lg">
+    <CardHeader>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <CardTitle className="text-xl font-bold text-gray-900">
+            Marketplace Orders ({filteredOrders.length})
+          </CardTitle>
+          <CardDescription>All orders placed by operators</CardDescription>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="shipped">Shipped</SelectItem>
+              <SelectItem value="delivered">Delivered</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={dateSort} onValueChange={setDateSort}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="Sort by date" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </CardHeader>
+    <CardContent>
+      <div className="max-h-[600px] overflow-y-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs sm:text-sm">Order ID</TableHead>
+              <TableHead className="text-xs sm:text-sm">Operator</TableHead>
+              <TableHead className="text-xs sm:text-sm">Product</TableHead>
+              <TableHead className="text-xs sm:text-sm">Quantity</TableHead>
+              <TableHead className="text-xs sm:text-sm">Amount</TableHead>
+              <TableHead className="text-xs sm:text-sm">Status</TableHead>
+              <TableHead className="text-xs sm:text-sm">Date</TableHead>
+              <TableHead className="text-xs sm:text-sm">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+<TableBody>
+  {loading ? (
+    Array.from({ length: 5 }).map((_, i) => <TableRowSkeleton key={i} />)
+  ) : (
+    paginatedOrders.map((order) => (
+      <TableRow key={order.orderId}>
+                  <TableCell className="font-medium text-xs sm:text-sm">
+                    {order.orderId}
+                  </TableCell>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium text-xs sm:text-sm">
+                        {order.operatorName || order.operatorId}
+                      </div>
+                      <div className="text-xs text-gray-500">{order.operatorId}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium text-xs sm:text-sm">
+                      {order.productName || order.productId}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs sm:text-sm">{order.quantity}</TableCell>
+                  <TableCell className="font-medium text-xs sm:text-sm">
+                    {order.totalAmount ? formatCurrency(order.totalAmount) : "N/A"}
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={order.status}
+                      onValueChange={(value) => handleUpdateOrderStatus(order, value)}
+                    >
+                      <SelectTrigger className="w-28 sm:w-32 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="shipped">Shipped</SelectItem>
+                        <SelectItem value="delivered">Delivered</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center text-xs sm:text-sm">
+                      <Calendar className="h-4 w-4 mr-1 text-gray-400" />
+                      {formatDate(order.createdAt)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleViewOrder(order)} 
+                        className="h-8 w-8"
+                        title="View Order Details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleTrackOrder(order)} 
+                        className="h-8 w-8"
+                        title={order.trackingNumber ? "Track Order" : "Add Tracking"}
+                      >
+                        <Truck className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+  {!loading && paginatedOrders.length === 0 && (
+    <TableRow>
+      <TableCell colSpan={8} className="text-center text-gray-500 py-8">
+        {statusFilter === "all" ? "No orders found." : `No ${statusFilter} orders found.`}
+      </TableCell>
+    </TableRow>
+  )}
+</TableBody>
+        </Table>
+        {Pagination()}
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
 
           <TabsContent value="vendors" className="space-y-6">
             <Card className="border-0 shadow-lg">
@@ -863,15 +1053,15 @@ const handleEditVendor = (vendor: Vendor) => {
         <p className="text-gray-900">{formatDate(vendor.createdAt)}</p>
       </div>
       <div className="flex space-x-2 pt-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="flex-1 bg-transparent text-xs"
-          onClick={() => handleViewVendor(vendor)}
-        >
-          <Eye className="h-4 w-4 mr-1" />
-          View
-        </Button>
+<Button 
+  variant="outline" 
+  size="sm" 
+  className="flex-1 bg-transparent text-xs"
+  onClick={() => handleViewVendor(vendor)}
+>
+  <Eye className="h-4 w-4 mr-1" />
+  View
+</Button>
         <Button 
           variant="outline" 
           size="sm" 
@@ -892,6 +1082,7 @@ const handleEditVendor = (vendor: Vendor) => {
           </TabsContent>
         </Tabs>
 
+
 <Dialog open={showEditVendorDialog} onOpenChange={setShowEditVendorDialog}>
   <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
     <DialogHeader>
@@ -907,6 +1098,343 @@ const handleEditVendor = (vendor: Vendor) => {
     )}
   </DialogContent>
 </Dialog>
+{/* Order Details Dialog */}
+<Dialog open={showOrderDetails} onOpenChange={setShowOrderDetails}>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Order Details - {selectedOrder?.orderId}</DialogTitle>
+      <DialogDescription>Complete information for this order</DialogDescription>
+    </DialogHeader>
+    {selectedOrder && (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Order Information</Label>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Order ID:</span>
+                <span className="font-medium">{selectedOrder.orderId}</span>
+              </div>
+              <div className="flex justify-between text-sm mt-2">
+                <span className="text-gray-600">Status:</span>
+                <Badge variant={
+                  selectedOrder.status === 'delivered' ? 'default' :
+                  selectedOrder.status === 'shipped' ? 'secondary' :
+                  selectedOrder.status === 'pending' ? 'outline' :
+                  'destructive'
+                }>
+                  {selectedOrder.status}
+                </Badge>
+              </div>
+              <div className="flex justify-between text-sm mt-2">
+                <span className="text-gray-600">Quantity:</span>
+                <span className="font-medium">{selectedOrder.quantity}</span>
+              </div>
+              <div className="flex justify-between text-sm mt-2">
+                <span className="text-gray-600">Total Amount:</span>
+                <span className="font-medium">
+                  {selectedOrder.totalAmount ? formatCurrency(selectedOrder.totalAmount) : "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Timeline</Label>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Created:</span>
+                <span className="font-medium">{formatDate(selectedOrder.createdAt)}</span>
+              </div>
+              <div className="flex justify-between text-sm mt-2">
+                <span className="text-gray-600">Last Updated:</span>
+                <span className="font-medium">{formatDate(selectedOrder.updatedAt)}</span>
+              </div>
+              {selectedOrder.estimatedDelivery && (
+                <div className="flex justify-between text-sm mt-2">
+                  <span className="text-gray-600">Est. Delivery:</span>
+                  <span className="font-medium">{formatDate(selectedOrder.estimatedDelivery)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Product Details</Label>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="text-sm">
+                <span className="text-gray-600">Product:</span>
+                <span className="font-medium ml-2">{selectedOrder.productName || selectedOrder.productId}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Shipping Information</Label>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              {selectedOrder.trackingNumber ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Tracking Number:</span>
+                    <span className="font-medium">{selectedOrder.trackingNumber}</span>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      setShowOrderDetails(false)
+                      window.open(`https://www.ekartlogistics.in/track-order`, '_blank')
+                    }}
+                    className="w-full"
+                  >
+                    <Truck className="h-4 w-4 mr-2" />
+                    Track Package
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 text-center">
+                  No tracking information available
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowOrderDetails(false)}
+          >
+            Close
+          </Button>
+        </div>
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
+
+
+{/* Tracking Number Dialog */}
+<Dialog open={showTrackingDialog} onOpenChange={setShowTrackingDialog}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Add Tracking Number</DialogTitle>
+      <DialogDescription>
+        Enter tracking number for order {trackingOrder?.orderId}
+      </DialogDescription>
+    </DialogHeader>
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="trackingNumber">Tracking Number *</Label>
+        <Input
+          id="trackingNumber"
+          value={trackingNumber}
+          onChange={(e) => setTrackingNumber(e.target.value)}
+          placeholder="Enter tracking number"
+        />
+      </div>
+      <div className="bg-blue-50 p-3 rounded-lg">
+        <p className="text-sm text-blue-700">
+          After adding the tracking number, you can track the package on Ekart Logistics.
+        </p>
+      </div>
+      <div className="flex justify-end space-x-2 pt-2">
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            setShowTrackingDialog(false)
+            setTrackingNumber("")
+            setTrackingOrder(null)
+          }}
+        >
+          Cancel
+        </Button>
+        <Button onClick={handleSubmitTracking}>
+          Add Tracking
+        </Button>
+      </div>
+    </div>
+  </DialogContent>
+
+</Dialog>
+
+      <Dialog open={showEditProductDialog} onOpenChange={setShowEditProductDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+            <DialogDescription>Update product information</DialogDescription>
+          </DialogHeader>
+          {editingProduct && (
+            <EditProductForm
+              product={editingProduct}
+              onClose={() => setShowEditProductDialog(false)}
+              onSuccess={handleEditProductSuccess}
+              vendors={vendors}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Vendor Dialog */}
+      <Dialog open={showEditVendorDialog} onOpenChange={setShowEditVendorDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Vendor</DialogTitle>
+            <DialogDescription>Update vendor information</DialogDescription>
+          </DialogHeader>
+          {editingVendor && (
+            <EditVendorForm
+              vendor={editingVendor}
+              onClose={() => setShowEditVendorDialog(false)}
+              onSuccess={handleEditVendorSuccess}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    <Dialog open={showVendorDetails} onOpenChange={setShowVendorDetails}>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Vendor Details</DialogTitle>
+      <DialogDescription>Complete information for {selectedVendor?.profileDetail.companyName || selectedVendor?.profileDetail.name}</DialogDescription>
+    </DialogHeader>
+    {selectedVendor && (
+      <div className="space-y-6">
+        {/* Vendor Header */}
+        <div className="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-lg">
+            <Building2 className="h-8 w-8 text-white" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">
+              {selectedVendor.profileDetail.companyName || selectedVendor.profileDetail.name}
+            </h3>
+            <p className="text-gray-600">{selectedVendor.profileDetail.name}</p>
+          </div>
+          <Badge className="bg-green-100 text-green-800 ml-auto">Active</Badge>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Contact Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <Users className="h-5 w-5 mr-2" />
+                Contact Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label className="text-sm text-gray-500">Contact Person</Label>
+                <p className="font-medium">{selectedVendor.profileDetail.name}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Email</Label>
+                <p className="font-medium">{selectedVendor.email}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Phone</Label>
+                <p className="font-medium">{selectedVendor.profileDetail.phone}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Company Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <Building2 className="h-5 w-5 mr-2" />
+                Company Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label className="text-sm text-gray-500">Company Name</Label>
+                <p className="font-medium">{selectedVendor.profileDetail.companyName || "Not specified"}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Vendor ID</Label>
+                <p className="font-medium">{selectedVendor.user_id}</p>
+              </div>
+              <div>
+                <Label className="text-sm text-gray-500">Status</Label>
+                <Badge className="bg-green-100 text-green-800">Active Vendor</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Address Information */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <MapPin className="h-5 w-5 mr-2" />
+                Address Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-500">State</Label>
+                  <p className="font-medium">{selectedVendor.profileDetail.address?.state || "Not specified"}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">District</Label>
+                  <p className="font-medium">{selectedVendor.profileDetail.address?.district || "Not specified"}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Area</Label>
+                  <p className="font-medium">{selectedVendor.profileDetail.address?.area || "Not specified"}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Account Information */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <Calendar className="h-5 w-5 mr-2" />
+                Account Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-gray-500">Member Since</Label>
+                  <p className="font-medium">{formatDate(selectedVendor.createdAt)}</p>
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Last Updated</Label>
+                  <p className="font-medium">{formatDate(selectedVendor.updatedAt)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowVendorDetails(false)}
+          >
+            Close
+          </Button>
+          <Button 
+            onClick={() => {
+              setShowVendorDetails(false)
+              handleEditVendor(selectedVendor)
+            }}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Vendor
+          </Button>
+        </div>
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
+
       </div>
     </DashboardLayout>
   )
@@ -957,8 +1485,8 @@ const handleSubmit = async (e: React.FormEvent) => {
     await marketplaceApi.createOrder({
       productName: selectedProduct?.name || "Unknown Product",
       quantity: formData.quantity,
-      operatorId: formData.operatorId,
-      vendorId: formData.vendorId,
+      operatorUserId: formData.operatorId,
+      vendorUserId: formData.vendorId,
       status: "pending",
     });
 
