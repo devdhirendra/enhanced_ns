@@ -154,6 +154,8 @@ export interface StockIssuance {
   updatedAt: string
 }
 
+import { onboardingApi } from "./onboarding-api"
+
 class ApiClient {
   private baseURL: string
   private token: string | null = null
@@ -1010,7 +1012,6 @@ class ApiClient {
     return this.request(`/orders/${orderId}/status`, {
       method: "PUT",
       body: JSON.stringify(data),
-
     })
   }
 
@@ -1929,45 +1930,28 @@ class ApiClient {
   }
 
   async uploadOnboardingFile(file: File): Promise<{ fileUrl: string }> {
-    const form = new FormData()
-    form.append("file", file)
-    const res = await fetch(`${API_BASE_URL}/onboarding/upload`, {
-      method: "POST",
-      headers: this.token ? { Authorization: `Bearer ${this.token}` } : undefined,
-      body: form,
-    })
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
-    return res.json()
+    return onboardingApi.uploadFile(file)
   }
 
   async uploadOnboardingFiles(files: File[]): Promise<{ fileUrls: string[] }> {
-    const form = new FormData()
-    files.forEach((f) => form.append("files", f))
-    const res = await fetch(`${API_BASE_URL}/onboarding/upload/multiple`, {
-      method: "POST",
-      headers: this.token ? { Authorization: `Bearer ${this.token}` } : undefined,
-      body: form,
-    })
-    if (!res.ok) throw new Error(`Multi-upload failed: ${res.status}`)
-    return res.json()
+    return onboardingApi.uploadMultipleFiles(files)
   }
 
-  async createOnboarding(data: { userId: string; doc: string[] }): Promise<OnboardingRecord> {
-    const res = await this.request<OnboardingRecord>("/onboarding/create", {
-      method: "POST",
-      body: JSON.stringify(data),
-    })
-    return res
+  async createOnboarding(data: { userId: string; doc: string[] }): Promise<any> {
+    // Convert old format to new format
+    const docData = data.doc.map((url, idx) => ({
+      type: `Document ${idx + 1}`,
+      file: url,
+    }))
+    return onboardingApi.createOnboarding({ userId: data.userId, doc: docData })
   }
 
-  async getAllOnboardings(): Promise<OnboardingRecord[]> {
-    const res = await this.request<OnboardingRecord[]>("/onboarding/all", { method: "GET" })
-    return res
+  async getAllOnboardings(): Promise<any[]> {
+    return onboardingApi.getAllOnboardings()
   }
 
-  async getOnboardingById(id: string): Promise<OnboardingRecord> {
-    const res = await this.request<OnboardingRecord>(`/onboarding/${id}`, { method: "GET" })
-    return res
+  async getOnboardingById(id: string): Promise<any> {
+    return onboardingApi.getOnboardingById(id)
   }
 
   async updateOnboardingStatus(
@@ -1978,34 +1962,19 @@ class ApiClient {
       comment?: string
       rejectionReason?: string
     },
-  ): Promise<{ message: string; updatedRecord: Partial<OnboardingRecord> }> {
-    const res = await this.request<{ message: string; updatedRecord: Partial<OnboardingRecord> }>(
-      `/onboarding/${id}/status`,
-      {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      },
-    )
-    return res
+  ): Promise<{ message: string; updatedRecord: Partial<any> }> {
+    return onboardingApi.updateOnboardingStatus(id, data)
   }
 
   async updateOnboardingComment(
     id: string,
     comment: string,
-  ): Promise<{ message: string; updatedRecord: Partial<OnboardingRecord> }> {
-    const res = await this.request<{ message: string; updatedRecord: Partial<OnboardingRecord> }>(
-      `/onboarding/${id}/comment`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({ comment }),
-      },
-    )
-    return res
+  ): Promise<{ message: string; updatedRecord: Partial<any> }> {
+    return onboardingApi.updateComment(id, comment)
   }
 
   async deleteOnboarding(id: string): Promise<{ message: string }> {
-    const res = await this.request<{ message: string }>(`/onboarding/${id}`, { method: "DELETE" })
-    return res
+    return onboardingApi.deleteOnboarding(id)
   }
 }
 

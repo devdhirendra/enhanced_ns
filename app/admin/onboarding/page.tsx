@@ -365,18 +365,20 @@ export default function AdminOnboardingPage() {
                   <strong>Documents</strong>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {(selected.doc ?? []).length > 0 ? (
-                      (selected.doc as string[]).map((url, i) => (
-                        <a
-                          key={i}
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded border p-2 hover:bg-accent"
-                        >
-                          <FileText className="h-4 w-4" />{" "}
-                          <span className="truncate text-sm">{url.split("/").pop()}</span>
-                        </a>
-                      ))
+                      (selected.doc as string[]).map((url, i) => {
+                        const filename = url && typeof url === "string" ? url.split("/").pop() : "Document"
+                        return (
+                          <a
+                            key={i}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 rounded border p-2 hover:bg-accent"
+                          >
+                            <FileText className="h-4 w-4" /> <span className="truncate text-sm">{filename}</span>
+                          </a>
+                        )
+                      })
                     ) : (
                       <div className="text-muted-foreground">No documents</div>
                     )}
