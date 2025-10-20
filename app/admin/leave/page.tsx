@@ -34,6 +34,11 @@ import {
   Download,
   Loader2,
   AlertCircle,
+  FileText,
+    RefreshCw, // Add this import if not already there
+  ChevronLeft, // Add this import if not already there
+  ChevronRight, // Add this import if not already there
+  ArrowUpDown, // Add this import if not already there
 } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
@@ -57,6 +62,7 @@ interface LeaveRequest {
   documents?: string[]
   createdAt: string
 }
+
 
 interface LeavePolicy {
   policyId: string
@@ -177,6 +183,17 @@ export default function LeaveManagementPage() {
   const [policiesLoading, setPoliciesLoading] = useState(true)
   const [balancesLoading, setBalancesLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [showEditPolicyDialog, setShowEditPolicyDialog] = useState(false)
+  const [editingPolicy, setEditingPolicy] = useState<LeavePolicy | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
+
+  // Add these search and pagination states for leave balances
+  const [balanceSearchTerm, setBalanceSearchTerm] = useState("")
+  const [balanceRoleFilter, setBalanceRoleFilter] = useState("all")
+  const [balanceCurrentPage, setBalanceCurrentPage] = useState(1)
+  const [balanceSortBy, setBalanceSortBy] = useState("userName")
+  const [balanceSortOrder, setBalanceSortOrder] = useState<"asc" | "desc">("asc")
+const balanceItemsPerPage = 8
 
   // Error states
   const [error, setError] = useState<string | null>(null)
@@ -454,6 +471,108 @@ const fetchEmployeeBalances = async () => {
       toast.error("Failed to export data. Please try again.")
     }
   }
+  const handleEditPolicy = (policy: LeavePolicy) => {
+  setEditingPolicy(policy)
+  setShowEditPolicyDialog(true)
+}
+
+const handleUpdatePolicy = async (formData: any) => {
+  if (!editingPolicy) return
+
+  try {
+    setActionLoading(editingPolicy.policyId)
+    
+    const payload = {
+      policyName: formData.policyName.trim(),
+      leaveType: formData.leaveType,
+      daysPerYear: Number.parseInt(formData.daysPerYear),
+      maxCarryForwardDays: formData.allowCarryForward ? Number.parseInt(formData.maxCarryForwardDays) || 0 : 0,
+      allowCarryForward: formData.allowCarryForward,
+      applicableRoles: formData.applicableRoles,
+      description: formData.description.trim(),
+    }
+
+    const response = await leavePolicyApi.update(editingPolicy.policyId, payload)
+
+    if (response.success) {
+      toast.success("Leave policy updated successfully!")
+      setShowEditPolicyDialog(false)
+      setEditingPolicy(null)
+      fetchLeavePolicies()
+    } else {
+      toast.error(response.error || "Failed to update leave policy")
+    }
+  } catch (error) {
+    console.error("Error updating policy:", error)
+    toast.error("Failed to update leave policy. Please try again.")
+  } finally {
+    setActionLoading(null)
+  }
+}
+
+const handleDeletePolicy = async (policyId: string) => {
+  if (!confirm("Are you sure you want to delete this policy? This action cannot be undone.")) {
+    return
+  }
+
+  try {
+    setDeleteLoading(policyId)
+    const response = await leavePolicyApi.delete(policyId)
+
+    if (response.success) {
+      toast.success("Leave policy deleted successfully!")
+      fetchLeavePolicies()
+    } else {
+      toast.error(response.error || "Failed to delete leave policy")
+    }
+  } catch (error) {
+    console.error("Error deleting policy:", error)
+    toast.error("Failed to delete leave policy. Please try again.")
+  } finally {
+    setDeleteLoading(null)
+  }
+}
+const filteredEmployeeBalances = employeeBalances
+  .filter((employee) => {
+    const matchesSearch = 
+      employee.userName.toLowerCase().includes(balanceSearchTerm.toLowerCase()) ||
+      employee.userId.toLowerCase().includes(balanceSearchTerm.toLowerCase())
+    
+    const matchesRole = balanceRoleFilter === "all" || employee.userRole === balanceRoleFilter
+    
+    return matchesSearch && matchesRole
+  })
+  .sort((a, b) => {
+    let aValue = a[balanceSortBy as keyof EmployeeBalance]
+    let bValue = b[balanceSortBy as keyof EmployeeBalance]
+
+    if (balanceSortBy === "userName") {
+      aValue = a.userName.toLowerCase()
+      bValue = b.userName.toLowerCase()
+    }
+
+    if (balanceSortOrder === "asc") {
+      return aValue > bValue ? 1 : -1
+    } else {
+      return aValue < bValue ? 1 : -1
+    }
+  })
+
+const balanceTotalPages = Math.ceil(filteredEmployeeBalances.length / balanceItemsPerPage)
+const paginatedBalances = filteredEmployeeBalances.slice(
+  (balanceCurrentPage - 1) * balanceItemsPerPage,
+  balanceCurrentPage * balanceItemsPerPage
+)
+
+// Add this function to handle balance sorting
+const handleBalanceSort = (column: string) => {
+  if (balanceSortBy === column) {
+    setBalanceSortOrder(balanceSortOrder === "asc" ? "desc" : "asc")
+  } else {
+    setBalanceSortBy(column)
+    setBalanceSortOrder("asc")
+  }
+}
 
   const handleViewDetails = (request: LeaveRequest) => {
     setSelectedRequest(request)
@@ -592,6 +711,25 @@ const fetchEmployeeBalances = async () => {
                   <LeavePolicyForm onClose={() => setShowPolicyDialog(false)} onSuccess={fetchLeavePolicies} />
                 </DialogContent>
               </Dialog>
+              {/* Edit Policy Dialog */}
+<Dialog open={showEditPolicyDialog} onOpenChange={setShowEditPolicyDialog}>
+  <DialogContent className="max-w-2xl mx-4">
+    <DialogHeader>
+      <DialogTitle>Edit Leave Policy</DialogTitle>
+      <DialogDescription>Update the leave policy details</DialogDescription>
+    </DialogHeader>
+    {editingPolicy && (
+      <EditPolicyForm 
+        policy={editingPolicy} 
+        onClose={() => {
+          setShowEditPolicyDialog(false)
+          setEditingPolicy(null)
+        }} 
+        onSuccess={fetchLeavePolicies}
+      />
+    )}
+  </DialogContent>
+</Dialog>
             </div>
           </div>
 
@@ -762,146 +900,298 @@ const fetchEmployeeBalances = async () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="balances" className="space-y-4 md:space-y-6">
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle className="text-lg md:text-xl font-bold text-gray-900">Employee Leave Balances</CardTitle>
-                <CardDescription>Current leave balance for all employees</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[150px]">Employee</TableHead>
-                        <TableHead className="min-w-[200px]">Leave Type</TableHead>
-                        <TableHead className="min-w-[100px]">Total</TableHead>
-                        <TableHead className="min-w-[100px]">Used</TableHead>
-                        <TableHead className="min-w-[100px]">Remaining</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {balancesLoading ? (
-                        Array.from({ length: 3 }).map((_, i) => (
-                          <TableRow key={i}>
-                            <TableCell>
-                              <Skeleton className="h-4 w-24" />
-                            </TableCell>
-                            <TableCell>
-                              <Skeleton className="h-4 w-24" />
-                            </TableCell>
-                            <TableCell>
-                              <Skeleton className="h-4 w-12" />
-                            </TableCell>
-                            <TableCell>
-                              <Skeleton className="h-4 w-12" />
-                            </TableCell>
-                            <TableCell>
-                              <Skeleton className="h-4 w-12" />
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : employeeBalances.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                            No employee balances found
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        employeeBalances.flatMap((employee) =>
-                          employee.policies.map((policy, idx) => (
-                            <TableRow key={`${employee.userId}-${idx}`} className="hover:bg-gray-50">
-                              <TableCell>
-                                <div>
-                                  <div className="font-medium text-gray-900 text-sm md:text-base">
-                                    {employee.userName}
-                                  </div>
-                                  <div className="text-xs md:text-sm text-gray-500">{employee.userRole}</div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={`${getLeaveTypeColor(policy.leaveType)} border text-xs md:text-sm`}>
-                                  {policy.policyName}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-medium text-sm md:text-base">{policy.totalDays}</TableCell>
-                              <TableCell className="text-sm md:text-base text-orange-600 font-medium">
-                                {policy.usedDays}
-                              </TableCell>
-                              <TableCell className="text-sm md:text-base text-green-600 font-medium">
-                                {policy.remainingDays}
-                              </TableCell>
-                            </TableRow>
-                          )),
-                        )
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+<TabsContent value="balances" className="space-y-4 md:space-y-6">
+  <Card className="border-0 shadow-lg">
+    <CardHeader>
+      <CardTitle className="text-lg md:text-xl font-bold text-gray-900">
+        Employee Leave Balances ({filteredEmployeeBalances.length})
+      </CardTitle>
+      <CardDescription>Current leave balance for all employees with search and filtering</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      {/* Filters and Search */}
+      <div className="flex flex-col md:flex-row gap-3 md:gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search by employee name or ID..."
+            value={balanceSearchTerm}
+            onChange={(e) => {
+              setBalanceSearchTerm(e.target.value)
+              setBalanceCurrentPage(1)
+            }}
+            className="pl-10"
+          />
+        </div>
+        <Select 
+          value={balanceRoleFilter} 
+          onValueChange={(value) => {
+            setBalanceRoleFilter(value)
+            setBalanceCurrentPage(1)
+          }}
+        >
+          <SelectTrigger className="w-full md:w-40 lg:w-48">
+            <SelectValue placeholder="Filter by Role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Roles</SelectItem>
+            <SelectItem value="technician">Technician</SelectItem>
+            <SelectItem value="staff">Staff</SelectItem>
+            <SelectItem value="operator">Operator</SelectItem>
+            <SelectItem value="manager">Manager</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          onClick={fetchEmployeeBalances}
+          disabled={balancesLoading}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className={`h-4 w-4 ${balancesLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
 
-          <TabsContent value="policies" className="space-y-4 md:space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
-              {policiesLoading ? (
-                Array.from({ length: 3 }).map((_, i) => <PolicyCardSkeleton key={i} />)
-              ) : leavePolicies.length === 0 ? (
-                <Card className="col-span-full border-0 shadow-lg">
-                  <CardContent className="py-12 text-center">
-                    <p className="text-gray-500">No leave policies found. Create one to get started.</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                leavePolicies.map((policy) => (
-                  <Card
-                    key={policy.policyId}
-                    className="border-0 shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-1"
-                  >
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-base md:text-lg font-bold text-gray-900">
-                          {policy.policyName}
-                        </CardTitle>
-                        <Badge className={`${getLeaveTypeColor(policy.leaveType)} border text-xs md:text-sm`}>
-                          {policy.leaveType}
+      {/* Table */}
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50">
+              <TableHead 
+                className="min-w-[150px] cursor-pointer hover:bg-gray-100"
+                onClick={() => handleBalanceSort("userName")}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Employee</span>
+                  <ArrowUpDown className="h-4 w-4" />
+                </div>
+              </TableHead>
+              <TableHead className="min-w-[100px]">Role</TableHead>
+              <TableHead className="min-w-[200px]">Leave Policies</TableHead>
+              <TableHead className="min-w-[100px] text-right">Total Days</TableHead>
+              <TableHead className="min-w-[100px] text-right">Used Days</TableHead>
+              <TableHead className="min-w-[100px] text-right">Remaining</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {balancesLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <Skeleton className="h-4 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-16" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-32" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-12 ml-auto" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-12 ml-auto" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-12 ml-auto" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : paginatedBalances.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No employee balances found</p>
+                  <p className="text-sm">Try adjusting your search filters</p>
+                </TableCell>
+              </TableRow>
+            ) : (
+              paginatedBalances.flatMap((employee) =>
+                employee.policies.map((policy, idx) => (
+                  <TableRow key={`${employee.userId}-${idx}`} className="hover:bg-gray-50">
+                    <TableCell>
+                      {idx === 0 && (
+                        <div>
+                          <div className="font-medium text-gray-900 text-sm md:text-base">
+                            {employee.userName}
+                          </div>
+                          <div className="text-xs md:text-sm text-gray-500">{employee.userId}</div>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {idx === 0 && (
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {employee.userRole}
                         </Badge>
-                      </div>
-                      <CardDescription className="text-xs md:text-sm">{policy.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3 md:space-y-4">
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs md:text-sm">
-                          <span className="text-gray-600">Days per year:</span>
-                          <span className="font-medium">{policy.daysPerYear}</span>
-                        </div>
-                        <div className="flex justify-between text-xs md:text-sm">
-                          <span className="text-gray-600">Carry forward:</span>
-                          <span className="font-medium">{policy.allowCarryForward ? "Yes" : "No"}</span>
-                        </div>
-                        {policy.allowCarryForward && (
-                          <div className="flex justify-between text-xs md:text-sm">
-                            <span className="text-gray-600">Max carry forward:</span>
-                            <span className="font-medium">{policy.maxCarryForwardDays} days</span>
-                          </div>
-                        )}
-                        <div className="text-xs md:text-sm">
-                          <span className="text-gray-600">Applicable roles:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {policy.applicableRoles.map((role, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs">
-                                {role}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={`${getLeaveTypeColor(policy.leaveType)} border text-xs md:text-sm`}>
+                        {policy.policyName}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-sm md:text-base">
+                      {policy.totalDays}
+                    </TableCell>
+                    <TableCell className="text-right text-sm md:text-base text-orange-600 font-medium">
+                      {policy.usedDays}
+                    </TableCell>
+                    <TableCell className="text-right text-sm md:text-base text-green-600 font-medium">
+                      {policy.remainingDays}
+                    </TableCell>
+                  </TableRow>
                 ))
+              )
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination */}
+      {balanceTotalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t">
+          <div className="text-sm text-gray-600">
+            Showing {paginatedBalances.length > 0 ? (balanceCurrentPage - 1) * balanceItemsPerPage + 1 : 0} to{" "}
+            {Math.min(balanceCurrentPage * balanceItemsPerPage, filteredEmployeeBalances.length)} of{" "}
+            {filteredEmployeeBalances.length} employees
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBalanceCurrentPage(Math.max(1, balanceCurrentPage - 1))}
+              disabled={balanceCurrentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, balanceTotalPages) }, (_, i) => {
+                const page = i + 1
+                return (
+                  <Button
+                    key={page}
+                    variant={balanceCurrentPage === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setBalanceCurrentPage(page)}
+                  >
+                    {page}
+                  </Button>
+                )
+              })}
+              {balanceTotalPages > 5 && (
+                <span className="px-2 text-sm text-gray-500">...</span>
               )}
             </div>
-          </TabsContent>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBalanceCurrentPage(Math.min(balanceTotalPages, balanceCurrentPage + 1))}
+              disabled={balanceCurrentPage === balanceTotalPages}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </CardContent>
+  </Card>
+</TabsContent>
+<TabsContent value="policies" className="space-y-4 md:space-y-6">
+  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
+    {policiesLoading ? (
+      Array.from({ length: 3 }).map((_, i) => <PolicyCardSkeleton key={i} />)
+    ) : leavePolicies.length === 0 ? (
+      <Card className="col-span-full border-0 shadow-lg">
+        <CardContent className="py-12 text-center">
+          <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <p className="text-gray-500">No leave policies found. Create one to get started.</p>
+        </CardContent>
+      </Card>
+    ) : (
+      leavePolicies.map((policy) => (
+        <Card
+          key={policy.policyId}
+          className="border-0 shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-1"
+        >
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base md:text-lg font-bold text-gray-900">
+                {policy.policyName}
+              </CardTitle>
+              <Badge className={`${getLeaveTypeColor(policy.leaveType)} border text-xs md:text-sm`}>
+                {policy.leaveType}
+              </Badge>
+            </div>
+            <CardDescription className="text-xs md:text-sm">{policy.description}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 md:space-y-4">
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs md:text-sm">
+                <span className="text-gray-600">Days per year:</span>
+                <span className="font-medium">{policy.daysPerYear}</span>
+              </div>
+              <div className="flex justify-between text-xs md:text-sm">
+                <span className="text-gray-600">Carry forward:</span>
+                <span className="font-medium">{policy.allowCarryForward ? "Yes" : "No"}</span>
+              </div>
+              {policy.allowCarryForward && (
+                <div className="flex justify-between text-xs md:text-sm">
+                  <span className="text-gray-600">Max carry forward:</span>
+                  <span className="font-medium">{policy.maxCarryForwardDays} days</span>
+                </div>
+              )}
+              <div className="text-xs md:text-sm">
+                <span className="text-gray-600">Applicable roles:</span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {policy.applicableRoles.map((role, index) => (
+                    <Badge key={index} variant="secondary" className="text-xs capitalize">
+                      {role}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-between text-xs md:text-sm">
+                <span className="text-gray-600">Created:</span>
+                <span className="font-medium">{format(new Date(policy.createdAt), "MMM dd, yyyy")}</span>
+              </div>
+            </div>
+            <div className="flex space-x-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                onClick={() => handleEditPolicy(policy)}
+                disabled={actionLoading === policy.policyId}
+              >
+                {actionLoading === policy.policyId ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Edit"
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={() => handleDeletePolicy(policy.policyId)}
+                disabled={deleteLoading === policy.policyId}
+              >
+                {deleteLoading === policy.policyId ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Delete"
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))
+    )}
+  </div>
+</TabsContent>
         </Tabs>
 
         {/* Leave Request Details Dialog */}
@@ -1030,6 +1320,243 @@ interface LeavePolicyFormData {
   maxCarryForwardDays: string
   description: string
   applicableRoles: string[]
+}
+
+function EditPolicyForm({ 
+  policy, 
+  onClose, 
+  onSuccess 
+}: { 
+  policy: LeavePolicy 
+  onClose: () => void 
+  onSuccess?: () => void 
+}) {
+  const [formData, setFormData] = useState({
+    policyName: policy.policyName,
+    leaveType: policy.leaveType,
+    daysPerYear: policy.daysPerYear.toString(),
+    allowCarryForward: policy.allowCarryForward,
+    maxCarryForwardDays: policy.maxCarryForwardDays.toString(),
+    description: policy.description,
+    applicableRoles: policy.applicableRoles,
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formData.policyName.trim()) {
+      toast.error("Policy name is required")
+      return
+    }
+
+    if (!formData.daysPerYear || Number.parseInt(formData.daysPerYear) <= 0) {
+      toast.error("Days per year must be greater than 0")
+      return
+    }
+
+    if (formData.applicableRoles.length === 0) {
+      toast.error("Select at least one applicable role")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      
+      const payload = {
+        policyName: formData.policyName.trim(),
+        leaveType: formData.leaveType,
+        daysPerYear: Number.parseInt(formData.daysPerYear),
+        maxCarryForwardDays: formData.allowCarryForward ? Number.parseInt(formData.maxCarryForwardDays) || 0 : 0,
+        allowCarryForward: formData.allowCarryForward,
+        applicableRoles: formData.applicableRoles,
+        description: formData.description.trim(),
+      }
+
+      const response = await leavePolicyApi.update(policy.policyId, payload)
+
+      if (response.success) {
+        toast.success("Leave policy updated successfully!")
+        onSuccess?.()
+        onClose()
+      } else {
+        toast.error(response.error || "Failed to update leave policy")
+      }
+    } catch (error) {
+      console.error("Error updating policy:", error)
+      toast.error("Failed to update leave policy. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleRoleToggle = (role: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      applicableRoles: prev.applicableRoles.includes(role)
+        ? prev.applicableRoles.filter((r) => r !== role)
+        : [...prev.applicableRoles, role],
+    }))
+  }
+
+  const roles = ["technician", "staff", "operator", "manager"]
+  const leaveTypes = [
+    "Annual Leave",
+    "Sick Leave",
+    "Emergency Leave",
+    "Maternity Leave",
+    "Paternity Leave",
+    "Bereavement Leave",
+  ]
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="edit-name" className="text-sm font-medium">
+            Policy Name *
+          </Label>
+          <Input
+            id="edit-name"
+            value={formData.policyName}
+            onChange={(e) => setFormData({ ...formData, policyName: e.target.value })}
+            placeholder="e.g., Standard Annual Leave"
+            required
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <Label htmlFor="edit-type" className="text-sm font-medium">
+            Leave Type *
+          </Label>
+          <Select value={formData.leaveType} onValueChange={(value) => setFormData({ ...formData, leaveType: value })}>
+            <SelectTrigger className="mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {leaveTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="edit-daysPerYear" className="text-sm font-medium">
+            Days Per Year *
+          </Label>
+          <Input
+            id="edit-daysPerYear"
+            type="number"
+            min="1"
+            max="365"
+            value={formData.daysPerYear}
+            onChange={(e) => setFormData({ ...formData, daysPerYear: e.target.value })}
+            placeholder="e.g., 21"
+            required
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <Label htmlFor="edit-maxCarryForward" className="text-sm font-medium">
+            Max Carry Forward Days
+          </Label>
+          <Input
+            id="edit-maxCarryForward"
+            type="number"
+            min="0"
+            value={formData.maxCarryForwardDays}
+            onChange={(e) => setFormData({ ...formData, maxCarryForwardDays: e.target.value })}
+            placeholder="e.g., 5"
+            disabled={!formData.allowCarryForward}
+            className="mt-1"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2 py-2">
+        <input
+          type="checkbox"
+          id="edit-carryForward"
+          checked={formData.allowCarryForward}
+          onChange={(e) => setFormData({ ...formData, allowCarryForward: e.target.checked })}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        <Label htmlFor="edit-carryForward" className="text-sm font-medium cursor-pointer">
+          Allow carry forward to next year
+        </Label>
+      </div>
+
+      <div>
+        <Label className="text-sm font-medium">Applicable Roles *</Label>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          {roles.map((role) => (
+            <div key={role} className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id={`edit-${role}`}
+                checked={formData.applicableRoles.includes(role)}
+                onChange={() => handleRoleToggle(role)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <Label htmlFor={`edit-${role}`} className="text-sm cursor-pointer capitalize">
+                {role}
+              </Label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="edit-description" className="text-sm font-medium">
+          Description
+        </Label>
+        <Textarea
+          id="edit-description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Describe the policy details and conditions..."
+          rows={3}
+          className="mt-1 resize-none"
+        />
+      </div>
+
+      <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4 pt-4 border-t">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClose}
+          disabled={isSubmitting}
+          className="order-2 sm:order-1 bg-white hover:bg-gray-50"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={
+            isSubmitting || 
+            !formData.policyName || 
+            !formData.daysPerYear || 
+            formData.applicableRoles.length === 0
+          }
+          className="order-1 sm:order-2"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Updating...
+            </>
+          ) : (
+            "Update Policy"
+          )}
+        </Button>
+      </div>
+    </form>
+  )
 }
 
 function LeavePolicyForm({ onClose, onSuccess }: { onClose: () => void; onSuccess?: () => void }) {
