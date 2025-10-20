@@ -441,7 +441,7 @@ const handleViewOrder = (order: Order) => {
 const handleTrackOrder = (order: Order) => {
   if (order.trackingNumber) {
     // If tracking number exists, open in new tab
-    window.open(``, '_blank')
+    window.open(`https://www.ekartlogistics.in/track-order`, '_blank')
   } else {
     // If no tracking number, open dialog to input one
     setTrackingOrder(order)
