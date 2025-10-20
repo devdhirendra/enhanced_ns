@@ -21,49 +21,67 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Search, Plus, Eye, Check, X, Clock, Users, UserCheck, UserX, Download, Loader2, AlertCircle } from "lucide-react"
+import {
+  Search,
+  Plus,
+  Eye,
+  Check,
+  X,
+  Clock,
+  Users,
+  UserCheck,
+  UserX,
+  Download,
+  Loader2,
+  AlertCircle,
+} from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import { useAuth } from "@/contexts/AuthContext"
-import { leaveApi } from "@/lib/api"
+import { leavePolicyApi, leaveRequestApi, leaveUserPoliciesApi } from "@/lib/leave-api"
 
 interface LeaveRequest {
-  id: string
-  employeeId: string
-  employeeName: string
-  employeeRole: string
-  operator: string
+  leaveId: string
+  userId: string
+  userName: string
+  userRole: string
   leaveType: string
+  policyId: string
   startDate: string
   endDate: string
-  days: number
+  totalDays: number
   reason: string
   status: "pending" | "approved" | "rejected"
-  appliedDate: string
-  approvedBy: string | null
-  approvedDate: string | null
-  documents: string[]
+  approvedBy?: string
+  rejectionReason?: string
+  documents?: string[]
+  createdAt: string
 }
 
 interface LeavePolicy {
-  id: string
-  name: string
-  type: string
+  policyId: string
+  policyName: string
+  leaveType: string
   daysPerYear: number
-  carryForward: boolean
-  maxCarryForward: number
+  maxCarryForwardDays: number
+  allowCarryForward: boolean
   applicableRoles: string[]
   description: string
+  createdAt: string
 }
 
 interface EmployeeBalance {
-  employeeId: string
-  employeeName: string
-  role: string
-  operator: string
-  annual: { total: number; used: number; remaining: number }
-  sick: { total: number; used: number; remaining: number }
-  emergency: { total: number; used: number; remaining: number }
+  userId: string
+  userName: string
+  userRole: string
+  policies: Array<{
+    policyId: string
+    policyName: string
+    leaveType: string
+    totalDays: number
+    usedDays: number
+    remainingDays: number
+  }>
 }
 
 // Skeleton Components
@@ -86,22 +104,28 @@ const TableRowSkeleton = () => (
       <div className="space-y-1">
         <Skeleton className="h-4 w-24" />
         <Skeleton className="h-3 w-16" />
-        <Skeleton className="h-3 w-20" />
       </div>
     </TableCell>
-    <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+    <TableCell>
+      <Skeleton className="h-6 w-16 rounded-full" />
+    </TableCell>
     <TableCell>
       <div className="space-y-1">
         <Skeleton className="h-4 w-12" />
         <Skeleton className="h-3 w-20" />
       </div>
     </TableCell>
-    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-    <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+    <TableCell>
+      <Skeleton className="h-4 w-32" />
+    </TableCell>
+    <TableCell>
+      <Skeleton className="h-4 w-20" />
+    </TableCell>
+    <TableCell>
+      <Skeleton className="h-6 w-16 rounded-full" />
+    </TableCell>
     <TableCell>
       <div className="flex space-x-2">
-        <Skeleton className="h-8 w-8 rounded" />
         <Skeleton className="h-8 w-8 rounded" />
         <Skeleton className="h-8 w-8 rounded" />
       </div>
@@ -146,14 +170,14 @@ export default function LeaveManagementPage() {
   const [leaveRequestsData, setLeaveRequestsData] = useState<LeaveRequest[]>([])
   const [leavePolicies, setLeavePolicies] = useState<LeavePolicy[]>([])
   const [employeeBalances, setEmployeeBalances] = useState<EmployeeBalance[]>([])
-  
+
   // Loading states
   const [loading, setLoading] = useState(true)
   const [requestsLoading, setRequestsLoading] = useState(true)
   const [policiesLoading, setPoliciesLoading] = useState(true)
   const [balancesLoading, setBalancesLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  
+
   // Error states
   const [error, setError] = useState<string | null>(null)
 
@@ -166,14 +190,10 @@ export default function LeaveManagementPage() {
     try {
       setLoading(true)
       setError(null)
-      await Promise.all([
-        fetchLeaveRequests(),
-        fetchLeavePolicies(),
-        fetchEmployeeBalances()
-      ])
+      await Promise.all([fetchLeaveRequests(), fetchLeavePolicies(), fetchEmployeeBalances()])
     } catch (err) {
-      setError('Failed to load data. Please refresh the page.')
-      console.error('Error fetching data:', err)
+      setError("Failed to load data. Please refresh the page.")
+      console.error("Error fetching data:", err)
     } finally {
       setLoading(false)
     }
@@ -182,136 +202,144 @@ export default function LeaveManagementPage() {
 const fetchLeaveRequests = async () => {
   try {
     setRequestsLoading(true)
-    const response = await leaveApi.getAll()
+    const response = await leaveRequestApi.getAll()
+
+    // Handle different response structures
+    let requestsData = []
     
-    // Transform the API response to match your interface
-    const requests = response.map((item: any) => ({
-      id: item.leave_id || '',
-      employeeId: item.technicianId || item.employee_id || '',
-      employeeName: item.employeeName || item.employee_name || item.name || 'Unknown Employee',
-      employeeRole: item.employeeRole || item.role || item.employee_role || 'Technician',
-      operator: item.operator || item.operator_name || 'Unknown Operator',
-      leaveType: item.leaveType || item.leave_type || 'annual',
+    if (response.success) {
+      // Handle array response directly or nested in data property
+      if (Array.isArray(response.data)) {
+        requestsData = response.data
+      } else if (response.data && Array.isArray(response.data.requests)) {
+        requestsData = response.data.requests
+      } else if (response.data && Array.isArray(response.data.data)) {
+        requestsData = response.data.data
+      }
+    }
+
+    const requests = requestsData.map((item: any) => ({
+      leaveId: item.leaveId || item.id || `REQ${Date.now()}`,
+      userId: item.userId || item.user_id || "",
+      userName: item.userName || item.user_name || "Unknown User",
+      userRole: item.userRole || item.role || "Staff",
+      leaveType: item.leaveType || item.leave_type || "Annual Leave",
+      policyId: item.policyId || item.policy_id || "",
       startDate: item.startDate || item.start_date || new Date().toISOString(),
       endDate: item.endDate || item.end_date || new Date().toISOString(),
-      days: item.days || item.total_days || 0,
-      reason: item.reason || item.leave_reason || 'No reason provided',
-      status: item.status || 'pending',
-      appliedDate: item.appliedDate || item.applied_date || item.created_at || new Date().toISOString(),
-      approvedBy: item.approvedBy || item.approved_by || null,
-      approvedDate: item.approvedDate || item.approved_date || null,
-      documents: item.documents || item.attachments || []
+      totalDays: item.totalDays || item.days || item.total_days || 0,
+      reason: item.reason || "No reason provided",
+      status: (item.status || "pending") as "pending" | "approved" | "rejected",
+      approvedBy: item.approvedBy || item.approved_by,
+      rejectionReason: item.rejectionReason || item.rejection_reason,
+      documents: item.documents || [],
+      createdAt: item.createdAt || item.created_at || new Date().toISOString(),
     }))
 
     setLeaveRequestsData(requests)
   } catch (err) {
-    console.error('Error fetching leave requests:', err)
-    toast.error('Failed to load leave requests')
-    // Set empty array as fallback
+    console.error("Error fetching leave requests:", err)
+    toast.error("Failed to load leave requests")
     setLeaveRequestsData([])
   } finally {
     setRequestsLoading(false)
   }
 }
 
-  const fetchLeavePolicies = async () => {
-    try {
-      setPoliciesLoading(true)
-      // Add API call when available
-      // const policies = await leaveApi.getPolicies()
-      // setLeavePolicies(policies)
-      
-      // Demo data for now
-      setLeavePolicies([
-        {
-          id: "LP001",
-          name: "Annual Leave",
-          type: "annual",
-          daysPerYear: 21,
-          carryForward: true,
-          maxCarryForward: 5,
-          applicableRoles: ["Technician", "Staff", "Operator"],
-          description: "Paid annual leave for all employees",
-        },
-        {
-          id: "LP002",
-          name: "Sick Leave",
-          type: "sick",
-          daysPerYear: 12,
-          carryForward: false,
-          maxCarryForward: 0,
-          applicableRoles: ["Technician", "Staff", "Operator"],
-          description: "Medical leave with doctor's certificate required for more than 2 days",
-        },
-        {
-          id: "LP003",
-          name: "Emergency Leave",
-          type: "emergency",
-          daysPerYear: 5,
-          carryForward: false,
-          maxCarryForward: 0,
-          applicableRoles: ["Technician", "Staff"],
-          description: "Unpaid emergency leave for urgent personal matters",
-        },
-      ])
-    } catch (err) {
-      console.error('Error fetching leave policies:', err)
-      toast.error('Failed to load leave policies')
-    } finally {
-      setPoliciesLoading(false)
-    }
-  }
 
-  const fetchEmployeeBalances = async () => {
-    try {
-      setBalancesLoading(true)
-      // Add API call when available
-      // const balances = await leaveApi.getBalances()
-      // setEmployeeBalances(balances)
-      
-      // Demo data for now
-      setEmployeeBalances([
-        {
-          employeeId: "TECH001",
-          employeeName: "Ravi Kumar",
-          role: "Technician",
-          operator: "City Networks",
-          annual: { total: 21, used: 5, remaining: 16 },
-          sick: { total: 12, used: 2, remaining: 10 },
-          emergency: { total: 5, used: 0, remaining: 5 },
-        },
-        {
-          employeeId: "STAFF001",
-          employeeName: "Priya Singh",
-          role: "Staff",
-          operator: "Metro Fiber",
-          annual: { total: 21, used: 8, remaining: 13 },
-          sick: { total: 12, used: 1, remaining: 11 },
-          emergency: { total: 5, used: 1, remaining: 4 },
-        },
-      ])
-    } catch (err) {
-      console.error('Error fetching employee balances:', err)
-      toast.error('Failed to load employee balances')
-    } finally {
-      setBalancesLoading(false)
-    }
-  }
+const fetchLeavePolicies = async () => {
+  try {
+    setPoliciesLoading(true)
+    const response = await leavePolicyApi.getAll()
 
-const filteredRequests = leaveRequestsData.filter((request) => {
-  const searchTermLower = searchTerm.toLowerCase()
-  const employeeName = request.employeeName?.toLowerCase() || ''
-  const requestId = request.id?.toLowerCase() || ''
-  
-  const matchesSearch =
-    employeeName.includes(searchTermLower) ||
-    requestId.includes(searchTermLower)
-  
-  const matchesStatus = statusFilter === "all" || request.status === statusFilter
-  const matchesRole = roleFilter === "all" || request.employeeRole === roleFilter
-  
-  return matchesSearch && matchesStatus && matchesRole
-})
+    // Handle different response structures
+    let policiesData = []
+    
+    if (response.success) {
+      if (Array.isArray(response.data)) {
+        policiesData = response.data
+      } else if (response.data && Array.isArray(response.data.policies)) {
+        policiesData = response.data.policies
+      } else if (response.data && Array.isArray(response.data.data)) {
+        policiesData = response.data.data
+      }
+    }
+
+    const policies = policiesData.map((item: any) => ({
+      policyId: item.policyId || item.id || `POL${Date.now()}`,
+      policyName: item.policyName || item.name || "Unnamed Policy",
+      leaveType: item.leaveType || item.type || "Annual Leave",
+      daysPerYear: item.daysPerYear || item.days_per_year || 0,
+      maxCarryForwardDays: item.maxCarryForwardDays || item.max_carry_forward || 0,
+      allowCarryForward: item.allowCarryForward || item.allow_carry_forward || false,
+      applicableRoles: item.applicableRoles || item.applicable_roles || [],
+      description: item.description || "No description available",
+      createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+    }))
+
+    setLeavePolicies(policies)
+  } catch (err) {
+    console.error("Error fetching leave policies:", err)
+    toast.error("Failed to load leave policies")
+    setLeavePolicies([])
+  } finally {
+    setPoliciesLoading(false)
+  }
+}
+
+const fetchEmployeeBalances = async () => {
+  try {
+    setBalancesLoading(true)
+    const response = await leaveUserPoliciesApi.getAllUsers()
+
+    // Handle different response structures
+    let balancesData = []
+    
+    if (response.success) {
+      if (Array.isArray(response.data)) {
+        balancesData = response.data
+      } else if (response.data && Array.isArray(response.data.users)) {
+        balancesData = response.data.users
+      } else if (response.data && Array.isArray(response.data.data)) {
+        balancesData = response.data.data
+      }
+    }
+
+    const balances = balancesData.map((item: any) => ({
+      userId: item.userId || item.user_id || "",
+      userName: item.userName || item.user_name || "Unknown User",
+      userRole: item.userRole || item.role || "Staff",
+      policies: (item.policies || []).map((policy: any) => ({
+        policyId: policy.policyId || policy.id || "",
+        policyName: policy.policyName || policy.name || "",
+        leaveType: policy.leaveType || policy.type || "",
+        totalDays: policy.totalDays || policy.total_days || 0,
+        usedDays: policy.usedDays || policy.used_days || 0,
+        remainingDays: policy.remainingDays || policy.remaining_days || 0,
+      })),
+    }))
+
+    setEmployeeBalances(balances)
+  } catch (err) {
+    console.error("Error fetching employee balances:", err)
+    toast.error("Failed to load employee balances")
+    setEmployeeBalances([])
+  } finally {
+    setBalancesLoading(false)
+  }
+}
+
+  const filteredRequests = leaveRequestsData.filter((request) => {
+    const searchTermLower = searchTerm.toLowerCase()
+    const userName = request.userName?.toLowerCase() || ""
+    const requestId = request.leaveId?.toLowerCase() || ""
+
+    const matchesSearch = userName.includes(searchTermLower) || requestId.includes(searchTermLower)
+    const matchesStatus = statusFilter === "all" || request.status === statusFilter
+    const matchesRole = roleFilter === "all" || request.userRole === roleFilter
+
+    return matchesSearch && matchesStatus && matchesRole
+  })
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -328,36 +356,35 @@ const filteredRequests = leaveRequestsData.filter((request) => {
 
   const getLeaveTypeColor = (type: string) => {
     switch (type) {
-      case "annual":
+      case "Annual Leave":
         return "bg-blue-100 text-blue-800 border-blue-200"
-      case "sick":
+      case "Sick Leave":
         return "bg-orange-100 text-orange-800 border-orange-200"
-      case "emergency":
+      case "Emergency Leave":
         return "bg-red-100 text-red-800 border-red-200"
       default:
         return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
 
-  const handleApproveRequest = async (requestId: string) => {
+  const handleApproveRequest = async (leaveId: string) => {
     try {
-      setActionLoading(requestId)
-      await leaveApi.approve(requestId)
-      
-      // Update local state immediately for better UX
+      setActionLoading(leaveId)
+      const approvedBy = user?.user_id || "admin"
+      await leaveRequestApi.approve(leaveId, approvedBy)
+
       setLeaveRequestsData((prevRequests) =>
         prevRequests.map((request) =>
-          request.id === requestId
+          request.leaveId === leaveId
             ? {
                 ...request,
                 status: "approved" as const,
-                approvedBy: user?.profileDetail.user_id || "Admin",
-                approvedDate: new Date().toISOString(),
+                approvedBy: approvedBy,
               }
             : request,
         ),
       )
-      
+
       toast.success("Leave request approved successfully!")
     } catch (error) {
       console.error("Error approving leave request:", error)
@@ -367,25 +394,24 @@ const filteredRequests = leaveRequestsData.filter((request) => {
     }
   }
 
-  const handleRejectRequest = async (requestId: string) => {
+  const handleRejectRequest = async (leaveId: string, reason = "Not approved") => {
     try {
-      setActionLoading(requestId)
-      await leaveApi.reject(requestId)
-      
-      // Update local state immediately for better UX
+      setActionLoading(leaveId)
+      const rejectedBy = user?.user_id || "admin"
+      await leaveRequestApi.reject(leaveId, rejectedBy, reason)
+
       setLeaveRequestsData((prevRequests) =>
         prevRequests.map((request) =>
-          request.id === requestId
+          request.leaveId === leaveId
             ? {
                 ...request,
                 status: "rejected" as const,
-                approvedBy: user?.user_id || "Admin",
-                approvedDate: new Date().toISOString(),
+                rejectionReason: reason,
               }
             : request,
         ),
       )
-      
+
       toast.success("Leave request rejected!")
     } catch (error) {
       console.error("Error rejecting leave request:", error)
@@ -395,50 +421,33 @@ const filteredRequests = leaveRequestsData.filter((request) => {
     }
   }
 
-  const handleDeleteRequest = async (requestId: string) => {
-    try {
-      setActionLoading(requestId)
-      await leaveApi.delete(requestId)
-      
-      setLeaveRequestsData((prevRequests) =>
-        prevRequests.filter((request) => request.id !== requestId)
-      )
-      
-      toast.success("Leave request deleted successfully!")
-    } catch (error) {
-      console.error("Error deleting leave request:", error)
-      toast.error("Failed to delete leave request. Please try again.")
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
   const handleExport = () => {
     try {
       const csvContent = [
-        ['Employee Name', 'Role', 'Operator', 'Leave Type', 'Start Date', 'End Date', 'Days', 'Reason', 'Status', 'Applied Date'],
-        ...filteredRequests.map(request => [
-          request.employeeName,
-          request.employeeRole,
-          request.operator,
+        ["Employee Name", "Role", "Leave Type", "Start Date", "End Date", "Days", "Reason", "Status", "Applied Date"],
+        ...filteredRequests.map((request) => [
+          request.userName,
+          request.userRole,
           request.leaveType,
-          request.startDate,
-          request.endDate,
-          request.days.toString(),
+          format(new Date(request.startDate), "yyyy-MM-dd"),
+          format(new Date(request.endDate), "yyyy-MM-dd"),
+          request.totalDays.toString(),
           request.reason,
           request.status,
-          request.appliedDate
-        ])
-      ].map(row => row.join(',')).join('\n')
+          format(new Date(request.createdAt), "yyyy-MM-dd"),
+        ]),
+      ]
+        .map((row) => row.join(","))
+        .join("\n")
 
-      const blob = new Blob([csvContent], { type: 'text/csv' })
+      const blob = new Blob([csvContent], { type: "text/csv" })
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
+      const a = document.createElement("a")
       a.href = url
-      a.download = `leave_requests_${new Date().toISOString().split('T')[0]}.csv`
+      a.download = `leave_requests_${new Date().toISOString().split("T")[0]}.csv`
       a.click()
       window.URL.revokeObjectURL(url)
-      
+
       toast.success("Leave data exported successfully!")
     } catch (error) {
       console.error("Error exporting data:", error)
@@ -490,10 +499,10 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900">{totalRequests}</div>
-                  <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">This month</p>
+                  <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">All time</p>
                 </CardContent>
               </Card>
-              
+
               <Card className="border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-yellow-100 hover:shadow-xl transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-700">Pending</CardTitle>
@@ -504,7 +513,7 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                   <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">Awaiting approval</p>
                 </CardContent>
               </Card>
-              
+
               <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-100 hover:shadow-xl transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-700">Approved</CardTitle>
@@ -512,10 +521,10 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900">{approvedRequests}</div>
-                  <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">This month</p>
+                  <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">Approved</p>
                 </CardContent>
               </Card>
-              
+
               <Card className="border-0 shadow-lg bg-gradient-to-br from-red-50 to-rose-100 hover:shadow-xl transition-shadow">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-700">Rejected</CardTitle>
@@ -523,7 +532,7 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900">{rejectedRequests}</div>
-                  <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">This month</p>
+                  <p className="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">Rejected</p>
                 </CardContent>
               </Card>
             </>
@@ -534,30 +543,30 @@ const filteredRequests = leaveRequestsData.filter((request) => {
         <Tabs defaultValue="requests" className="space-y-4 md:space-y-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <TabsList className="grid w-full max-w-lg grid-cols-3 bg-gray-100 p-1 rounded-lg">
-              <TabsTrigger 
-                value="requests" 
+              <TabsTrigger
+                value="requests"
                 className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs md:text-sm"
               >
                 Leave Requests
               </TabsTrigger>
-              <TabsTrigger 
-                value="balances" 
+              <TabsTrigger
+                value="balances"
                 className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs md:text-sm"
               >
                 Leave Balances
               </TabsTrigger>
-              <TabsTrigger 
-                value="policies" 
+              <TabsTrigger
+                value="policies"
                 className="data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs md:text-sm"
               >
                 Leave Policies
               </TabsTrigger>
             </TabsList>
-            
+
             <div className="flex items-center space-x-2 w-full lg:w-auto">
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleExport}
                 className="flex-1 lg:flex-initial bg-white hover:bg-gray-50"
               >
@@ -566,7 +575,7 @@ const filteredRequests = leaveRequestsData.filter((request) => {
               </Button>
               <Dialog open={showPolicyDialog} onOpenChange={setShowPolicyDialog}>
                 <DialogTrigger asChild>
-                  <Button 
+                  <Button
                     className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 flex-1 lg:flex-initial"
                     size="sm"
                   >
@@ -580,47 +589,59 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                     <DialogTitle>Create Leave Policy</DialogTitle>
                     <DialogDescription>Define a new leave policy for employees</DialogDescription>
                   </DialogHeader>
-                  <LeavePolicyForm onClose={() => setShowPolicyDialog(false)} />
+                  <LeavePolicyForm onClose={() => setShowPolicyDialog(false)} onSuccess={fetchLeavePolicies} />
                 </DialogContent>
               </Dialog>
             </div>
           </div>
 
           <TabsContent value="requests" className="space-y-4 md:space-y-6">
-            {/* Filters */}
-            <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search by employee name or request ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-40 lg:w-48">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-full md:w-40 lg:w-48">
-                  <SelectValue placeholder="Role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="Technician">Technician</SelectItem>
-                  <SelectItem value="Staff">Staff</SelectItem>
-                  <SelectItem value="Operator">Operator</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+<div className="flex flex-col md:flex-row gap-3 md:gap-4">
+  <div className="relative flex-1">
+    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+    <Input
+      placeholder="Search by employee name or request ID..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      className="pl-10"
+    />
+  </div>
+  
+  {/* Add Refresh Button */}
+  <Button
+    variant="outline"
+    onClick={fetchAllData}
+    disabled={loading}
+    className="flex items-center gap-2"
+  >
+    <Loader2 className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+    Refresh
+  </Button>
+
+  <Select value={statusFilter} onValueChange={setStatusFilter}>
+    <SelectTrigger className="w-full md:w-40 lg:w-48">
+      <SelectValue placeholder="Status" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="all">All Status</SelectItem>
+      <SelectItem value="pending">Pending</SelectItem>
+      <SelectItem value="approved">Approved</SelectItem>
+      <SelectItem value="rejected">Rejected</SelectItem>
+    </SelectContent>
+  </Select>
+  
+  <Select value={roleFilter} onValueChange={setRoleFilter}>
+    <SelectTrigger className="w-full md:w-40 lg:w-48">
+      <SelectValue placeholder="Role" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="all">All Roles</SelectItem>
+      <SelectItem value="technician">Technician</SelectItem>
+      <SelectItem value="staff">Staff</SelectItem>
+      <SelectItem value="operator">Operator</SelectItem>
+    </SelectContent>
+  </Select>
+</div>
 
             {/* Leave Requests Table */}
             <Card className="border-0 shadow-lg">
@@ -655,25 +676,21 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                         </TableRow>
                       ) : (
                         filteredRequests.map((request) => (
-                          <TableRow key={request.id} className="hover:bg-gray-50">
+                          <TableRow key={request.leaveId} className="hover:bg-gray-50">
                             <TableCell>
                               <div>
-<div className="font-medium text-gray-900 text-sm md:text-base">
-  {request.employeeId || 'N/A'}
-</div>
-<div className="text-xs md:text-sm text-gray-500">{request.employeeRole || 'N/A'}</div>
+                                <div className="font-medium text-gray-900 text-sm md:text-base">{request.userName}</div>
+                                <div className="text-xs md:text-sm text-gray-500">{request.userRole}</div>
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge 
-                                className={`${getLeaveTypeColor(request.leaveType)} text-xs md:text-sm border`}
-                              >
+                              <Badge className={`${getLeaveTypeColor(request.leaveType)} text-xs md:text-sm border`}>
                                 {request.leaveType}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               <div>
-                                <div className="font-medium text-sm md:text-base">{request.days} days</div>
+                                <div className="font-medium text-sm md:text-base">{request.totalDays} days</div>
                                 <div className="text-xs md:text-sm text-gray-500">
                                   {format(new Date(request.startDate), "MMM dd")} -{" "}
                                   {format(new Date(request.endDate), "MMM dd")}
@@ -686,21 +703,19 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                               </div>
                             </TableCell>
                             <TableCell className="text-xs md:text-sm">
-                              {format(new Date(request.appliedDate), "MMM dd, yyyy")}
+                              {format(new Date(request.createdAt), "MMM dd, yyyy")}
                             </TableCell>
                             <TableCell>
-                              <Badge 
-                                className={`${getStatusColor(request.status)} text-xs md:text-sm border`}
-                              >
+                              <Badge className={`${getStatusColor(request.status)} text-xs md:text-sm border`}>
                                 {request.status}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center space-x-1 md:space-x-2">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 hover:bg-blue-50" 
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-blue-50"
                                   onClick={() => handleViewDetails(request)}
                                 >
                                   <Eye className="h-4 w-4" />
@@ -711,10 +726,10 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                      onClick={() => handleApproveRequest(request.id)}
-                                      disabled={actionLoading === request.id}
+                                      onClick={() => handleApproveRequest(request.leaveId)}
+                                      disabled={actionLoading === request.leaveId}
                                     >
-                                      {actionLoading === request.id ? (
+                                      {actionLoading === request.leaveId ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
                                         <Check className="h-4 w-4" />
@@ -724,10 +739,10 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                      onClick={() => handleRejectRequest(request.id)}
-                                      disabled={actionLoading === request.id}
+                                      onClick={() => handleRejectRequest(request.leaveId)}
+                                      disabled={actionLoading === request.leaveId}
                                     >
-                                      {actionLoading === request.id ? (
+                                      {actionLoading === request.leaveId ? (
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
                                         <X className="h-4 w-4" />
@@ -759,10 +774,10 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="min-w-[150px]">Employee</TableHead>
-                        <TableHead className="min-w-[140px]">Annual Leave</TableHead>
-                        <TableHead className="min-w-[140px]">Sick Leave</TableHead>
-                        <TableHead className="min-w-[140px]">Emergency Leave</TableHead>
-                        <TableHead className="min-w-[100px]">Actions</TableHead>
+                        <TableHead className="min-w-[200px]">Leave Type</TableHead>
+                        <TableHead className="min-w-[100px]">Total</TableHead>
+                        <TableHead className="min-w-[100px]">Used</TableHead>
+                        <TableHead className="min-w-[100px]">Remaining</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -770,100 +785,55 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                         Array.from({ length: 3 }).map((_, i) => (
                           <TableRow key={i}>
                             <TableCell>
-                              <div className="space-y-1">
-                                <Skeleton className="h-4 w-24" />
-                                <Skeleton className="h-3 w-16" />
-                                <Skeleton className="h-3 w-20" />
-                              </div>
+                              <Skeleton className="h-4 w-24" />
                             </TableCell>
                             <TableCell>
-                              <div className="space-y-1">
-                                <Skeleton className="h-4 w-16" />
-                                <Skeleton className="h-2 w-full" />
-                              </div>
+                              <Skeleton className="h-4 w-24" />
                             </TableCell>
                             <TableCell>
-                              <div className="space-y-1">
-                                <Skeleton className="h-4 w-16" />
-                                <Skeleton className="h-2 w-full" />
-                              </div>
+                              <Skeleton className="h-4 w-12" />
                             </TableCell>
                             <TableCell>
-                              <div className="space-y-1">
-                                <Skeleton className="h-4 w-16" />
-                                <Skeleton className="h-2 w-full" />
-                              </div>
+                              <Skeleton className="h-4 w-12" />
                             </TableCell>
                             <TableCell>
-                              <Skeleton className="h-8 w-24" />
+                              <Skeleton className="h-4 w-12" />
                             </TableCell>
                           </TableRow>
                         ))
+                      ) : employeeBalances.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                            No employee balances found
+                          </TableCell>
+                        </TableRow>
                       ) : (
-                        employeeBalances.map((employee) => (
-                          <TableRow key={employee.employeeId} className="hover:bg-gray-50">
-                            <TableCell>
-                              <div>
-                                <div className="font-medium text-gray-900 text-sm md:text-base">
-                                  {employee.employeeName}
+                        employeeBalances.flatMap((employee) =>
+                          employee.policies.map((policy, idx) => (
+                            <TableRow key={`${employee.userId}-${idx}`} className="hover:bg-gray-50">
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium text-gray-900 text-sm md:text-base">
+                                    {employee.userName}
+                                  </div>
+                                  <div className="text-xs md:text-sm text-gray-500">{employee.userRole}</div>
                                 </div>
-                                <div className="text-xs md:text-sm text-gray-500">{employee.role}</div>
-                                <div className="text-xs md:text-sm text-gray-500">{employee.operator}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="text-xs md:text-sm">
-                                  <span className="font-medium">{employee.annual.remaining}</span> /{" "}
-                                  {employee.annual.total} days
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className="bg-blue-600 h-2 rounded-full transition-all"
-                                    style={{ width: `${(employee.annual.remaining / employee.annual.total) * 100}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="text-xs md:text-sm">
-                                  <span className="font-medium">{employee.sick.remaining}</span> / {employee.sick.total}{" "}
-                                  days
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className="bg-orange-600 h-2 rounded-full transition-all"
-                                    style={{ width: `${(employee.sick.remaining / employee.sick.total) * 100}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <div className="text-xs md:text-sm">
-                                  <span className="font-medium">{employee.emergency.remaining}</span> /{" "}
-                                  {employee.emergency.total} days
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className="bg-red-600 h-2 rounded-full transition-all"
-                                    style={{
-                                      width: `${(employee.emergency.remaining / employee.emergency.total) * 100}%`,
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Button variant="outline" size="sm" className="bg-white hover:bg-gray-50">
-                                <Eye className="h-4 w-4 mr-2" />
-                                <span className="hidden sm:inline">View Details</span>
-                                <span className="sm:hidden">View</span>
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={`${getLeaveTypeColor(policy.leaveType)} border text-xs md:text-sm`}>
+                                  {policy.policyName}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="font-medium text-sm md:text-base">{policy.totalDays}</TableCell>
+                              <TableCell className="text-sm md:text-base text-orange-600 font-medium">
+                                {policy.usedDays}
+                              </TableCell>
+                              <TableCell className="text-sm md:text-base text-green-600 font-medium">
+                                {policy.remainingDays}
+                              </TableCell>
+                            </TableRow>
+                          )),
+                        )
                       )}
                     </TableBody>
                   </Table>
@@ -876,19 +846,25 @@ const filteredRequests = leaveRequestsData.filter((request) => {
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
               {policiesLoading ? (
                 Array.from({ length: 3 }).map((_, i) => <PolicyCardSkeleton key={i} />)
+              ) : leavePolicies.length === 0 ? (
+                <Card className="col-span-full border-0 shadow-lg">
+                  <CardContent className="py-12 text-center">
+                    <p className="text-gray-500">No leave policies found. Create one to get started.</p>
+                  </CardContent>
+                </Card>
               ) : (
                 leavePolicies.map((policy) => (
-                  <Card 
-                    key={policy.id} 
+                  <Card
+                    key={policy.policyId}
                     className="border-0 shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-1"
                   >
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-base md:text-lg font-bold text-gray-900">
-                          {policy.name}
+                          {policy.policyName}
                         </CardTitle>
-                        <Badge className={`${getLeaveTypeColor(policy.type)} border text-xs md:text-sm`}>
-                          {policy.type}
+                        <Badge className={`${getLeaveTypeColor(policy.leaveType)} border text-xs md:text-sm`}>
+                          {policy.leaveType}
                         </Badge>
                       </div>
                       <CardDescription className="text-xs md:text-sm">{policy.description}</CardDescription>
@@ -901,12 +877,12 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                         </div>
                         <div className="flex justify-between text-xs md:text-sm">
                           <span className="text-gray-600">Carry forward:</span>
-                          <span className="font-medium">{policy.carryForward ? "Yes" : "No"}</span>
+                          <span className="font-medium">{policy.allowCarryForward ? "Yes" : "No"}</span>
                         </div>
-                        {policy.carryForward && (
+                        {policy.allowCarryForward && (
                           <div className="flex justify-between text-xs md:text-sm">
                             <span className="text-gray-600">Max carry forward:</span>
-                            <span className="font-medium">{policy.maxCarryForward} days</span>
+                            <span className="font-medium">{policy.maxCarryForwardDays} days</span>
                           </div>
                         )}
                         <div className="text-xs md:text-sm">
@@ -919,15 +895,6 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                             ))}
                           </div>
                         </div>
-                      </div>
-                      <div className="flex space-x-2 pt-2">
-                        <Button variant="outline" size="sm" className="flex-1 bg-white hover:bg-gray-50">
-                          <Eye className="h-4 w-4 mr-2" />
-                          View
-                        </Button>
-                        <Button variant="outline" size="sm" className="flex-1 bg-white hover:bg-gray-50">
-                          Edit
-                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -951,13 +918,10 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                     <h4 className="font-semibold text-gray-900 mb-2 text-sm md:text-base">Employee Information</h4>
                     <div className="space-y-2 text-xs md:text-sm">
                       <div>
-                        <span className="font-medium">Name:</span> {selectedRequest.employeeName}
+                        <span className="font-medium">Name:</span> {selectedRequest.userName}
                       </div>
                       <div>
-                        <span className="font-medium">Role:</span> {selectedRequest.employeeRole}
-                      </div>
-                      <div>
-                        <span className="font-medium">Operator:</span> {selectedRequest.operator}
+                        <span className="font-medium">Role:</span> {selectedRequest.userRole}
                       </div>
                     </div>
                   </div>
@@ -971,7 +935,7 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                         </Badge>
                       </div>
                       <div>
-                        <span className="font-medium">Duration:</span> {selectedRequest.days} days
+                        <span className="font-medium">Duration:</span> {selectedRequest.totalDays} days
                       </div>
                       <div>
                         <span className="font-medium">Dates:</span>{" "}
@@ -983,9 +947,7 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                 </div>
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-2 text-sm md:text-base">Reason</h4>
-                  <p className="text-xs md:text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">
-                    {selectedRequest.reason}
-                  </p>
+                  <p className="text-xs md:text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedRequest.reason}</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -993,7 +955,7 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                     <div className="space-y-2 text-xs md:text-sm">
                       <div>
                         <span className="font-medium">Applied Date:</span>{" "}
-                        {format(new Date(selectedRequest.appliedDate), "MMM dd, yyyy")}
+                        {format(new Date(selectedRequest.createdAt), "MMM dd, yyyy")}
                       </div>
                       <div>
                         <span className="font-medium">Status:</span>{" "}
@@ -1010,40 +972,24 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                         <span className="font-medium">Approved By:</span> {selectedRequest.approvedBy || "N/A"}
                       </div>
                       <div>
-                        <span className="font-medium">Approved Date:</span>{" "}
-                        {selectedRequest.approvedDate
-                          ? format(new Date(selectedRequest.approvedDate), "MMM dd, yyyy")
-                          : "N/A"}
+                        <span className="font-medium">Rejection Reason:</span>{" "}
+                        {selectedRequest.rejectionReason || "N/A"}
                       </div>
                     </div>
                   </div>
                 </div>
-                {selectedRequest.documents && selectedRequest.documents.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2 text-sm md:text-base">Documents</h4>
-                    <div className="space-y-2">
-                      {selectedRequest.documents.map((doc, index) => (
-                        <div key={index} className="flex items-center space-x-2 text-xs md:text-sm">
-                          <span className="text-blue-600 underline cursor-pointer hover:text-blue-800">
-                            {doc}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 {selectedRequest.status === "pending" && (
                   <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4 pt-4 border-t">
                     <Button
                       variant="outline"
                       className="text-red-600 border-red-600 hover:bg-red-50 bg-white order-2 sm:order-1"
                       onClick={() => {
-                        handleRejectRequest(selectedRequest.id)
+                        handleRejectRequest(selectedRequest.leaveId)
                         setShowDetailsDialog(false)
                       }}
-                      disabled={actionLoading === selectedRequest.id}
+                      disabled={actionLoading === selectedRequest.leaveId}
                     >
-                      {actionLoading === selectedRequest.id ? (
+                      {actionLoading === selectedRequest.leaveId ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       ) : (
                         <X className="h-4 w-4 mr-2" />
@@ -1053,12 +999,12 @@ const filteredRequests = leaveRequestsData.filter((request) => {
                     <Button
                       className="bg-green-600 hover:bg-green-700 order-1 sm:order-2"
                       onClick={() => {
-                        handleApproveRequest(selectedRequest.id)
+                        handleApproveRequest(selectedRequest.leaveId)
                         setShowDetailsDialog(false)
                       }}
-                      disabled={actionLoading === selectedRequest.id}
+                      disabled={actionLoading === selectedRequest.leaveId}
                     >
-                      {actionLoading === selectedRequest.id ? (
+                      {actionLoading === selectedRequest.leaveId ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       ) : (
                         <Check className="h-4 w-4 mr-2" />
@@ -1077,23 +1023,22 @@ const filteredRequests = leaveRequestsData.filter((request) => {
 }
 
 interface LeavePolicyFormData {
-  name: string
-  type: string
+  policyName: string
+  leaveType: string
   daysPerYear: string
-  carryForward: boolean
-  maxCarryForward: string
+  allowCarryForward: boolean
+  maxCarryForwardDays: string
   description: string
   applicableRoles: string[]
 }
 
-// Enhanced Leave Policy Form Component
-function LeavePolicyForm({ onClose }: { onClose: () => void }) {
+function LeavePolicyForm({ onClose, onSuccess }: { onClose: () => void; onSuccess?: () => void }) {
   const [formData, setFormData] = useState<LeavePolicyFormData>({
-    name: "",
-    type: "annual",
+    policyName: "",
+    leaveType: "Annual Leave",
     daysPerYear: "",
-    carryForward: false,
-    maxCarryForward: "",
+    allowCarryForward: false,
+    maxCarryForwardDays: "",
     description: "",
     applicableRoles: [],
   })
@@ -1101,18 +1046,50 @@ function LeavePolicyForm({ onClose }: { onClose: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
+    if (!formData.policyName.trim()) {
+      toast.error("Policy name is required")
+      return
+    }
+
+    if (!formData.daysPerYear || Number.parseInt(formData.daysPerYear) <= 0) {
+      toast.error("Days per year must be greater than 0")
+      return
+    }
+
+    if (formData.applicableRoles.length === 0) {
+      toast.error("Select at least one applicable role")
+      return
+    }
+
     try {
       setIsSubmitting(true)
-      
-      // TODO: Add API call when backend is ready
-      // await leaveApi.createPolicy(formData)
-      
-      toast.success("Leave policy created successfully!")
-      console.log("Policy form submitted:", formData)
-      onClose()
+      console.log("[v0] Submitting policy:", formData)
+
+      const payload = {
+        policyName: formData.policyName.trim(),
+        leaveType: formData.leaveType,
+        daysPerYear: Number.parseInt(formData.daysPerYear),
+        maxCarryForwardDays: formData.allowCarryForward ? Number.parseInt(formData.maxCarryForwardDays) || 0 : 0,
+        allowCarryForward: formData.allowCarryForward,
+        applicableRoles: formData.applicableRoles,
+        description: formData.description.trim(),
+      }
+
+      console.log("[v0] Policy payload:", payload)
+
+      const response = await leavePolicyApi.create(payload)
+      console.log("[v0] Policy creation response:", response)
+
+      if (response?.success || response?.data) {
+        toast.success("Leave policy created successfully!")
+        onSuccess?.()
+        onClose()
+      } else {
+        toast.error(response?.message || "Failed to create leave policy")
+      }
     } catch (error) {
-      console.error("Error creating policy:", error)
+      console.error("[v0] Error creating policy:", error)
       toast.error("Failed to create leave policy. Please try again.")
     } finally {
       setIsSubmitting(false)
@@ -1120,51 +1097,64 @@ function LeavePolicyForm({ onClose }: { onClose: () => void }) {
   }
 
   const handleRoleToggle = (role: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       applicableRoles: prev.applicableRoles.includes(role)
-        ? prev.applicableRoles.filter(r => r !== role)
-        : [...prev.applicableRoles, role]
+        ? prev.applicableRoles.filter((r) => r !== role)
+        : [...prev.applicableRoles, role],
     }))
   }
 
-  const roles = ["Technician", "Staff", "Operator", "Manager"]
+  const roles = ["technician", "staff", "operator", "manager"]
+  const leaveTypes = [
+    "Annual Leave",
+    "Sick Leave",
+    "Emergency Leave",
+    "Maternity Leave",
+    "Paternity Leave",
+    "Bereavement Leave",
+  ]
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="name" className="text-sm font-medium">Policy Name *</Label>
+          <Label htmlFor="name" className="text-sm font-medium">
+            Policy Name *
+          </Label>
           <Input
             id="name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            value={formData.policyName}
+            onChange={(e) => setFormData({ ...formData, policyName: e.target.value })}
             placeholder="e.g., Annual Leave Policy"
             required
             className="mt-1"
           />
         </div>
         <div>
-          <Label htmlFor="type" className="text-sm font-medium">Leave Type *</Label>
-          <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+          <Label htmlFor="type" className="text-sm font-medium">
+            Leave Type *
+          </Label>
+          <Select value={formData.leaveType} onValueChange={(value) => setFormData({ ...formData, leaveType: value })}>
             <SelectTrigger className="mt-1">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="annual">Annual Leave</SelectItem>
-              <SelectItem value="sick">Sick Leave</SelectItem>
-              <SelectItem value="emergency">Emergency Leave</SelectItem>
-              <SelectItem value="maternity">Maternity Leave</SelectItem>
-              <SelectItem value="paternity">Paternity Leave</SelectItem>
-              <SelectItem value="bereavement">Bereavement Leave</SelectItem>
+              {leaveTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="daysPerYear" className="text-sm font-medium">Days Per Year *</Label>
+          <Label htmlFor="daysPerYear" className="text-sm font-medium">
+            Days Per Year *
+          </Label>
           <Input
             id="daysPerYear"
             type="number"
@@ -1178,33 +1168,35 @@ function LeavePolicyForm({ onClose }: { onClose: () => void }) {
           />
         </div>
         <div>
-          <Label htmlFor="maxCarryForward" className="text-sm font-medium">Max Carry Forward Days</Label>
+          <Label htmlFor="maxCarryForward" className="text-sm font-medium">
+            Max Carry Forward Days
+          </Label>
           <Input
             id="maxCarryForward"
             type="number"
             min="0"
-            value={formData.maxCarryForward}
-            onChange={(e) => setFormData({ ...formData, maxCarryForward: e.target.value })}
+            value={formData.maxCarryForwardDays}
+            onChange={(e) => setFormData({ ...formData, maxCarryForwardDays: e.target.value })}
             placeholder="e.g., 5"
-            disabled={!formData.carryForward}
+            disabled={!formData.allowCarryForward}
             className="mt-1"
           />
         </div>
       </div>
-      
+
       <div className="flex items-center space-x-2 py-2">
         <input
           type="checkbox"
           id="carryForward"
-          checked={formData.carryForward}
-          onChange={(e) => setFormData({ ...formData, carryForward: e.target.checked })}
+          checked={formData.allowCarryForward}
+          onChange={(e) => setFormData({ ...formData, allowCarryForward: e.target.checked })}
           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
         <Label htmlFor="carryForward" className="text-sm font-medium cursor-pointer">
           Allow carry forward to next year
         </Label>
       </div>
-      
+
       <div>
         <Label className="text-sm font-medium">Applicable Roles *</Label>
         <div className="grid grid-cols-2 gap-2 mt-2">
@@ -1217,16 +1209,18 @@ function LeavePolicyForm({ onClose }: { onClose: () => void }) {
                 onChange={() => handleRoleToggle(role)}
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <Label htmlFor={role} className="text-sm cursor-pointer">
+              <Label htmlFor={role} className="text-sm cursor-pointer capitalize">
                 {role}
               </Label>
             </div>
           ))}
         </div>
       </div>
-      
+
       <div>
-        <Label htmlFor="description" className="text-sm font-medium">Description</Label>
+        <Label htmlFor="description" className="text-sm font-medium">
+          Description
+        </Label>
         <Textarea
           id="description"
           value={formData.description}
@@ -1236,20 +1230,22 @@ function LeavePolicyForm({ onClose }: { onClose: () => void }) {
           className="mt-1 resize-none"
         />
       </div>
-      
+
       <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4 pt-4 border-t">
-        <Button 
-          type="button" 
-          variant="outline" 
+        <Button
+          type="button"
+          variant="outline"
           onClick={onClose}
           disabled={isSubmitting}
           className="order-2 sm:order-1 bg-white hover:bg-gray-50"
         >
           Cancel
         </Button>
-        <Button 
-          type="submit" 
-          disabled={isSubmitting || !formData.name || !formData.daysPerYear || formData.applicableRoles.length === 0}
+        <Button
+          type="submit"
+          disabled={
+            isSubmitting || !formData.policyName || !formData.daysPerYear || formData.applicableRoles.length === 0
+          }
           className="order-1 sm:order-2"
         >
           {isSubmitting ? (
@@ -1258,7 +1254,7 @@ function LeavePolicyForm({ onClose }: { onClose: () => void }) {
               Creating...
             </>
           ) : (
-            'Create Policy'
+            "Create Policy"
           )}
         </Button>
       </div>
