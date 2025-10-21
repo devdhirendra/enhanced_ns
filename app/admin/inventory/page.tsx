@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import type React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -41,6 +41,9 @@ import {
   RefreshCw,
   Building2,
   MoreHorizontal,
+  ChevronUp,
+  ChevronDown,
+  ArrowUpDown,
 } from "lucide-react"
 import { formatCurrency, formatDate, getStatusColor, exportToCSV } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -116,6 +119,20 @@ interface Operator {
   }
 }
 
+type SortField = 'itemName' | 'quantity' | 'unitPrice' | 'category' | 'status' | 'supplier' | 'brand';
+type SortOrder = 'asc' | 'desc';
+
+interface SortConfig {
+  field: SortField;
+  order: SortOrder;
+}
+
+type LogsSortField = 'date' | 'itemId' | 'action' | 'quantity' | 'actor';
+interface LogsSortConfig {
+  field: LogsSortField;
+  order: SortOrder;
+}
+
 export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -132,7 +149,19 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
 
-// Replace the fetchInventoryData function with this updated version
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  
+  // Logs pagination states
+  const [logsCurrentPage, setLogsCurrentPage] = useState(1)
+  const [logsItemsPerPage, setLogsItemsPerPage] = useState(10)
+
+  // Sorting states
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'itemName', order: 'asc' })
+  const [logsSortConfig, setLogsSortConfig] = useState<LogsSortConfig>({ field: 'date', order: 'desc' })
+
+  // Replace the fetchInventoryData function with this updated version
   const fetchInventoryData = async () => {
     try {
       setLoading(true)
@@ -185,24 +214,200 @@ export default function InventoryPage() {
     fetchInventoryData()
   }, [])
 
-  const filteredItems = stockItems.filter((item) => {
+  // Handle card clicks with table actions
+const handleCardClick = (cardType: string) => {
+  switch(cardType) {
+    case 'totalValue':
+      // Show all items sorted by value (unitPrice * quantity)
+      setActiveTab('stock')
+      setSearchTerm('')
+      setCategoryFilter('all')
+      setStatusFilter('all')
+      setSortConfig({ field: 'unitPrice', order: 'desc' })
+      toast({
+        title: "Sorted by Value",
+        description: "Items sorted by highest value first",
+      })
+      break
+    case 'totalItems':
+      // Show all items
+      setActiveTab('stock')
+      setSearchTerm('')
+      setCategoryFilter('all')
+      setStatusFilter('all')
+      setSortConfig({ field: 'itemName', order: 'asc' })
+      toast({
+        title: "All Items View",
+        description: `Showing all ${totalItems} items`,
+      })
+      break
+    case 'lowStock':
+      // Filter to show only low stock and out of stock items
+      setActiveTab('stock')
+      setSearchTerm('')
+      setCategoryFilter('all')
+      setStatusFilter('out_of_stock') // Filter by out_of_stock status
+      setSortConfig({ field: 'quantity', order: 'asc' })
+      toast({
+        title: "Low Stock & Out of Stock Items",
+        description: `Showing items that need restocking`,
+      })
+      break
+    case 'recentIssues':
+      // Navigate to issues tab
+      setActiveTab('issue')
+      toast({
+        title: "Recent Issues",
+        description: `Viewing ${issuances.length} recent inventory issuances`,
+      })
+      break
+  }
+}
+
+  // Sorting function for stock items
+  const handleSort = (field: SortField) => {
+    setSortConfig(current => ({
+      field,
+      order: current.field === field && current.order === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  // Sorting function for logs
+  const handleLogsSort = (field: LogsSortField) => {
+    setLogsSortConfig(current => ({
+      field,
+      order: current.field === field && current.order === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  // Get sort icon for stock items
+  const getSortIcon = (field: SortField) => {
+    if (sortConfig.field !== field) {
+      return <ArrowUpDown className="h-4 w-4" />
+    }
+    return sortConfig.order === 'asc' ? 
+      <ChevronUp className="h-4 w-4" /> : 
+      <ChevronDown className="h-4 w-4" />
+  }
+
+  // Get sort icon for logs
+  const getLogsSortIcon = (field: LogsSortField) => {
+    if (logsSortConfig.field !== field) {
+      return <ArrowUpDown className="h-4 w-4" />
+    }
+    return logsSortConfig.order === 'asc' ? 
+      <ChevronUp className="h-4 w-4" /> : 
+      <ChevronDown className="h-4 w-4" />
+  }
+
+  // Apply sorting and filtering for stock items
+const filteredAndSortedItems = useMemo(() => {
+  let filtered = stockItems.filter((item) => {
     const matchesSearch =
       item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.supplier.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = categoryFilter === "all" || item.category === categoryFilter
     const matchesStatus = statusFilter === "all" || item.status === statusFilter
+    
     return matchesSearch && matchesCategory && matchesStatus
   })
 
-  const totalInventoryValue = stockItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
-  const lowStockItems = stockItems.filter((item) => item.quantity < 10).length
-  const totalItems = stockItems.length
-  const categories = [...new Set(stockItems.map((item) => item.category))].filter(Boolean)
-  const statuses = [...new Set(stockItems.map((item) => item.status))].filter(Boolean)
+  // Apply sorting
+  filtered.sort((a, b) => {
+    let aValue: any = a[sortConfig.field]
+    let bValue: any = b[sortConfig.field]
 
+    // Special handling for quantity sorting - prioritize low stock items
+    if (sortConfig.field === 'quantity') {
+      const aIsLowStock = a.quantity < 10 || a.status === 'out_of_stock'
+      const bIsLowStock = b.quantity < 10 || b.status === 'out_of_stock'
+      
+      if (aIsLowStock && !bIsLowStock) return -1
+      if (!aIsLowStock && bIsLowStock) return 1
+    }
+
+    if (typeof aValue === 'string') {
+      aValue = aValue.toLowerCase()
+      bValue = bValue.toLowerCase()
+    }
+
+    if (aValue < bValue) {
+      return sortConfig.order === 'asc' ? -1 : 1
+    }
+    if (aValue > bValue) {
+      return sortConfig.order === 'asc' ? 1 : -1
+    }
+    return 0
+  })
+
+  return filtered
+}, [stockItems, searchTerm, categoryFilter, statusFilter, sortConfig])
+
+  // Apply sorting and filtering for logs
+  const sortedLogs = useMemo(() => {
+    const logs = [...stockMovements]
+
+    logs.sort((a, b) => {
+      let aValue: any = a[logsSortConfig.field]
+      let bValue: any = b[logsSortConfig.field]
+
+      // Handle date sorting
+      if (logsSortConfig.field === 'date') {
+        aValue = a.date || a.createdAt
+        bValue = b.date || b.createdAt
+      }
+
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase()
+        bValue = bValue.toLowerCase()
+      }
+
+      if (aValue < bValue) {
+        return logsSortConfig.order === 'asc' ? -1 : 1
+      }
+      if (aValue > bValue) {
+        return logsSortConfig.order === 'asc' ? 1 : -1
+      }
+      return 0
+    })
+
+    return logs
+  }, [stockMovements, logsSortConfig])
+
+  // Pagination for stock items
+  const totalPages = Math.ceil(filteredAndSortedItems.length / itemsPerPage)
+  const paginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    return filteredAndSortedItems.slice(startIndex, startIndex + itemsPerPage)
+  }, [filteredAndSortedItems, currentPage, itemsPerPage])
+
+  // Pagination for logs
+  const logsTotalPages = Math.ceil(sortedLogs.length / logsItemsPerPage)
+  const paginatedLogs = useMemo(() => {
+    const startIndex = (logsCurrentPage - 1) * logsItemsPerPage
+    return sortedLogs.slice(startIndex, startIndex + logsItemsPerPage)
+  }, [sortedLogs, logsCurrentPage, logsItemsPerPage])
+
+const totalInventoryValue = useMemo(() => 
+  stockItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0), 
+  [stockItems]
+)
+const lowStockItems = useMemo(() => 
+  stockItems.filter((item) => item.quantity < 10 || item.status === 'out_of_stock').length, 
+  [stockItems]
+)
+const totalItems = useMemo(() => stockItems.length, [stockItems])
+const categories = useMemo(() => 
+  [...new Set(stockItems.map((item) => item.category))].filter(Boolean), 
+  [stockItems]
+)
+const statuses = useMemo(() => 
+  [...new Set(stockItems.map((item) => item.status))].filter(Boolean), 
+  [stockItems]
+)
   const handleExport = () => {
-    const exportData = filteredItems.map((item) => ({
+    const exportData = filteredAndSortedItems.map((item) => ({
       "Item ID": item.id,
       "Item Name": item.itemName,
       Category: item.category,
@@ -291,7 +496,17 @@ export default function InventoryPage() {
     setShowEditItemDialog(true)
   }
 
-   return (
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, categoryFilter, statusFilter, activeTab])
+
+  // Reset logs page when tab changes
+  useEffect(() => {
+    setLogsCurrentPage(1)
+  }, [activeTab])
+
+  return (
     <DashboardLayout title="Inventory Management" description="Manage your network equipment and supplies">
       <div className="space-y-6">
         {/* Loading indicator */}
@@ -349,9 +564,12 @@ export default function InventoryPage() {
 
         {!loading && (
           <>
-            {/* Inventory Overview Cards */}
+            {/* Inventory Overview Cards - Now Clickable with Table Actions */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <Card 
+                className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-300 hover:scale-105"
+                onClick={() => handleCardClick('totalValue')}
+              >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-blue-700">Total Inventory Value</CardTitle>
                   <div className="p-2 rounded-full bg-blue-100">
@@ -364,7 +582,10 @@ export default function InventoryPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+              <Card 
+                className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-green-300 hover:scale-105"
+                onClick={() => handleCardClick('totalItems')}
+              >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-green-700">Total Items</CardTitle>
                   <div className="p-2 rounded-full bg-green-100">
@@ -377,7 +598,10 @@ export default function InventoryPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+              <Card 
+                className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-red-300 hover:scale-105"
+                onClick={() => handleCardClick('lowStock')}
+              >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-red-700">Low Stock Alerts</CardTitle>
                   <div className="p-2 rounded-full bg-red-100">
@@ -390,7 +614,10 @@ export default function InventoryPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+              <Card 
+                className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-orange-300 hover:scale-105"
+                onClick={() => handleCardClick('recentIssues')}
+              >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-orange-700">Recent Issues</CardTitle>
                   <div className="p-2 rounded-full bg-orange-100">
@@ -514,12 +741,34 @@ export default function InventoryPage() {
                   <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div>
-                        <CardTitle>Inventory Items ({filteredItems.length})</CardTitle>
+                        <CardTitle>Inventory Items ({filteredAndSortedItems.length})</CardTitle>
                         <CardDescription>Complete list of all inventory items</CardDescription>
                       </div>
-                      <Badge variant="outline" className="ml-auto sm:ml-0">
-                        {filteredItems.length} items
-                      </Badge>
+                      <div className="flex items-center gap-4">
+                        <Badge variant="outline" className="ml-auto sm:ml-0">
+                          {filteredAndSortedItems.length} items
+                        </Badge>
+                        <div className="flex items-center space-x-2">
+                          <Label htmlFor="itemsPerPage" className="text-sm whitespace-nowrap">Items per page:</Label>
+                          <Select
+                            value={itemsPerPage.toString()}
+                            onValueChange={(value) => {
+                              setItemsPerPage(Number.parseInt(value))
+                              setCurrentPage(1)
+                            }}
+                          >
+                            <SelectTrigger className="w-20">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="5">5</SelectItem>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="25">25</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -528,17 +777,57 @@ export default function InventoryPage() {
                         <Table>
                           <TableHeader className="bg-muted/50">
                             <TableRow>
-                              <TableHead>Item Details</TableHead>
-                              <TableHead className="hidden sm:table-cell">Category</TableHead>
-                              <TableHead>Stock</TableHead>
-                              <TableHead className="hidden md:table-cell">Pricing</TableHead>
+                              <TableHead 
+                                className="cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleSort('itemName')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Item Details</span>
+                                  {getSortIcon('itemName')}
+                                </div>
+                              </TableHead>
+                              <TableHead 
+                                className="hidden sm:table-cell cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleSort('category')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Category</span>
+                                  {getSortIcon('category')}
+                                </div>
+                              </TableHead>
+                              <TableHead 
+                                className="cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleSort('quantity')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Stock</span>
+                                  {getSortIcon('quantity')}
+                                </div>
+                              </TableHead>
+                              <TableHead 
+                                className="hidden md:table-cell cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleSort('unitPrice')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Pricing</span>
+                                  {getSortIcon('unitPrice')}
+                                </div>
+                              </TableHead>
                               <TableHead className="hidden lg:table-cell">Supplier</TableHead>
-                              <TableHead>Status</TableHead>
+                              <TableHead 
+                                className="cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleSort('status')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Status</span>
+                                  {getSortIcon('status')}
+                                </div>
+                              </TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {filteredItems.map((item) => (
+                            {paginatedItems.map((item) => (
                               <TableRow key={item.id} className="group">
                                 <TableCell>
                                   <div>
@@ -609,7 +898,7 @@ export default function InventoryPage() {
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {filteredItems.length === 0 && !loading && (
+                            {filteredAndSortedItems.length === 0 && !loading && (
                               <TableRow>
                                 <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                                   No items found. {searchTerm && "Try adjusting your search terms."}
@@ -619,6 +908,59 @@ export default function InventoryPage() {
                           </TableBody>
                         </Table>
                       </div>
+
+                      {/* Pagination Controls */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between px-4 py-4 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredAndSortedItems.length)} of {filteredAndSortedItems.length} items
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                              disabled={currentPage === 1}
+                            >
+                              Previous
+                            </Button>
+                            <div className="flex items-center space-x-1">
+                              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                let pageNum
+                                if (totalPages <= 5) {
+                                  pageNum = i + 1
+                                } else if (currentPage <= 3) {
+                                  pageNum = i + 1
+                                } else if (currentPage >= totalPages - 2) {
+                                  pageNum = totalPages - 4 + i
+                                } else {
+                                  pageNum = currentPage - 2 + i
+                                }
+
+                                return (
+                                  <Button
+                                    key={pageNum}
+                                    variant={currentPage === pageNum ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className="w-8 h-8 p-0"
+                                  >
+                                    {pageNum}
+                                  </Button>
+                                )
+                              })}
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                              disabled={currentPage === totalPages}
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -745,12 +1087,34 @@ export default function InventoryPage() {
                   <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div>
-                        <CardTitle>Inventory Activity Log ({stockMovements.length})</CardTitle>
+                        <CardTitle>Inventory Activity Log ({sortedLogs.length})</CardTitle>
                         <CardDescription>Complete history of all inventory activities</CardDescription>
                       </div>
-                      <Badge variant="outline" className="ml-auto sm:ml-0">
-                        {stockMovements.length} activities
-                      </Badge>
+                      <div className="flex items-center gap-4">
+                        <Badge variant="outline" className="ml-auto sm:ml-0">
+                          {sortedLogs.length} activities
+                        </Badge>
+                        <div className="flex items-center space-x-2">
+                          <Label htmlFor="logsItemsPerPage" className="text-sm whitespace-nowrap">Items per page:</Label>
+                          <Select
+                            value={logsItemsPerPage.toString()}
+                            onValueChange={(value) => {
+                              setLogsItemsPerPage(Number.parseInt(value))
+                              setLogsCurrentPage(1)
+                            }}
+                          >
+                            <SelectTrigger className="w-20">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="5">5</SelectItem>
+                              <SelectItem value="10">10</SelectItem>
+                              <SelectItem value="25">25</SelectItem>
+                              <SelectItem value="50">50</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -759,16 +1123,56 @@ export default function InventoryPage() {
                         <Table>
                           <TableHeader className="bg-muted/50">
                             <TableRow>
-                              <TableHead>Date</TableHead>
-                              <TableHead className="hidden sm:table-cell">Item</TableHead>
-                              <TableHead>Action</TableHead>
-                              <TableHead className="hidden md:table-cell">Quantity</TableHead>
-                              <TableHead className="hidden lg:table-cell">Performed By</TableHead>
+                              <TableHead 
+                                className="cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleLogsSort('date')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Date</span>
+                                  {getLogsSortIcon('date')}
+                                </div>
+                              </TableHead>
+                              <TableHead 
+                                className="hidden sm:table-cell cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleLogsSort('itemId')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Item</span>
+                                  {getLogsSortIcon('itemId')}
+                                </div>
+                              </TableHead>
+                              <TableHead 
+                                className="cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleLogsSort('action')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Action</span>
+                                  {getLogsSortIcon('action')}
+                                </div>
+                              </TableHead>
+                              <TableHead 
+                                className="hidden md:table-cell cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleLogsSort('quantity')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Quantity</span>
+                                  {getLogsSortIcon('quantity')}
+                                </div>
+                              </TableHead>
+                              <TableHead 
+                                className="hidden lg:table-cell cursor-pointer hover:bg-muted/70 transition-colors"
+                                onClick={() => handleLogsSort('actor')}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>Performed By</span>
+                                  {getLogsSortIcon('actor')}
+                                </div>
+                              </TableHead>
                               <TableHead className="hidden xl:table-cell">Details</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {stockMovements.map((log) => (
+                            {paginatedLogs.map((log) => (
                               <TableRow key={log.id} className="group">
                                 <TableCell>
                                   <div className="flex items-center">
@@ -805,7 +1209,7 @@ export default function InventoryPage() {
                                 </TableCell>
                               </TableRow>
                             ))}
-                            {stockMovements.length === 0 && !loading && (
+                            {sortedLogs.length === 0 && !loading && (
                               <TableRow>
                                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                                   No activity logs found.
@@ -815,6 +1219,59 @@ export default function InventoryPage() {
                           </TableBody>
                         </Table>
                       </div>
+
+                      {/* Pagination Controls for Logs */}
+                      {logsTotalPages > 1 && (
+                        <div className="flex items-center justify-between px-4 py-4 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            Showing {((logsCurrentPage - 1) * logsItemsPerPage) + 1} to {Math.min(logsCurrentPage * logsItemsPerPage, sortedLogs.length)} of {sortedLogs.length} activities
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setLogsCurrentPage(prev => Math.max(prev - 1, 1))}
+                              disabled={logsCurrentPage === 1}
+                            >
+                              Previous
+                            </Button>
+                            <div className="flex items-center space-x-1">
+                              {Array.from({ length: Math.min(5, logsTotalPages) }, (_, i) => {
+                                let pageNum
+                                if (logsTotalPages <= 5) {
+                                  pageNum = i + 1
+                                } else if (logsCurrentPage <= 3) {
+                                  pageNum = i + 1
+                                } else if (logsCurrentPage >= logsTotalPages - 2) {
+                                  pageNum = logsTotalPages - 4 + i
+                                } else {
+                                  pageNum = logsCurrentPage - 2 + i
+                                }
+
+                                return (
+                                  <Button
+                                    key={pageNum}
+                                    variant={logsCurrentPage === pageNum ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setLogsCurrentPage(pageNum)}
+                                    className="w-8 h-8 p-0"
+                                  >
+                                    {pageNum}
+                                  </Button>
+                                )
+                              })}
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setLogsCurrentPage(prev => Math.min(prev + 1, logsTotalPages))}
+                              disabled={logsCurrentPage === logsTotalPages}
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -826,8 +1283,6 @@ export default function InventoryPage() {
     </DashboardLayout>
   )
 }
-
-
 function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const { user } = useAuth() // Get the authenticated user
   const [formData, setFormData] = useState({

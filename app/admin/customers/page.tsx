@@ -40,6 +40,9 @@ import {
   AlertCircle,
   Upload,
   DollarSign,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
@@ -72,6 +75,17 @@ interface SortConfig {
   direction: 'asc' | 'desc'
 }
 
+interface StatsCard {
+  title: string
+  value: string | number
+  description: string
+  icon: any
+  gradient: string
+  iconBg: string
+  filterType: string
+  filterValue: string
+}
+
 export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [planFilter, setPlanFilter] = useState("all")
@@ -84,6 +98,9 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+  const [activeFilter, setActiveFilter] = useState<{ type: string; value: string }>({ type: 'all', value: 'all' })
   const { toast } = useToast()
   const { user } = useAuth()
 
@@ -124,6 +141,79 @@ export default function CustomersPage() {
     fetchCustomers()
   }, [])
 
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const totalCustomers = customers.length
+    const activeCustomers = customers.filter((c) => c.connectionStatus === "active").length
+    const suspendedCustomers = customers.filter((c) => c.connectionStatus === "suspended").length
+    const pendingCustomers = customers.filter((c) => c.connectionStatus === "pending").length
+    const totalRevenue = customers.reduce((sum, c) => sum + c.monthlyCharges, 0)
+    const outstandingAmount = customers.reduce((sum, c) => sum + c.outstandingAmount, 0)
+
+    return {
+      total: totalCustomers,
+      active: activeCustomers,
+      suspended: suspendedCustomers,
+      pending: pendingCustomers,
+      revenue: totalRevenue,
+      outstanding: outstandingAmount
+    }
+  }, [customers])
+
+  // Stats cards configuration
+  const statsCards: StatsCard[] = [
+    {
+      title: "Total Customers",
+      value: stats.total,
+      description: "Registered customers",
+      icon: Users,
+      gradient: "from-blue-50 to-blue-100",
+      iconBg: "bg-blue-500",
+      filterType: "all",
+      filterValue: "all"
+    },
+    {
+      title: "Active",
+      value: stats.active,
+      description: "Active connections",
+      icon: UserCheck,
+      gradient: "from-green-50 to-green-100",
+      iconBg: "bg-green-500",
+      filterType: "status",
+      filterValue: "active"
+    },
+    {
+      title: "Suspended",
+      value: stats.suspended,
+      description: "Suspended accounts",
+      icon: UserX,
+      gradient: "from-red-50 to-red-100",
+      iconBg: "bg-red-500",
+      filterType: "status",
+      filterValue: "suspended"
+    },
+    {
+      title: "Pending",
+      value: stats.pending,
+      description: "Pending activation",
+      icon: AlertCircle,
+      gradient: "from-yellow-50 to-yellow-100",
+      iconBg: "bg-yellow-500",
+      filterType: "status",
+      filterValue: "pending"
+    },
+    {
+      title: "Monthly Revenue",
+      value: `₹${stats.revenue.toLocaleString()}`,
+      description: "Total monthly billing",
+      icon: CreditCard,
+      gradient: "from-purple-50 to-purple-100",
+      iconBg: "bg-purple-500",
+      filterType: "revenue",
+      filterValue: "revenue"
+    }
+  ]
+
   const handleSort = (key: keyof Customer) => {
     let direction: 'asc' | 'desc' = 'asc'
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -160,18 +250,30 @@ export default function CustomersPage() {
     })
   }, [customers, sortConfig])
 
-  const filteredCustomers = sortedCustomers.filter((customer) => {
-    const matchesSearch =
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone.includes(searchTerm)
+  const filteredCustomers = useMemo(() => {
+    return sortedCustomers.filter((customer) => {
+      const matchesSearch =
+        customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.customerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.phone.includes(searchTerm)
 
-    const matchesPlan = planFilter === "all" || customer.plan === planFilter
-    const matchesStatus = statusFilter === "all" || customer.connectionStatus === statusFilter
+      const matchesPlan = planFilter === "all" || customer.plan === planFilter
+      const matchesStatus = statusFilter === "all" || customer.connectionStatus === statusFilter
 
-    return matchesSearch && matchesPlan && matchesStatus
-  })
+      return matchesSearch && matchesPlan && matchesStatus
+    })
+  }, [sortedCustomers, searchTerm, planFilter, statusFilter])
+
+  // Pagination
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + itemsPerPage)
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, planFilter, statusFilter])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -239,7 +341,6 @@ export default function CustomersPage() {
   }
 
   const handleImport = () => {
-    // Import functionality placeholder
     toast({
       title: "Import Feature",
       description: "Import functionality will be implemented soon.",
@@ -367,19 +468,27 @@ export default function CustomersPage() {
     })
   }
 
-  const totalCustomers = customers.length
-  const activeCustomers = customers.filter((c) => c.connectionStatus === "active").length
-  const suspendedCustomers = customers.filter((c) => c.connectionStatus === "suspended").length
-  const pendingCustomers = customers.filter((c) => c.connectionStatus === "pending").length
-  const totalRevenue = customers.reduce((sum, c) => sum + c.monthlyCharges, 0)
-  const outstandingAmount = customers.reduce((sum, c) => sum + c.outstandingAmount, 0)
+  const handleFilterClick = (filterType: string, filterValue: string) => {
+    setActiveFilter({ type: filterType, value: filterValue })
+    
+    if (filterType === 'status') {
+      setStatusFilter(filterValue)
+    } else if (filterType === 'plan') {
+      setPlanFilter(filterValue)
+    } else {
+      // Reset all filters for 'all'
+      setStatusFilter('all')
+      setPlanFilter('all')
+    }
+    setCurrentPage(1)
+  }
 
   return (
     <DashboardLayout title="Customer Management" description="Manage customer accounts and service connections">
-      <div className="min-h-screen bg-gray-50 overflow-hidden">
+      <div className="min-h-screen bg-gray-50">
         <div className="grid grid-cols-1">
-          <main className="h-[calc(100vh-4rem)]">
-            <div className="max-w-7xl mx-auto">
+          <main className="h-[calc(100vh-4rem)] overflow-y-auto">
+            <div className="max-w-7xl mx-auto p-4">
               <div className="space-y-4">
                 {/* Error Alert */}
                 {error && (
@@ -400,51 +509,32 @@ export default function CustomersPage() {
                 )}
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-                  {[
-                    {
-                      title: "Total Customers",
-                      value: totalCustomers,
-                      description: "Registered customers",
-                      icon: Users,
-                      gradient: "from-blue-50 to-blue-100",
-                      iconBg: "bg-blue-500"
-                    },
-                    {
-                      title: "Active",
-                      value: activeCustomers,
-                      description: "Active connections",
-                      icon: UserCheck,
-                      gradient: "from-green-50 to-green-100",
-                      iconBg: "bg-green-500"
-                    },
-                    {
-                      title: "Monthly Revenue",
-                      value: `₹${totalRevenue.toLocaleString()}`,
-                      description: "Total monthly billing",
-                      icon: CreditCard,
-                      gradient: "from-purple-50 to-purple-100",
-                      iconBg: "bg-purple-500"
-                    },
-                    {
-                      title: "Outstanding",
-                      value: `₹${outstandingAmount.toLocaleString()}`,
-                      description: "Pending payments",
-                      icon: AlertTriangle,
-                      gradient: "from-red-50 to-red-100",
-                      iconBg: "bg-red-500"
-                    }
-                  ].map((stat, index) => (
-                    <Card key={`stat-${index}`} className={`border-0 shadow-lg bg-gradient-to-br ${stat.gradient}`}>
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                  {statsCards.map((stat, index) => (
+                    <Card 
+                      key={`stat-${index}`} 
+                      className={`border-0 shadow-lg bg-gradient-to-br ${stat.gradient} cursor-pointer transition-all duration-200 hover:scale-105 ${
+                        activeFilter.type === stat.filterType && activeFilter.value === stat.filterValue 
+                          ? 'ring-2 ring-blue-500' 
+                          : ''
+                      }`}
+                      onClick={() => handleFilterClick(stat.filterType, stat.filterValue)}
+                    >
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
-                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">{stat.title}</CardTitle>
+                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">
+                          {stat.title}
+                        </CardTitle>
                         <div className={`p-2 ${stat.iconBg} rounded-lg flex-shrink-0`}>
                           <stat.icon className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
                         </div>
                       </CardHeader>
                       <CardContent className="px-4 lg:px-6">
-                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{stat.value}</div>
-                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">{stat.description}</p>
+                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+                          {stat.value}
+                        </div>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">
+                          {stat.description}
+                        </p>
                       </CardContent>
                     </Card>
                   ))}
@@ -560,6 +650,7 @@ export default function CustomersPage() {
                         <CardDescription className="text-gray-600 mt-1">
                           Complete list of customers and their service status
                           {searchTerm && ` • Filtered by: "${searchTerm}"`}
+                          {activeFilter.type !== 'all' && ` • Showing: ${activeFilter.value}`}
                         </CardDescription>
                       </div>
                       {loading && (
@@ -569,24 +660,51 @@ export default function CustomersPage() {
                   </CardHeader>
 
                   <CardContent className="p-0">
-                    {/* Desktop/Tablet Table View with Horizontal Scroll */}
+                    {/* Desktop/Tablet Table View */}
                     <div className="hidden md:block">
                       <ScrollArea className="w-full">
                         <div className="min-w-[1200px]">
                           <Table>
                             <TableHeader>
                               <TableRow className="bg-gray-50/50">
-                                <TableHead className="w-[220px] font-semibold">Customer</TableHead>
+                                <TableHead className="w-[220px] font-semibold">
+                                  <Button
+                                    variant="ghost"
+                                    onClick={() => handleSort("name")}
+                                    className="font-semibold p-0 h-auto hover:bg-transparent"
+                                  >
+                                    Customer
+                                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                                  </Button>
+                                </TableHead>
                                 <TableHead className="w-[200px] font-semibold">Contact</TableHead>
                                 <TableHead className="w-[180px] font-semibold">Service Plan</TableHead>
-                                <TableHead className="w-[140px] font-semibold">Billing</TableHead>
+                                <TableHead className="w-[140px] font-semibold">
+                                  <Button
+                                    variant="ghost"
+                                    onClick={() => handleSort("monthlyCharges")}
+                                    className="font-semibold p-0 h-auto hover:bg-transparent"
+                                  >
+                                    Billing
+                                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                                  </Button>
+                                </TableHead>
                                 <TableHead className="w-[180px] font-semibold">Address</TableHead>
-                                <TableHead className="w-[100px] font-semibold">Status</TableHead>
+                                <TableHead className="w-[100px] font-semibold">
+                                  <Button
+                                    variant="ghost"
+                                    onClick={() => handleSort("connectionStatus")}
+                                    className="font-semibold p-0 h-auto hover:bg-transparent"
+                                  >
+                                    Status
+                                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                                  </Button>
+                                </TableHead>
                                 <TableHead className="w-[100px] font-semibold">Actions</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {filteredCustomers.map((customer) => (
+                              {paginatedCustomers.map((customer) => (
                                 <TableRow 
                                   key={customer.id} 
                                   className="hover:bg-gray-50/50 transition-colors"
@@ -704,13 +822,70 @@ export default function CustomersPage() {
                         <ScrollBar orientation="horizontal" />
                       </ScrollArea>
                       
+                      {/* Pagination */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between px-6 py-4 border-t">
+                          <div className="text-sm text-gray-700">
+                            Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredCustomers.length)} of {filteredCustomers.length} entries
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                              disabled={currentPage === 1}
+                              className="flex items-center gap-1"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            <div className="flex items-center space-x-1">
+                              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                let pageNum
+                                if (totalPages <= 5) {
+                                  pageNum = i + 1
+                                } else if (currentPage <= 3) {
+                                  pageNum = i + 1
+                                } else if (currentPage >= totalPages - 2) {
+                                  pageNum = totalPages - 4 + i
+                                } else {
+                                  pageNum = currentPage - 2 + i
+                                }
+                                
+                                return (
+                                  <Button
+                                    key={pageNum}
+                                    variant={currentPage === pageNum ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className="w-8 h-8 p-0"
+                                  >
+                                    {pageNum}
+                                  </Button>
+                                )
+                              })}
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                              disabled={currentPage === totalPages}
+                              className="flex items-center gap-1"
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* Empty State for Desktop */}
                       {filteredCustomers.length === 0 && !loading && (
                         <div className="text-center text-gray-500 py-12">
                           <div className="flex flex-col items-center">
                             <User className="h-16 w-16 text-gray-300 mb-4" />
                             <h3 className="text-lg font-medium mb-2">No customers found</h3>
-                            {searchTerm ? (
+                            {searchTerm || statusFilter !== 'all' || planFilter !== 'all' ? (
                               <p className="text-sm">Try adjusting your search terms or filters.</p>
                             ) : (
                               <p className="text-sm">Get started by adding your first customer.</p>
@@ -720,137 +895,164 @@ export default function CustomersPage() {
                       )}
                     </div>
 
-                    {/* Mobile Card View with Vertical Scrolling */}
+                    {/* Mobile Card View */}
                     <div className="md:hidden">
-                      <ScrollArea className="h-[600px] w-full">
-                        <div className="space-y-3 p-4">
-                          {filteredCustomers.map((customer) => (
-                            <Card key={customer.id} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                              <CardContent className="p-4">
-                                <div className="space-y-4">
-                                  {/* Header */}
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex items-center space-x-3 flex-1 min-w-0">
-                                      <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
-                                        <User className="h-5 w-5 text-blue-600" />
-                                      </div>
-                                      <div className="min-w-0 flex-1">
-                                        <h3 className="font-semibold text-gray-900 truncate text-sm">
-                                          {customer.name}
-                                        </h3>
-                                        <p className="text-xs text-gray-500 truncate">
-                                          ID: {customer.customerId}
-                                        </p>
-                                      </div>
+                      <div className="space-y-3 p-4">
+                        {paginatedCustomers.map((customer) => (
+                          <Card key={customer.id} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                            <CardContent className="p-4">
+                              <div className="space-y-4">
+                                {/* Header */}
+                                <div className="flex items-start justify-between">
+                                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                    <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
+                                      <User className="h-5 w-5 text-blue-600" />
                                     </div>
-                                    <div className="flex items-center space-x-2 flex-shrink-0">
-                                      {getStatusBadge(customer.connectionStatus)}
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent className="w-48" align="end">
-                                          <DropdownMenuItem onClick={() => handleViewDetails(customer)}>
-                                            <Eye className="h-4 w-4 mr-2" />
-                                            View Details
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem onClick={() => handleEdit(customer)}>
-                                            <Edit className="h-4 w-4 mr-2" />
-                                            Edit
-                                          </DropdownMenuItem>
-                                          {customer.connectionStatus === "active" ? (
-                                            <DropdownMenuItem onClick={() => handleSuspend(customer)}>
-                                              <UserX className="h-4 w-4 mr-2" />
-                                              Suspend
-                                            </DropdownMenuItem>
-                                          ) : (
-                                            <DropdownMenuItem onClick={() => handleActivate(customer)}>
-                                              <UserCheck className="h-4 w-4 mr-2" />
-                                              Activate
-                                            </DropdownMenuItem>
-                                          )}
-                                          <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(customer)}>
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
+                                    <div className="min-w-0 flex-1">
+                                      <h3 className="font-semibold text-gray-900 truncate text-sm">
+                                        {customer.name}
+                                      </h3>
+                                      <p className="text-xs text-gray-500 truncate">
+                                        ID: {customer.customerId}
+                                      </p>
                                     </div>
                                   </div>
-
-                                  {/* Plan and Billing */}
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2 min-w-0 flex-1">
-                                      {getConnectionTypeIcon(customer.connectionType)}
-                                      <div className="min-w-0 flex-1">
-                                        <div className="font-medium text-gray-900 text-sm truncate">
-                                          {getPlanLabel(customer.plan)}
-                                        </div>
-                                        <div className="text-xs text-gray-500 capitalize">
-                                          {customer.connectionType}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                      <div className="font-semibold text-sm text-gray-900">
-                                        ₹{customer.monthlyCharges.toLocaleString()}/mo
-                                      </div>
-                                      {customer.outstandingAmount > 0 && (
-                                        <div className="text-xs text-red-600">
-                                          Due: ₹{customer.outstandingAmount.toLocaleString()}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Contact Grid */}
-                                  <div className="grid grid-cols-1 gap-2">
-                                    <div className="flex items-center text-sm text-gray-600">
-                                      <Phone className="h-3 w-3 mr-2 text-green-600 flex-shrink-0" />
-                                      <span className="truncate">{customer.phone || "N/A"}</span>
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                      <Mail className="h-3 w-3 mr-2 text-blue-600 flex-shrink-0" />
-                                      <span className="truncate">{customer.email}</span>
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                      <MapPin className="h-3 w-3 mr-2 text-red-600 flex-shrink-0" />
-                                      <span className="truncate">{customer.address || "N/A"}</span>
-                                    </div>
-                                  </div>
-
-                                  {/* Join Date */}
-                                  <div className="pt-2 border-t border-gray-100">
-                                    <div className="text-xs text-gray-500">
-                                      Joined: {customer.joinDate ? new Date(customer.joinDate).toLocaleDateString() : 'N/A'}
-                                      {customer.lastPayment && (
-                                        <span className="ml-4">
-                                          Last Payment: {new Date(customer.lastPayment).toLocaleDateString()}
-                                        </span>
-                                      )}
-                                    </div>
+                                  <div className="flex items-center space-x-2 flex-shrink-0">
+                                    {getStatusBadge(customer.connectionStatus)}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent className="w-48" align="end">
+                                        <DropdownMenuItem onClick={() => handleViewDetails(customer)}>
+                                          <Eye className="h-4 w-4 mr-2" />
+                                          View Details
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleEdit(customer)}>
+                                          <Edit className="h-4 w-4 mr-2" />
+                                          Edit
+                                        </DropdownMenuItem>
+                                        {customer.connectionStatus === "active" ? (
+                                          <DropdownMenuItem onClick={() => handleSuspend(customer)}>
+                                            <UserX className="h-4 w-4 mr-2" />
+                                            Suspend
+                                          </DropdownMenuItem>
+                                        ) : (
+                                          <DropdownMenuItem onClick={() => handleActivate(customer)}>
+                                            <UserCheck className="h-4 w-4 mr-2" />
+                                            Activate
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(customer)}>
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
                                 </div>
-                              </CardContent>
-                            </Card>
-                          ))}
 
-                          {/* Empty State for Mobile */}
-                          {filteredCustomers.length === 0 && !loading && (
-                            <div className="text-center text-gray-500 py-12">
-                              <User className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-                              <h3 className="text-lg font-medium mb-2">No customers found</h3>
-                              {searchTerm ? (
-                                <p className="text-sm">Try adjusting your search terms or filters.</p>
-                              ) : (
-                                <p className="text-sm">Get started by adding your first customer.</p>
-                              )}
+                                {/* Plan and Billing */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                    {getConnectionTypeIcon(customer.connectionType)}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="font-medium text-gray-900 text-sm truncate">
+                                        {getPlanLabel(customer.plan)}
+                                      </div>
+                                      <div className="text-xs text-gray-500 capitalize">
+                                        {customer.connectionType}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <div className="font-semibold text-sm text-gray-900">
+                                      ₹{customer.monthlyCharges.toLocaleString()}/mo
+                                    </div>
+                                    {customer.outstandingAmount > 0 && (
+                                      <div className="text-xs text-red-600">
+                                        Due: ₹{customer.outstandingAmount.toLocaleString()}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Contact Grid */}
+                                <div className="grid grid-cols-1 gap-2">
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Phone className="h-3 w-3 mr-2 text-green-600 flex-shrink-0" />
+                                    <span className="truncate">{customer.phone || "N/A"}</span>
+                                  </div>
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <Mail className="h-3 w-3 mr-2 text-blue-600 flex-shrink-0" />
+                                    <span className="truncate">{customer.email}</span>
+                                  </div>
+                                  <div className="flex items-center text-sm text-gray-600">
+                                    <MapPin className="h-3 w-3 mr-2 text-red-600 flex-shrink-0" />
+                                    <span className="truncate">{customer.address || "N/A"}</span>
+                                  </div>
+                                </div>
+
+                                {/* Join Date */}
+                                <div className="pt-2 border-t border-gray-100">
+                                  <div className="text-xs text-gray-500">
+                                    Joined: {customer.joinDate ? new Date(customer.joinDate).toLocaleDateString() : 'N/A'}
+                                    {customer.lastPayment && (
+                                      <span className="ml-4">
+                                        Last Payment: {new Date(customer.lastPayment).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+
+                        {/* Mobile Pagination */}
+                        {totalPages > 1 && (
+                          <div className="flex items-center justify-between pt-4">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                              disabled={currentPage === 1}
+                              className="flex items-center gap-1"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Prev
+                            </Button>
+                            <div className="text-sm text-gray-700">
+                              Page {currentPage} of {totalPages}
                             </div>
-                          )}
-                        </div>
-                      </ScrollArea>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                              disabled={currentPage === totalPages}
+                              className="flex items-center gap-1"
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Empty State for Mobile */}
+                        {filteredCustomers.length === 0 && !loading && (
+                          <div className="text-center text-gray-500 py-12">
+                            <User className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                            <h3 className="text-lg font-medium mb-2">No customers found</h3>
+                            {searchTerm || statusFilter !== 'all' || planFilter !== 'all' ? (
+                              <p className="text-sm">Try adjusting your search terms or filters.</p>
+                            ) : (
+                              <p className="text-sm">Get started by adding your first customer.</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

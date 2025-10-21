@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,6 +37,9 @@ import {
   AlertCircle,
   Filter,
   RefreshCw,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { formatDate, exportToCSV } from "@/lib/utils"
@@ -46,6 +49,22 @@ import type { User } from "@/lib/api"
 import { confirmDelete } from "@/lib/confirmation-dialog"
 
 type Staff = User
+
+interface SortConfig {
+  key: keyof Staff | null
+  direction: 'asc' | 'desc'
+}
+
+interface StatsCard {
+  title: string
+  value: string | number
+  description: string
+  icon: any
+  gradient: string
+  iconBg: string
+  filterType: string
+  filterValue: string
+}
 
 // Skeleton Loading Components
 function StatsCardSkeleton() {
@@ -158,9 +177,12 @@ export default function StaffPage() {
   const [staff, setStaff] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // NEW STATE VARIABLES FOR VIEW DIALOG
   const [showViewStaffDialog, setShowViewStaffDialog] = useState(false)
   const [viewingStaff, setViewingStaff] = useState<Staff | null>(null)
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
+  const [activeFilter, setActiveFilter] = useState<{ type: string; value: string }>({ type: 'all', value: 'all' })
   
   const { toast } = useToast()
 
@@ -190,13 +212,153 @@ export default function StaffPage() {
     fetchStaffData()
   }, [])
 
-  const filteredStaff = staff.filter((staffMember) => {
-    const matchesSearch =
-      staffMember.profileDetail.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      staffMember.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = roleFilter === "all" || staffMember.role === roleFilter
-    return matchesSearch && matchesRole
-  })
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const totalStaff = staff.length
+    const activeStaff = staff.length
+    const adminStaff = staff.filter(s => s.role === 'admin').length
+    const regularStaff = staff.filter(s => s.role === 'staff').length
+
+    return {
+      total: totalStaff,
+      active: activeStaff,
+      admin: adminStaff,
+      regular: regularStaff
+    }
+  }, [staff])
+
+  // Stats cards configuration
+  const statsCards: StatsCard[] = [
+    {
+      title: "Total Staff",
+      value: stats.total,
+      description: "Registered staff",
+      icon: Users,
+      gradient: "from-blue-50 to-blue-100",
+      iconBg: "bg-blue-500",
+      filterType: "all",
+      filterValue: "all"
+    },
+    {
+      title: "Active Staff",
+      value: stats.active,
+      description: "Currently active",
+      icon: Users,
+      gradient: "from-green-50 to-green-100",
+      iconBg: "bg-green-500",
+      filterType: "status",
+      filterValue: "active"
+    },
+    {
+      title: "Admin Users",
+      value: stats.admin,
+      description: "With admin access",
+      icon: Shield,
+      gradient: "from-purple-50 to-purple-100",
+      iconBg: "bg-purple-500",
+      filterType: "role",
+      filterValue: "admin"
+    },
+    {
+      title: "Regular Staff",
+      value: stats.regular,
+      description: "Standard access",
+      icon: Users,
+      gradient: "from-orange-50 to-orange-100",
+      iconBg: "bg-orange-500",
+      filterType: "role",
+      filterValue: "staff"
+    }
+  ]
+
+  // Sorting functionality
+  const handleSort = (key: keyof Staff) => {
+    let direction: 'asc' | 'desc' = 'asc'
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    setSortConfig({ key, direction })
+  }
+
+  const sortedStaff = useMemo(() => {
+    if (!sortConfig.key) return staff
+    
+    return [...staff].sort((a, b) => {
+      const aValue = a[sortConfig.key!]
+      const bValue = b[sortConfig.key!]
+      
+      if (aValue == null && bValue == null) return 0
+      if (aValue == null) return sortConfig.direction === 'asc' ? 1 : -1
+      if (bValue == null) return sortConfig.direction === 'asc' ? -1 : 1
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const aString = aValue.toLowerCase()
+        const bString = bValue.toLowerCase()
+        
+        if (aString < bString) {
+          return sortConfig.direction === 'asc' ? -1 : 1
+        }
+        if (aString > bString) {
+          return sortConfig.direction === 'asc' ? 1 : -1
+        }
+        return 0
+      }
+      
+      // For profileDetail properties
+      if (sortConfig.key === 'profileDetail') {
+        const aName = a.profileDetail.name?.toLowerCase() || ''
+        const bName = b.profileDetail.name?.toLowerCase() || ''
+        
+        if (aName < bName) {
+          return sortConfig.direction === 'asc' ? -1 : 1
+        }
+        if (aName > bName) {
+          return sortConfig.direction === 'asc' ? 1 : -1
+        }
+        return 0
+      }
+      
+      return 0
+    })
+  }, [staff, sortConfig])
+
+  // Filtering functionality
+  const filteredStaff = useMemo(() => {
+    return sortedStaff.filter((staffMember) => {
+      const matchesSearch =
+        staffMember.profileDetail.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        staffMember.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        staffMember.user_id.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesRole = roleFilter === "all" || staffMember.role === roleFilter
+      return matchesSearch && matchesRole
+    })
+  }, [sortedStaff, searchTerm, roleFilter])
+
+  // Pagination
+  const totalPages = Math.ceil(filteredStaff.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedStaff = filteredStaff.slice(startIndex, startIndex + itemsPerPage)
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, roleFilter])
+
+  // Handle filter clicks from stats cards
+  const handleFilterClick = (filterType: string, filterValue: string) => {
+    setActiveFilter({ type: filterType, value: filterValue })
+    
+    if (filterType === 'role') {
+      setRoleFilter(filterValue)
+    } else if (filterType === 'status') {
+      // Status filter logic if needed
+      setRoleFilter('all')
+    } else {
+      // Reset all filters for 'all'
+      setRoleFilter('all')
+    }
+    setCurrentPage(1)
+  }
 
   const handleExport = () => {
     const exportData = filteredStaff.map((staffMember) => ({
@@ -215,7 +377,6 @@ export default function StaffPage() {
     })
   }
 
-  // UPDATED VIEW STAFF FUNCTION
   const handleViewStaff = (staffId: string) => {
     const staffMember = staff.find((s) => s.user_id === staffId)
     if (staffMember) {
@@ -268,360 +429,412 @@ export default function StaffPage() {
     })
   }
 
-  const totalStaff = staff.length
-  const activeStaff = staff.length
-
-return (
-  <DashboardLayout title="Admin Settings" description="System configuration and user management">
-    <div className="min-h-screen bg-gray-50 overflow-hidden">
-      <div className="grid grid-cols-1">
-        <main className="h-[calc(100vh-4rem)]">
-          <div className="max-w-7xl mx-auto">
-            <div className="space-y-4">
-              {/* Error Alert */}
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-center">
-                    <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                    <p className="text-red-800">{error}</p>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={fetchStaffData}
-                      className="ml-auto"
-                    >
-                      Retry
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-                {loading ? (
-                  <>
-                    <StatsCardSkeleton />
-                    <StatsCardSkeleton />
-                    <StatsCardSkeleton />
-                    <StatsCardSkeleton />
-                  </>
-                ) : (
-                  <>
-                    <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
-                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Total Staff</CardTitle>
-                        <div className="p-2 bg-blue-500 rounded-lg flex-shrink-0">
-                          <Users className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
-                        </div>
-                      </CardHeader>
-                      <CardContent className="px-4 lg:px-6">
-                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{totalStaff}</div>
-                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">{activeStaff} active users</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
-                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Active Staff</CardTitle>
-                        <div className="p-2 bg-green-500 rounded-lg flex-shrink-0">
-                          <Users className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
-                        </div>
-                      </CardHeader>
-                      <CardContent className="px-4 lg:px-6">
-                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{activeStaff}</div>
-                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Currently online</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
-                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Admin Users</CardTitle>
-                        <div className="p-2 bg-purple-500 rounded-lg flex-shrink-0">
-                          <Shield className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
-                        </div>
-                      </CardHeader>
-                      <CardContent className="px-4 lg:px-6">
-                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
-                          {staff.filter(s => s.role === 'admin').length}
-                        </div>
-                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">With admin access</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
-                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">Regular Staff</CardTitle>
-                        <div className="p-2 bg-orange-500 rounded-lg flex-shrink-0">
-                          <Users className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
-                        </div>
-                      </CardHeader>
-                      <CardContent className="px-4 lg:px-6">
-                        <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
-                          {staff.filter(s => s.role === 'staff').length}
-                        </div>
-                        <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">Standard access</p>
-                      </CardContent>
-                    </Card>
-                  </>
-                )}
-              </div>
-
-              {/* Main Content */}
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                {/* Header Section */}
-                <div className="flex flex-col space-y-4">
-                  {/* Tabs and Actions Row */}
-                  <Card className="shadow-sm">
-                    <CardContent className="p-4">
-                      <div className="flex flex-col lg:flex-row gap-4">
-                        <div className="flex-1">
-                          <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
-                            <TabsTrigger value="staff" className="text-sm">Admin Staff</TabsTrigger>
-                            <TabsTrigger value="roles" className="text-sm">Roles & Permissions</TabsTrigger>
-                          </TabsList>
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={fetchStaffData} 
-                            disabled={loading}
-                            className="h-10"
-                          >
-                            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                            Refresh ({filteredStaff.length})
-                          </Button>
-                          
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleExport} 
-                            className="h-10"
-                            disabled={filteredStaff.length === 0}
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Export CSV
-                          </Button>
-                        </div>
-                      
-                   
-
-                  {/* Action Buttons Section */}
-                  <div className=" sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="flex flex-wrap gap-2">
-                      {activeTab === "staff" ? (
-                        <Dialog open={showAddStaffDialog} onOpenChange={setShowAddStaffDialog}>
-                          <DialogTrigger asChild>
-                            <Button className="h-9">
-                              <UserPlus className="h-4 w-4 mr-2" />
-                              Add Staff
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>Add New Admin Staff</DialogTitle>
-                              <DialogDescription>Create a new admin user account</DialogDescription>
-                            </DialogHeader>
-                            <AddStaffForm onClose={() => setShowAddStaffDialog(false)} onSuccess={handleAddStaffSuccess} />
-                          </DialogContent>
-                        </Dialog>
-                      ) : (
-                        <Button variant="outline" className="h-9" disabled>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Create Role (Coming Soon)
-                        </Button>
-                      )}
+  return (
+    <DashboardLayout title="Admin Settings" description="System configuration and user management">
+      <div className="min-h-screen bg-gray-50">
+        <div className="grid grid-cols-1">
+          <main className="h-[calc(100vh-4rem)] overflow-y-auto">
+            <div className="max-w-7xl mx-auto p-4">
+              <div className="space-y-4">
+                {/* Error Alert */}
+                {error && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                      <p className="text-red-800">{error}</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={fetchStaffData}
+                        className="ml-auto"
+                      >
+                        Retry
+                      </Button>
                     </div>
                   </div>
-                  </div>
-                   </CardContent>
-                  </Card>
-                </div>
+                )}
 
-                {/* Staff Tab */}
-                <TabsContent value="staff" className="space-y-4">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   {loading ? (
-                    <TableSkeleton />
+                    <>
+                      <StatsCardSkeleton />
+                      <StatsCardSkeleton />
+                      <StatsCardSkeleton />
+                      <StatsCardSkeleton />
+                    </>
                   ) : (
                     <>
-                      {/* Search and Filter Section */}
-                      <Card className="shadow-sm">
-                        <CardContent className="p-4">
-                          <div className="flex flex-col lg:flex-row gap-4">
-                            <div className="relative flex-1">
-                              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                              <Input
-                                placeholder="Search by name, email, or ID..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 h-10"
-                              />
+                      {statsCards.map((stat, index) => (
+                        <Card 
+                          key={`stat-${index}`} 
+                          className={`border-0 shadow-lg bg-gradient-to-br ${stat.gradient} cursor-pointer transition-all duration-200 hover:scale-105 ${
+                            activeFilter.type === stat.filterType && activeFilter.value === stat.filterValue 
+                              ? 'ring-2 ring-blue-500' 
+                              : ''
+                          }`}
+                          onClick={() => handleFilterClick(stat.filterType, stat.filterValue)}
+                        >
+                          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 lg:px-6">
+                            <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">
+                              {stat.title}
+                            </CardTitle>
+                            <div className={`p-2 ${stat.iconBg} rounded-lg flex-shrink-0`}>
+                              <stat.icon className="h-4 w-4 lg:h-5 lg:w-5 text-white" />
                             </div>
-                            <div className="flex flex-col sm:flex-row gap-3">
-                              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                                <SelectTrigger className="w-full sm:w-48 h-10">
-                                  <Filter className="h-4 w-4 mr-2" />
-                                  <SelectValue placeholder="Filter by Role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">All Roles</SelectItem>
-                                  <SelectItem value="staff">Staff</SelectItem>
-                                  <SelectItem value="admin">Admin</SelectItem>
-                                </SelectContent>
-                              </Select>
+                          </CardHeader>
+                          <CardContent className="px-4 lg:px-6">
+                            <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+                              {stat.value}
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                            <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">
+                              {stat.description}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </>
+                  )}
+                </div>
 
-                      {/* Main Content Card */}
-                      <Card className="border-0 shadow-lg">
-                        <CardHeader className="pb-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <CardTitle className="text-xl font-semibold text-gray-900">
-                                Admin Staff ({filteredStaff.length})
-                              </CardTitle>
-                              <CardDescription className="text-gray-600 mt-1">
-                                Manage administrative users and their access
-                                {searchTerm && ` • Filtered by: "${searchTerm}"`}
-                              </CardDescription>
-                            </div>
-                            {loading && (
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                            )}
+                {/* Main Content */}
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+                  {/* Header Section */}
+                  <div className="flex flex-col space-y-4">
+                    {/* Tabs and Actions Row */}
+                    <Card className="shadow-sm">
+                      <CardContent className="p-4">
+                        <div className="flex flex-col lg:flex-row gap-4">
+                          <div className="flex-1">
+                            <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
+                              <TabsTrigger value="staff" className="text-sm">Admin Staff</TabsTrigger>
+                              <TabsTrigger value="roles" className="text-sm">Roles & Permissions</TabsTrigger>
+                            </TabsList>
                           </div>
-                        </CardHeader>
-
-                        <CardContent className="p-0">
-                          {/* Desktop/Tablet Table View with Horizontal Scroll */}
-                          <div className="hidden md:block">
-                            <ScrollArea className="w-full">
-                              <div className="min-w-[1200px]">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow className="bg-gray-50/50">
-                                      <TableHead className="w-[200px] font-semibold">Staff Details</TableHead>
-                                      <TableHead className="w-[180px] font-semibold">Contact</TableHead>
-                                      <TableHead className="w-[160px] font-semibold">Role & Assignment</TableHead>
-                                      <TableHead className="w-[100px] font-semibold">Status</TableHead>
-                                      <TableHead className="w-[120px] font-semibold">Created Date</TableHead>
-                                      <TableHead className="w-[120px] font-semibold">Actions</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {filteredStaff.map((staffMember) => (
-                                      <TableRow 
-                                        key={staffMember.user_id} 
-                                        className="hover:bg-gray-50/50 transition-colors"
-                                      >
-                                        <TableCell className="py-4">
-                                          <div className="flex items-center space-x-3">
-                                            <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
-                                              <Users className="h-4 w-4 text-blue-600" />
-                                            </div>
-                                            <div className="min-w-0">
-                                              <div className="font-medium text-gray-900 truncate">
-                                                {staffMember.profileDetail.name}
-                                              </div>
-                                              <div className="text-sm text-gray-500 truncate">
-                                                ID: {staffMember.user_id.slice(0, 8)}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </TableCell>
-                                        
-                                        <TableCell className="py-4">
-                                          <div className="space-y-1">
-                                            <div className="flex items-center text-sm text-gray-600">
-                                              <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
-                                              <span className="truncate">{staffMember.profileDetail.phone || "N/A"}</span>
-                                            </div>
-                                            <div className="flex items-center text-sm text-gray-600">
-                                              <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
-                                              <span className="truncate">{staffMember.email}</span>
-                                            </div>
-                                          </div>
-                                        </TableCell>
-                                        
-                                        <TableCell className="py-4">
-                                          <div>
-                                            <Badge variant="outline" className="capitalize mb-1">
-                                              {staffMember.role}
-                                            </Badge>
-                                            <div className="text-sm text-gray-500 truncate">
-                                              {staffMember.profileDetail.assignedTo || "Unassigned"}
-                                            </div>
-                                          </div>
-                                        </TableCell>
-                                        
-                                        <TableCell className="py-4">
-                                          <Badge className="bg-green-100 text-green-800">Active</Badge>
-                                        </TableCell>
-                                        
-                                        <TableCell className="py-4">
-                                          <div className="text-sm text-gray-600">
-                                            {formatDate(staffMember.createdAt)}
-                                          </div>
-                                        </TableCell>
-                                        
-                                        <TableCell className="py-4">
-                                          <div className="flex items-center space-x-1">
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => handleViewStaff(staffMember.user_id)}
-                                              className="h-8 w-8"
-                                            >
-                                              <Eye className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              onClick={() => handleEditStaff(staffMember.user_id)}
-                                              className="h-8 w-8"
-                                            >
-                                              <Edit className="h-4 w-4" />
-                                            </Button>
-                                            <Button 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              onClick={() => handleDeleteStaff(staffMember)}
-                                              className="h-8 w-8 text-red-600 hover:text-red-700"
-                                            >
-                                              <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              </div>
-                              <ScrollBar orientation="horizontal" />
-                            </ScrollArea>
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={fetchStaffData} 
+                              disabled={loading}
+                              className="h-10"
+                            >
+                              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                              Refresh ({filteredStaff.length})
+                            </Button>
                             
-                            {/* Empty State for Desktop */}
-                            {filteredStaff.length === 0 && !loading && (
-                              <div className="text-center text-gray-500 py-12">
-                                <div className="flex flex-col items-center">
-                                  <Users className="h-16 w-16 text-gray-300 mb-4" />
-                                  <h3 className="text-lg font-medium mb-2">No staff members found</h3>
-                                  {searchTerm ? (
-                                    <p className="text-sm">Try adjusting your search terms or filters.</p>
-                                  ) : (
-                                    <p className="text-sm">Get started by adding your first staff member.</p>
-                                  )}
-                                </div>
-                              </div>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={handleExport} 
+                              className="h-10"
+                              disabled={filteredStaff.length === 0}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Export CSV
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons Section */}
+                        <div className="flex justify-end mt-4">
+                          <div className="flex flex-wrap gap-2">
+                            {activeTab === "staff" ? (
+                              <Dialog open={showAddStaffDialog} onOpenChange={setShowAddStaffDialog}>
+                                <DialogTrigger asChild>
+                                  <Button className="h-9">
+                                    <UserPlus className="h-4 w-4 mr-2" />
+                                    Add Staff
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                                  <DialogHeader>
+                                    <DialogTitle>Add New Admin Staff</DialogTitle>
+                                    <DialogDescription>Create a new admin user account</DialogDescription>
+                                  </DialogHeader>
+                                  <AddStaffForm onClose={() => setShowAddStaffDialog(false)} onSuccess={handleAddStaffSuccess} />
+                                </DialogContent>
+                              </Dialog>
+                            ) : (
+                              <Button variant="outline" className="h-9" disabled>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create Role (Coming Soon)
+                              </Button>
                             )}
                           </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
 
-                          {/* Mobile Card View with Vertical Scrolling */}
-                          <div className="md:hidden">
-                            <ScrollArea className="h-[600px] w-full">
+                  {/* Staff Tab */}
+                  <TabsContent value="staff" className="space-y-4">
+                    {loading ? (
+                      <TableSkeleton />
+                    ) : (
+                      <>
+                        {/* Search and Filter Section */}
+                        <Card className="shadow-sm">
+                          <CardContent className="p-4">
+                            <div className="flex flex-col lg:flex-row gap-4">
+                              <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                <Input
+                                  placeholder="Search by name, email, or ID..."
+                                  value={searchTerm}
+                                  onChange={(e) => setSearchTerm(e.target.value)}
+                                  className="pl-10 h-10"
+                                />
+                              </div>
+                              <div className="flex flex-col sm:flex-row gap-3">
+                                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                                  <SelectTrigger className="w-full sm:w-48 h-10">
+                                    <Filter className="h-4 w-4 mr-2" />
+                                    <SelectValue placeholder="Filter by Role" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">All Roles</SelectItem>
+                                    <SelectItem value="staff">Staff</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Main Content Card */}
+                        <Card className="border-0 shadow-lg">
+                          <CardHeader className="pb-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <CardTitle className="text-xl font-semibold text-gray-900">
+                                  Admin Staff ({filteredStaff.length})
+                                </CardTitle>
+                                <CardDescription className="text-gray-600 mt-1">
+                                  Manage administrative users and their access
+                                  {searchTerm && ` • Filtered by: "${searchTerm}"`}
+                                  {activeFilter.type !== 'all' && ` • Showing: ${activeFilter.value}`}
+                                </CardDescription>
+                              </div>
+                              {loading && (
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                              )}
+                            </div>
+                          </CardHeader>
+
+                          <CardContent className="p-0">
+                            {/* Desktop/Tablet Table View */}
+                            <div className="hidden md:block">
+                              <ScrollArea className="w-full">
+                                <div className="min-w-[1200px]">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="bg-gray-50/50">
+                                        <TableHead className="w-[200px] font-semibold">
+                                          <Button
+                                            variant="ghost"
+                                            onClick={() => handleSort("profileDetail" as keyof Staff)}
+                                            className="font-semibold p-0 h-auto hover:bg-transparent"
+                                          >
+                                            Staff Details
+                                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                                          </Button>
+                                        </TableHead>
+                                        <TableHead className="w-[180px] font-semibold">Contact</TableHead>
+                                        <TableHead className="w-[160px] font-semibold">
+                                          <Button
+                                            variant="ghost"
+                                            onClick={() => handleSort("role")}
+                                            className="font-semibold p-0 h-auto hover:bg-transparent"
+                                          >
+                                            Role & Assignment
+                                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                                          </Button>
+                                        </TableHead>
+                                        <TableHead className="w-[100px] font-semibold">Status</TableHead>
+                                        <TableHead className="w-[120px] font-semibold">
+                                          <Button
+                                            variant="ghost"
+                                            onClick={() => handleSort("createdAt")}
+                                            className="font-semibold p-0 h-auto hover:bg-transparent"
+                                          >
+                                            Created Date
+                                            <ArrowUpDown className="ml-2 h-4 w-4" />
+                                          </Button>
+                                        </TableHead>
+                                        <TableHead className="w-[120px] font-semibold">Actions</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {paginatedStaff.map((staffMember) => (
+                                        <TableRow 
+                                          key={staffMember.user_id} 
+                                          className="hover:bg-gray-50/50 transition-colors"
+                                        >
+                                          <TableCell className="py-4">
+                                            <div className="flex items-center space-x-3">
+                                              <div className="bg-blue-100 p-2.5 rounded-lg flex-shrink-0">
+                                                <Users className="h-4 w-4 text-blue-600" />
+                                              </div>
+                                              <div className="min-w-0">
+                                                <div className="font-medium text-gray-900 truncate">
+                                                  {staffMember.profileDetail.name}
+                                                </div>
+                                                <div className="text-sm text-gray-500 truncate">
+                                                  ID: {staffMember.user_id.slice(0, 8)}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </TableCell>
+                                          
+                                          <TableCell className="py-4">
+                                            <div className="space-y-1">
+                                              <div className="flex items-center text-sm text-gray-600">
+                                                <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
+                                                <span className="truncate">{staffMember.profileDetail.phone || "N/A"}</span>
+                                              </div>
+                                              <div className="flex items-center text-sm text-gray-600">
+                                                <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
+                                                <span className="truncate">{staffMember.email}</span>
+                                              </div>
+                                            </div>
+                                          </TableCell>
+                                          
+                                          <TableCell className="py-4">
+                                            <div>
+                                              <Badge variant="outline" className="capitalize mb-1">
+                                                {staffMember.role}
+                                              </Badge>
+                                              <div className="text-sm text-gray-500 truncate">
+                                                {staffMember.profileDetail.assignedTo || "Unassigned"}
+                                              </div>
+                                            </div>
+                                          </TableCell>
+                                          
+                                          <TableCell className="py-4">
+                                            <Badge className="bg-green-100 text-green-800">Active</Badge>
+                                          </TableCell>
+                                          
+                                          <TableCell className="py-4">
+                                            <div className="text-sm text-gray-600">
+                                              {formatDate(staffMember.createdAt)}
+                                            </div>
+                                          </TableCell>
+                                          
+                                          <TableCell className="py-4">
+                                            <div className="flex items-center space-x-1">
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleViewStaff(staffMember.user_id)}
+                                                className="h-8 w-8"
+                                              >
+                                                <Eye className="h-4 w-4" />
+                                              </Button>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleEditStaff(staffMember.user_id)}
+                                                className="h-8 w-8"
+                                              >
+                                                <Edit className="h-4 w-4" />
+                                              </Button>
+                                              <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={() => handleDeleteStaff(staffMember)}
+                                                className="h-8 w-8 text-red-600 hover:text-red-700"
+                                              >
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            </div>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                                <ScrollBar orientation="horizontal" />
+                              </ScrollArea>
+                              
+                              {/* Pagination */}
+                              {totalPages > 1 && (
+                                <div className="flex items-center justify-between px-6 py-4 border-t">
+                                  <div className="text-sm text-gray-700">
+                                    Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredStaff.length)} of {filteredStaff.length} entries
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                      disabled={currentPage === 1}
+                                      className="flex items-center gap-1"
+                                    >
+                                      <ChevronLeft className="h-4 w-4" />
+                                      Previous
+                                    </Button>
+                                    <div className="flex items-center space-x-1">
+                                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        let pageNum
+                                        if (totalPages <= 5) {
+                                          pageNum = i + 1
+                                        } else if (currentPage <= 3) {
+                                          pageNum = i + 1
+                                        } else if (currentPage >= totalPages - 2) {
+                                          pageNum = totalPages - 4 + i
+                                        } else {
+                                          pageNum = currentPage - 2 + i
+                                        }
+                                        
+                                        return (
+                                          <Button
+                                            key={pageNum}
+                                            variant={currentPage === pageNum ? "default" : "outline"}
+                                            size="sm"
+                                            onClick={() => setCurrentPage(pageNum)}
+                                            className="w-8 h-8 p-0"
+                                          >
+                                            {pageNum}
+                                          </Button>
+                                        )
+                                      })}
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                      disabled={currentPage === totalPages}
+                                      className="flex items-center gap-1"
+                                    >
+                                      Next
+                                      <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Empty State for Desktop */}
+                              {filteredStaff.length === 0 && !loading && (
+                                <div className="text-center text-gray-500 py-12">
+                                  <div className="flex flex-col items-center">
+                                    <Users className="h-16 w-16 text-gray-300 mb-4" />
+                                    <h3 className="text-lg font-medium mb-2">No staff members found</h3>
+                                    {searchTerm || roleFilter !== 'all' ? (
+                                      <p className="text-sm">Try adjusting your search terms or filters.</p>
+                                    ) : (
+                                      <p className="text-sm">Get started by adding your first staff member.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Mobile Card View */}
+                            <div className="md:hidden">
                               <div className="space-y-3 p-4">
-                                {filteredStaff.map((staffMember) => (
+                                {paginatedStaff.map((staffMember) => (
                                   <Card key={staffMember.user_id} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                                     <CardContent className="p-4">
                                       <div className="space-y-4">
@@ -702,12 +915,41 @@ return (
                                   </Card>
                                 ))}
 
+                                {/* Mobile Pagination */}
+                                {totalPages > 1 && (
+                                  <div className="flex items-center justify-between pt-4">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                      disabled={currentPage === 1}
+                                      className="flex items-center gap-1"
+                                    >
+                                      <ChevronLeft className="h-4 w-4" />
+                                      Prev
+                                    </Button>
+                                    <div className="text-sm text-gray-700">
+                                      Page {currentPage} of {totalPages}
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                      disabled={currentPage === totalPages}
+                                      className="flex items-center gap-1"
+                                    >
+                                      Next
+                                      <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )}
+
                                 {/* Empty State for Mobile */}
                                 {filteredStaff.length === 0 && !loading && (
                                   <div className="text-center text-gray-500 py-12">
                                     <Users className="h-16 w-16 mx-auto text-gray-300 mb-4" />
                                     <h3 className="text-lg font-medium mb-2">No staff members found</h3>
-                                    {searchTerm ? (
+                                    {searchTerm || roleFilter !== 'all' ? (
                                       <p className="text-sm">Try adjusting your search terms or filters.</p>
                                     ) : (
                                       <p className="text-sm">Get started by adding your first staff member.</p>
@@ -715,79 +957,78 @@ return (
                                   </div>
                                 )}
                               </div>
-                            </ScrollArea>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </>
-                  )}
-                </TabsContent>
-
-                {/* Roles Tab */}
-                <TabsContent value="roles" className="space-y-6">
-                  <Card className="border-0 shadow-lg">
-                    <CardContent className="p-8">
-                      <div className="text-center py-8 sm:py-12">
-                        <Shield className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-base sm:text-lg font-medium text-gray-900">Roles & Permissions</h3>
-                        <p className="text-gray-500 mt-2 text-sm sm:text-base">This feature is coming soon.</p>
-                        <p className="text-xs sm:text-sm text-gray-400 mt-1">Role management will be available in the next update.</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                {/* Dialogs */}
-                <Dialog open={showEditStaffDialog} onOpenChange={setShowEditStaffDialog}>
-                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Edit Staff Member</DialogTitle>
-                      <DialogDescription>Update staff member information</DialogDescription>
-                    </DialogHeader>
-                    {editingStaff && (
-                      <EditStaffForm
-                        staff={editingStaff}
-                        onClose={() => setShowEditStaffDialog(false)}
-                        onSuccess={() => {
-                          setShowEditStaffDialog(false)
-                          fetchStaffData()
-                          toast({
-                            title: "Staff Updated",
-                            description: "Staff member has been updated successfully!",
-                          })
-                        }}
-                      />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </>
                     )}
-                  </DialogContent>
-                </Dialog>
+                  </TabsContent>
 
-                <Dialog open={showViewStaffDialog} onOpenChange={setShowViewStaffDialog}>
-                  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center space-x-2">
-                        <Users className="h-5 w-5" />
-                        <span>Staff Details</span>
-                      </DialogTitle>
-                      <DialogDescription>
-                        View detailed information for {viewingStaff?.profileDetail.name}
-                      </DialogDescription>
-                    </DialogHeader>
-                    {viewingStaff && (
-                      <ViewStaffDialog
-                        staff={viewingStaff}
-                        onClose={() => setShowViewStaffDialog(false)}
-                      />
-                    )}
-                  </DialogContent>
-                </Dialog>
-              </Tabs>
+                  {/* Roles Tab */}
+                  <TabsContent value="roles" className="space-y-6">
+                    <Card className="border-0 shadow-lg">
+                      <CardContent className="p-8">
+                        <div className="text-center py-8 sm:py-12">
+                          <Shield className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-base sm:text-lg font-medium text-gray-900">Roles & Permissions</h3>
+                          <p className="text-gray-500 mt-2 text-sm sm:text-base">This feature is coming soon.</p>
+                          <p className="text-xs sm:text-sm text-gray-400 mt-1">Role management will be available in the next update.</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* Dialogs */}
+                  <Dialog open={showEditStaffDialog} onOpenChange={setShowEditStaffDialog}>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Edit Staff Member</DialogTitle>
+                        <DialogDescription>Update staff member information</DialogDescription>
+                      </DialogHeader>
+                      {editingStaff && (
+                        <EditStaffForm
+                          staff={editingStaff}
+                          onClose={() => setShowEditStaffDialog(false)}
+                          onSuccess={() => {
+                            setShowEditStaffDialog(false)
+                            fetchStaffData()
+                            toast({
+                              title: "Staff Updated",
+                              description: "Staff member has been updated successfully!",
+                            })
+                          }}
+                        />
+                      )}
+                    </DialogContent>
+                  </Dialog>
+
+                  <Dialog open={showViewStaffDialog} onOpenChange={setShowViewStaffDialog}>
+                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center space-x-2">
+                          <Users className="h-5 w-5" />
+                          <span>Staff Details</span>
+                        </DialogTitle>
+                        <DialogDescription>
+                          View detailed information for {viewingStaff?.profileDetail.name}
+                        </DialogDescription>
+                      </DialogHeader>
+                      {viewingStaff && (
+                        <ViewStaffDialog
+                          staff={viewingStaff}
+                          onClose={() => setShowViewStaffDialog(false)}
+                        />
+                      )}
+                    </DialogContent>
+                  </Dialog>
+                </Tabs>
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
-    </div>
-  </DashboardLayout>
-)
+    </DashboardLayout>
+  )
 }
 
 function AddStaffForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {

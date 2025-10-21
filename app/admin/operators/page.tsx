@@ -75,7 +75,7 @@ export default function OperatorsPage() {
     total: operators.length,
     active: operators.filter(op => op.status === 'active').length,
     suspended: operators.filter(op => op.status === 'suspended').length,
-    expired: operators.filter(op => op.status === 'expired').length,
+    expired: operators.filter(op => op.status === "expired").length,
     inactive: operators.filter(op => op.status === 'inactive').length,
   }
 
