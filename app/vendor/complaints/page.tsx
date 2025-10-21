@@ -6,84 +6,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Plus,
-  Search,
-  Eye,
-  Clock,
-  AlertTriangle,
-  CheckCircle,
-  Headphones,
-  TrendingUp,
-  TrendingDown,
-  RefreshCw,
-  Loader2,
-} from "lucide-react"
+import { Search, Eye, Clock, AlertTriangle, CheckCircle, Headphones, RefreshCw, Loader2 } from "lucide-react"
 import { complaintApi } from "@/lib/complaint-api"
 import { useToast } from "@/hooks/use-toast"
 
 interface Complaint {
   complaint_id: string
-  customerId: string
-  CustomerNotes: string
-  technicianNotes: string
-  technicianId: string
-  status: string
-  priority: string
-  customerUserId: string
   description: string
   type: string
+  priority: string
+  status: string
   createdAt: string
   updatedAt: string
+  technicianNotes?: string
 }
 
-interface NewComplaint {
-  customerUserId: string
-  customerId: string
-  description: string
-  type: string
-  priority: "high" | "medium" | "low"
-  technicianId: string
-}
-
-interface ComplaintStats {
-  total: number
-  open: number
-  inProgress: number
-  resolved: number
-  escalated: number
-  avgResolutionTime: string
-  todayResolved: number
-  todayRaised: number
-}
-
-const complaintTypes = [
-  "no_internet",
-  "slow_speed",
-  "intermittent_connection",
-  "fiber_cut",
-  "hardware_issue",
-  "billing_issue",
-  "installation_request",
-  "other",
-]
-
-export default function OperatorComplaintsPage() {
+export default function VendorComplaintsPage() {
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -93,15 +36,6 @@ export default function OperatorComplaintsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const { toast } = useToast()
   const itemsPerPage = 10
-
-  const [newComplaint, setNewComplaint] = useState<NewComplaint>({
-    customerUserId: "",
-    customerId: "",
-    description: "",
-    type: "",
-    priority: "medium",
-    technicianId: "",
-  })
 
   const fetchComplaintsData = async () => {
     try {
@@ -193,90 +127,19 @@ export default function OperatorComplaintsPage() {
       }
     })
 
-  const handleAddComplaint = async () => {
-    try {
-      console.log("[v0] Creating new complaint:", newComplaint)
+  const paginatedComplaints = filteredComplaints.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+  const totalPages = Math.ceil(filteredComplaints.length / itemsPerPage)
 
-      const complaintData = {
-        type: newComplaint.type,
-        priority: newComplaint.priority || "medium",
-        description: newComplaint.description,
-        technicianId: newComplaint.technicianId || "",
-      }
-
-      await complaintApi.createComplaint(newComplaint.customerUserId, complaintData)
-
-      toast({
-        title: "Complaint Created",
-        description: "New complaint has been created successfully!",
-      })
-
-      setNewComplaint({
-        customerUserId: "",
-        customerId: "",
-        description: "",
-        type: "",
-        priority: "medium",
-        technicianId: "",
-      })
-      setIsAddDialogOpen(false)
-      fetchComplaintsData()
-    } catch (error) {
-      console.error("[v0] Error creating complaint:", error)
-      toast({
-        title: "Creation Failed",
-        description: "Failed to create complaint. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleStatusUpdate = async (complaintId: string, newStatus: string) => {
-    try {
-      console.log("[v0] Updating complaint status:", complaintId, newStatus)
-
-      await complaintApi.updateStatus(complaintId, { status: newStatus })
-
-      toast({
-        title: "Status Updated",
-        description: `Complaint ${complaintId} status updated to ${newStatus.replace("_", " ")}`,
-      })
-
-      fetchComplaintsData()
-    } catch (error) {
-      console.error("[v0] Error updating complaint status:", error)
-      toast({
-        title: "Update Failed",
-        description: "Failed to update complaint status. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const complaintStats: ComplaintStats = {
+  const complaintStats = {
     total: complaints.length,
     open: complaints.filter((c: Complaint) => c.status === "open").length,
     inProgress: complaints.filter((c: Complaint) => c.status === "in_progress" || c.status === "in-progress").length,
     resolved: complaints.filter((c: Complaint) => c.status === "resolved").length,
-    escalated: complaints.filter((c: Complaint) => c.status === "escalated").length,
-    avgResolutionTime: "4.2 hours",
-    todayResolved: complaints.filter((c: Complaint) => {
-      const today = new Date().toDateString()
-      return c.status === "resolved" && new Date(c.updatedAt).toDateString() === today
-    }).length,
-    todayRaised: complaints.filter((c: Complaint) => {
-      const today = new Date().toDateString()
-      return new Date(c.createdAt).toDateString() === today
-    }).length,
   }
 
-  const paginatedComplaints = filteredComplaints.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-  const totalPages = Math.ceil(filteredComplaints.length / itemsPerPage)
-
   return (
-    <DashboardLayout title="Complaints Management" description="Track and resolve customer complaints efficiently">
+    <DashboardLayout title="Complaints & Returns" description="Track complaints related to your products and services">
       <div className="space-y-8">
-        {/* Header */}
         <div className="flex justify-between items-start">
           <div className="flex items-center space-x-4">
             <Button variant="outline" size="sm" onClick={fetchComplaintsData} disabled={loading}>
@@ -284,97 +147,8 @@ export default function OperatorComplaintsPage() {
               Refresh
             </Button>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Complaint
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create New Complaint</DialogTitle>
-                <DialogDescription>Add a new customer complaint to the system</DialogDescription>
-              </DialogHeader>
-              <div className="grid grid-cols-2 gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customerUserId">Customer User ID</Label>
-                  <Input
-                    id="customerUserId"
-                    value={newComplaint.customerUserId}
-                    onChange={(e) => setNewComplaint({ ...newComplaint, customerUserId: e.target.value })}
-                    placeholder="Enter customer user ID"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="customerId">Customer ID</Label>
-                  <Input
-                    id="customerId"
-                    value={newComplaint.customerId}
-                    onChange={(e) => setNewComplaint({ ...newComplaint, customerId: e.target.value })}
-                    placeholder="Enter customer ID"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Complaint Type</Label>
-                  <Select
-                    value={newComplaint.type}
-                    onValueChange={(value) => setNewComplaint({ ...newComplaint, type: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select complaint type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {complaintTypes.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
-                  <Select
-                    value={newComplaint.priority}
-                    onValueChange={(value) =>
-                      setNewComplaint({ ...newComplaint, priority: value as NewComplaint["priority"] })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={newComplaint.description}
-                    onChange={(e) => setNewComplaint({ ...newComplaint, description: e.target.value })}
-                    placeholder="Describe the complaint in detail..."
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleAddComplaint} className="bg-blue-600 hover:bg-blue-700">
-                  Create Complaint
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
 
-        {/* Loading indicator */}
         {loading && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin mr-2" />
@@ -382,7 +156,6 @@ export default function OperatorComplaintsPage() {
           </div>
         )}
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -391,62 +164,44 @@ export default function OperatorComplaintsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-gray-900">{complaintStats.total}</div>
-              <div className="flex items-center space-x-2 mt-2">
-                <Badge className="bg-blue-100 text-blue-800 text-xs">{complaintStats.open} open</Badge>
-                <Badge className="bg-orange-100 text-orange-800 text-xs">{complaintStats.inProgress} in progress</Badge>
-              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Resolved Today</CardTitle>
-              <CheckCircle className="h-5 w-5 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{complaintStats.todayResolved}</div>
-              <div className="flex items-center mt-2">
-                <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-                <span className="text-sm text-green-600 font-medium">+25%</span>
-                <span className="text-sm text-gray-500 ml-1">vs yesterday</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Avg Resolution Time</CardTitle>
-              <Clock className="h-5 w-5 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{complaintStats.avgResolutionTime}</div>
-              <div className="flex items-center mt-2">
-                <TrendingDown className="h-4 w-4 text-green-600 mr-1" />
-                <span className="text-sm text-green-600 font-medium">-15%</span>
-                <span className="text-sm text-gray-500 ml-1">improvement</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Escalated</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">Open</CardTitle>
               <AlertTriangle className="h-5 w-5 text-red-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{complaintStats.escalated}</div>
-              <div className="flex items-center mt-2">
-                <Badge className="bg-red-100 text-red-800 text-xs">Needs attention</Badge>
-              </div>
+              <div className="text-3xl font-bold text-gray-900">{complaintStats.open}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">In Progress</CardTitle>
+              <Clock className="h-5 w-5 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-gray-900">{complaintStats.inProgress}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">Resolved</CardTitle>
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-gray-900">{complaintStats.resolved}</div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Filters and Search */}
         <Card>
           <CardHeader>
             <CardTitle>Complaints List ({filteredComplaints.length})</CardTitle>
-            <CardDescription>Manage and track all customer complaints</CardDescription>
+            <CardDescription>View all complaints related to your products and services</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -454,7 +209,7 @@ export default function OperatorComplaintsPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
-                    placeholder="Search complaints by ID, description, or type..."
+                    placeholder="Search complaints..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -470,7 +225,6 @@ export default function OperatorComplaintsPage() {
                   <SelectItem value="open">Open</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="escalated">Escalated</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={priorityFilter} onValueChange={setPriorityFilter}>
@@ -523,47 +277,29 @@ export default function OperatorComplaintsPage() {
                         <Badge className={getPriorityColor(complaint.priority)}>{complaint.priority}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={complaint.status}
-                          onValueChange={(value) => handleStatusUpdate(complaint.complaint_id, value)}
-                        >
-                          <SelectTrigger className="w-[130px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="open">Open</SelectItem>
-                            <SelectItem value="in_progress">In Progress</SelectItem>
-                            <SelectItem value="resolved">Resolved</SelectItem>
-                            <SelectItem value="escalated">Escalated</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Badge className={getStatusColor(complaint.status)}>{complaint.status.replace("_", " ")}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">{new Date(complaint.createdAt).toLocaleDateString()}</div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(complaint.createdAt).toLocaleTimeString()}
-                        </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedComplaint(complaint)
-                              setIsDetailsDialogOpen(true)
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedComplaint(complaint)
+                            setIsDetailsDialogOpen(true)
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
                   {filteredComplaints.length === 0 && !loading && (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                        No complaints found. {searchTerm && "Try adjusting your search terms."}
+                        No complaints found
                       </TableCell>
                     </TableRow>
                   )}
@@ -599,7 +335,6 @@ export default function OperatorComplaintsPage() {
           </CardContent>
         </Card>
 
-        {/* Complaint Details Dialog */}
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
@@ -610,18 +345,7 @@ export default function OperatorComplaintsPage() {
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Customer Information</h4>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="font-medium">Customer ID:</span> {selectedComplaint.customerId}
-                      </div>
-                      <div>
-                        <span className="font-medium">User ID:</span> {selectedComplaint.customerUserId}
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Complaint Details</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">Complaint Information</h4>
                     <div className="space-y-2 text-sm">
                       <div>
                         <span className="font-medium">Type:</span> {selectedComplaint.type.replace("_", " ")}
@@ -640,26 +364,6 @@ export default function OperatorComplaintsPage() {
                       </div>
                     </div>
                   </div>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Description</h4>
-                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedComplaint.description}</p>
-                </div>
-                {selectedComplaint.CustomerNotes && (
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Customer Notes</h4>
-                    <p className="text-sm text-gray-700 bg-blue-50 p-3 rounded-lg">{selectedComplaint.CustomerNotes}</p>
-                  </div>
-                )}
-                {selectedComplaint.technicianNotes && (
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Technician Notes</h4>
-                    <p className="text-sm text-gray-700 bg-green-50 p-3 rounded-lg">
-                      {selectedComplaint.technicianNotes}
-                    </p>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <h4 className="font-semibold text-gray-900 mb-2">Timeline</h4>
                     <div className="space-y-2 text-sm">
@@ -674,6 +378,18 @@ export default function OperatorComplaintsPage() {
                     </div>
                   </div>
                 </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Description</h4>
+                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedComplaint.description}</p>
+                </div>
+                {selectedComplaint.technicianNotes && (
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">Technician Notes</h4>
+                    <p className="text-sm text-gray-700 bg-green-50 p-3 rounded-lg">
+                      {selectedComplaint.technicianNotes}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </DialogContent>

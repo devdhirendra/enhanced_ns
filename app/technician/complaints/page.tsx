@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { technicianApi } from "@/lib/api"
+import { complaintApi } from "@/lib/complaint-api"
 import {
   Search,
   AlertTriangle,
@@ -29,60 +29,46 @@ import {
   CheckCircle,
   Play,
   MessageSquare,
-  Camera,
   FileText,
   Navigation,
-  MoreVertical,
   Calendar,
   Wifi,
   WifiOff,
   Router,
   Save,
+  RefreshCw,
 } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
-interface technicaiancomplaint {
-  id: string
-  ticketNumber: string
-  customer: {
-    name: string
-    phone: string
-    address: string
-    email: string
-    customerId: string
-  }
-  issue: {
-    type: string
-    category: string
-    description: string
-    severity: string
-    reportedTime: string
-  }
-  status: string
+interface TechnicianComplaint {
+  complaint_id: string
+  description: string
+  type: string
   priority: string
-  assignedDate: string
-  dueDate: string
-  estimatedResolution: string
-  location: { lat: number; lng: number }
-  previousComplaints: number
-  customerNotes: string
-  technicianNotes: string
-  resolution?: string
-  startTime?: string
-  resolvedTime?: string
+  status: string
+  createdAt: string
+  updatedAt: string
+  customerName?: string
+  customerPhone?: string
+  Area?: string
+  technicianNotes?: string
+  CustomerNotes?: string
 }
 
-export default function ComplaintsPage() {
+export default function TechnicianComplaintsPage() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const [complaints, setComplaints] = useState<technicaiancomplaint[]>([])
+  const [complaints, setComplaints] = useState<TechnicianComplaint[]>([])
+  const [filteredComplaints, setFilteredComplaints] = useState<TechnicianComplaint[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [priorityFilter, setPriorityFilter] = useState("all")
-  const [selectedComplaint, setSelectedComplaint] = useState("none")
+  const [sortBy, setSortBy] = useState("created")
+  const [selectedComplaint, setSelectedComplaint] = useState<TechnicianComplaint | null>(null)
   const [technicianNotes, setTechnicianNotes] = useState("")
   const [resolution, setResolution] = useState("")
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 5
 
   useEffect(() => {
     if (user?.user_id) {
@@ -97,48 +83,17 @@ export default function ComplaintsPage() {
       setLoading(true)
       console.log("[v0] Fetching technician complaints...")
 
-      const technicianId = user.profileDetail?.technicianId || user.user_id
-      const assignedComplaints = await technicianApi.getAssignedComplaints(technicianId)
-
+      const assignedComplaints = await complaintApi.getTechnicianComplaints(user.user_id)
       console.log("[v0] Fetched complaints:", assignedComplaints)
 
-      // Transform API data to component format with normalized priority
-      const transformedComplaints = Array.isArray(assignedComplaints)
-        ? assignedComplaints.map((complaint) => ({
-            id: complaint.complaint_id || complaint.id,
-            ticketNumber: complaint.complaint_id || `TKT-${Date.now()}`,
-            customer: {
-              name: complaint.customerName || "Unknown Customer",
-              phone: complaint.customerPhone || "N/A",
-              address: complaint.Area || complaint.customerAddress || "Unknown Location",
-              email: complaint.customerEmail || "N/A",
-              customerId: complaint.customerId || "N/A",
-            },
-            issue: {
-              type: complaint.type || "connectivity",
-              category:
-                complaint.type === "repair"
-                  ? "Equipment Fault"
-                  : complaint.type === "installation"
-                    ? "New Installation"
-                    : complaint.category || "Connectivity Issue",
-              description: complaint.description || "No description provided",
-              severity: complaint.priority ? complaint.priority.toLowerCase() : "medium",
-              reportedTime: complaint.createdAt || new Date().toISOString(),
-            },
-            status: complaint.status || "assigned",
-            priority: complaint.priority ? complaint.priority.toLowerCase() : "medium", // Normalize priority to lowercase
-            assignedDate: complaint.createdAt || new Date().toISOString(),
-            dueDate: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), // 4 hours from now
-            estimatedResolution: "2 hours",
-            location: { lat: 30.7333, lng: 76.7794 },
-            previousComplaints: 0,
-            customerNotes: complaint.CustomerNotes || complaint.customerNotes || "",
-            technicianNotes: complaint.technicianNotes || "",
-          }))
-        : []
+      const complaintsArray = Array.isArray(assignedComplaints?.data)
+        ? assignedComplaints.data
+        : Array.isArray(assignedComplaints)
+          ? assignedComplaints
+          : []
 
-      setComplaints(transformedComplaints)
+      setComplaints(complaintsArray)
+      setFilteredComplaints(complaintsArray)
       console.log("[v0] Complaints loaded successfully")
     } catch (error) {
       console.error("[v0] Error fetching complaints:", error)
@@ -148,24 +103,43 @@ export default function ComplaintsPage() {
         variant: "destructive",
       })
       setComplaints([])
+      setFilteredComplaints([])
     } finally {
       setLoading(false)
     }
   }
 
-  const filteredComplaints = complaints.filter((complaint) => {
-    const matchesSearch =
-      complaint.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      complaint.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      complaint.issue.description.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    const filtered = complaints.filter((complaint: TechnicianComplaint) => {
+      const matchesSearch =
+        complaint.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        complaint.complaint_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        complaint.description.toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesStatus = statusFilter === "all" || complaint.status === statusFilter
-    
-    // Fixed: Case-insensitive priority filtering
-    const matchesPriority = priorityFilter === "all" || complaint.priority.toLowerCase() === priorityFilter.toLowerCase()
+      const matchesStatus = statusFilter === "all" || complaint.status === statusFilter
+      const matchesPriority =
+        priorityFilter === "all" || complaint.priority.toLowerCase() === priorityFilter.toLowerCase()
 
-    return matchesSearch && matchesStatus && matchesPriority
-  })
+      return matchesSearch && matchesStatus && matchesPriority
+    })
+
+    filtered.sort((a: TechnicianComplaint, b: TechnicianComplaint) => {
+      switch (sortBy) {
+        case "created":
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        case "updated":
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        case "priority":
+          const priorityOrder: Record<string, number> = { high: 3, medium: 2, low: 1 }
+          return (priorityOrder[b.priority.toLowerCase()] || 0) - (priorityOrder[a.priority.toLowerCase()] || 0)
+        default:
+          return 0
+      }
+    })
+
+    setFilteredComplaints(filtered)
+    setCurrentPage(1)
+  }, [complaints, searchTerm, statusFilter, priorityFilter, sortBy])
 
   const getPriorityColor = (priority: string) => {
     const normalizedPriority = priority.toLowerCase()
@@ -186,6 +160,7 @@ export default function ComplaintsPage() {
       case "resolved":
         return "bg-green-100 text-green-800"
       case "in_progress":
+      case "in-progress":
         return "bg-blue-100 text-blue-800"
       case "assigned":
         return "bg-orange-100 text-orange-800"
@@ -213,16 +188,11 @@ export default function ComplaintsPage() {
     try {
       console.log("[v0] Starting work on complaint:", complaintId)
 
-      await technicianApi.updateComplaint(complaintId, {
-        status: "in-progress",
-        technicianNotes: "Work started by technician",
-      })
+      await complaintApi.updateStatus(complaintId, { status: "in-progress" })
 
       setComplaints(
-        complaints.map((complaint) =>
-          complaint.id === complaintId
-            ? { ...complaint, status: "in_progress", startTime: new Date().toISOString() }
-            : complaint,
+        complaints.map((complaint: TechnicianComplaint) =>
+          complaint.complaint_id === complaintId ? { ...complaint, status: "in-progress" } : complaint,
         ),
       )
 
@@ -244,19 +214,15 @@ export default function ComplaintsPage() {
     try {
       console.log("[v0] Resolving complaint:", complaintId)
 
-      await technicianApi.updateComplaint(complaintId, {
-        status: "resolved",
-        technicianNotes: resolution || "Issue resolved successfully",
-      })
+      await complaintApi.updateStatus(complaintId, { status: "resolved" })
 
       setComplaints(
-        complaints.map((complaint) =>
-          complaint.id === complaintId
+        complaints.map((complaint: TechnicianComplaint) =>
+          complaint.complaint_id === complaintId
             ? {
                 ...complaint,
                 status: "resolved",
-                resolvedTime: new Date().toISOString(),
-                resolution: resolution || "Issue resolved successfully",
+                technicianNotes: resolution || complaint.technicianNotes,
               }
             : complaint,
         ),
@@ -278,49 +244,29 @@ export default function ComplaintsPage() {
     }
   }
 
-  const handleUpdateNotes = async (complaintId: string, notes: string) => {
-    try {
-      console.log("[v0] Updating complaint notes:", complaintId)
-
-      await technicianApi.updateComplaint(complaintId, {
-        technicianNotes: notes,
-      })
-
-      setComplaints(
-        complaints.map((complaint) =>
-          complaint.id === complaintId ? { ...complaint, technicianNotes: notes } : complaint,
-        ),
-      )
-
-      toast({
-        title: "Notes Updated",
-        description: "Technician notes have been saved.",
-      })
-    } catch (error) {
-      console.error("[v0] Error updating notes:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update notes. Please try again.",
-        variant: "destructive",
-      })
+  const handleViewOnMap = (location: string) => {
+    if (location) {
+      const url = `https://www.google.com/maps?q=${encodeURIComponent(location)}`
+      window.open(url, "_blank")
     }
   }
 
-  const handleViewOnMap = (location: any) => {
-    const url = `https://www.google.com/maps?q=${location.lat},${location.lng}`
-    window.open(url, "_blank")
-  }
-
   const handleCallCustomer = (phone: string) => {
-    window.open(`tel:${phone}`)
+    if (phone) {
+      window.open(`tel:${phone}`)
+    }
   }
 
   const complaintStats = {
     total: complaints.length,
-    assigned: complaints.filter((c) => c.status === "assigned").length,
-    inProgress: complaints.filter((c) => c.status === "in_progress").length,
-    resolved: complaints.filter((c) => c.status === "resolved").length,
+    assigned: complaints.filter((c: TechnicianComplaint) => c.status === "assigned").length,
+    inProgress: complaints.filter((c: TechnicianComplaint) => c.status === "in_progress" || c.status === "in-progress")
+      .length,
+    resolved: complaints.filter((c: TechnicianComplaint) => c.status === "resolved").length,
   }
+
+  const paginatedComplaints = filteredComplaints.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+  const totalPages = Math.ceil(filteredComplaints.length / itemsPerPage)
 
   if (loading) {
     return (
@@ -331,7 +277,7 @@ export default function ComplaintsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
         <div>
@@ -339,7 +285,7 @@ export default function ComplaintsPage() {
           <p className="text-gray-500">Manage and resolve customer issues efficiently</p>
         </div>
         <Button onClick={fetchComplaints} variant="outline">
-          <AlertTriangle className="h-4 w-4 mr-2" />
+          <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
       </div>
@@ -409,7 +355,7 @@ export default function ComplaintsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="assigned">Assigned</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="in-progress">In Progress</SelectItem>
                   <SelectItem value="resolved">Resolved</SelectItem>
                 </SelectContent>
               </Select>
@@ -422,6 +368,16 @@ export default function ComplaintsPage() {
                   <SelectItem value="high">High</SelectItem>
                   <SelectItem value="medium">Medium</SelectItem>
                   <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-full md:w-32">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created">Created Date</SelectItem>
+                  <SelectItem value="updated">Updated Date</SelectItem>
+                  <SelectItem value="priority">Priority</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -437,170 +393,169 @@ export default function ComplaintsPage() {
               </p>
             </div>
           ) : (
-            filteredComplaints.map((complaint) => (
-              <div
-                key={complaint.id}
-                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-300 bg-gradient-to-r from-white to-gray-50"
-              >
-                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
-                  <div className="flex-1">
-                    <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-3 mb-3">
-                      <div className="flex items-center space-x-2">
-                        {getSeverityIcon(complaint.issue.type)}
-                        <h3 className="font-medium text-gray-900">{complaint.issue.category}</h3>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge className={getPriorityColor(complaint.priority)}>
-                          {complaint.priority.charAt(0).toUpperCase() + complaint.priority.slice(1)}
-                        </Badge>
-                        <Badge variant="outline">{complaint.ticketNumber}</Badge>
-                        {complaint.previousComplaints > 0 && (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-800">
-                            Repeat Customer ({complaint.previousComplaints})
+            <>
+              {paginatedComplaints.map((complaint: TechnicianComplaint) => (
+                <div
+                  key={complaint.complaint_id}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-300 bg-gradient-to-r from-white to-gray-50"
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between space-y-4 lg:space-y-0">
+                    <div className="flex-1">
+                      <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-3 mb-3">
+                        <div className="flex items-center space-x-2">
+                          {getSeverityIcon(complaint.type)}
+                          <h3 className="font-medium text-gray-900">{complaint.type}</h3>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Badge className={getPriorityColor(complaint.priority)}>
+                            {complaint.priority.charAt(0).toUpperCase() + complaint.priority.slice(1)}
                           </Badge>
-                        )}
+                          <Badge variant="outline">{complaint.complaint_id}</Badge>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="space-y-2 text-sm text-gray-600">
-                      <div className="flex flex-col md:flex-row md:items-center space-y-1 md:space-y-0 md:space-x-4">
-                        <div className="flex items-center space-x-2">
-                          <User className="h-4 w-4" />
-                          <span>{complaint.customer.name}</span>
+                      <div className="space-y-2 text-sm text-gray-600">
+                        <div className="flex flex-col md:flex-row md:items-center space-y-1 md:space-y-0 md:space-x-4">
+                          <div className="flex items-center space-x-2">
+                            <User className="h-4 w-4" />
+                            <span>{complaint.customerName || "Unknown"}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Phone className="h-4 w-4" />
+                            <span>{complaint.customerPhone || "N/A"}</span>
+                          </div>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Phone className="h-4 w-4" />
-                          <span>{complaint.customer.phone}</span>
+                          <MapPin className="h-4 w-4" />
+                          <span>{complaint.Area || "Unknown Location"}</span>
                         </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <MapPin className="h-4 w-4" />
-                        <span>{complaint.customer.address}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <MessageSquare className="h-4 w-4" />
-                        <span>{complaint.issue.description}</span>
-                      </div>
-                      <div className="flex flex-col md:flex-row md:items-center space-y-1 md:space-y-0 md:space-x-4">
+                        <div className="flex items-center space-x-2">
+                          <MessageSquare className="h-4 w-4" />
+                          <span>{complaint.description}</span>
+                        </div>
                         <div className="flex items-center space-x-1">
                           <Calendar className="h-4 w-4" />
-                          <span>Reported: {new Date(complaint.issue.reportedTime).toLocaleString()}</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Clock className="h-4 w-4" />
-                          <span>Est. Resolution: {complaint.estimatedResolution}</span>
+                          <span>Reported: {new Date(complaint.createdAt).toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col space-y-2 lg:ml-4">
-                    <Badge className={getStatusColor(complaint.status)}>
-                      {complaint.status.replace("_", " ").toUpperCase()}
-                    </Badge>
+                    <div className="flex flex-col space-y-2 lg:ml-4">
+                      <Badge className={getStatusColor(complaint.status)}>
+                        {complaint.status.replace("_", " ").toUpperCase()}
+                      </Badge>
 
-                    <div className="flex flex-wrap gap-2">
-                      {complaint.status === "assigned" && (
+                      <div className="flex flex-wrap gap-2">
+                        {complaint.status === "assigned" && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleStartWork(complaint.complaint_id)}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            <Play className="h-4 w-4 mr-1" />
+                            Start Work
+                          </Button>
+                        )}
+
+                        {(complaint.status === "in_progress" || complaint.status === "in-progress") && (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                Resolve
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Resolve Complaint</DialogTitle>
+                                <DialogDescription>
+                                  Provide resolution details for {complaint.complaint_id}
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <Label htmlFor="resolution">Resolution Details</Label>
+                                  <Textarea
+                                    id="resolution"
+                                    value={resolution}
+                                    onChange={(e) => setResolution(e.target.value)}
+                                    placeholder="Describe how the issue was resolved..."
+                                    rows={4}
+                                  />
+                                </div>
+                                <Button
+                                  onClick={() => handleResolveComplaint(complaint.complaint_id)}
+                                  className="w-full"
+                                >
+                                  <Save className="h-4 w-4 mr-2" />
+                                  Mark as Resolved
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        )}
+
+                        <Button size="sm" variant="outline" onClick={() => handleViewOnMap(complaint.Area || "")}>
+                          <Navigation className="h-4 w-4 mr-1" />
+                          Map
+                        </Button>
+
                         <Button
                           size="sm"
-                          onClick={() => handleStartWork(complaint.id)}
-                          className="bg-blue-600 hover:bg-blue-700"
+                          variant="outline"
+                          onClick={() => handleCallCustomer(complaint.customerPhone || "")}
                         >
-                          <Play className="h-4 w-4 mr-1" />
-                          Start Work
+                          <Phone className="h-4 w-4 mr-1" />
+                          Call
                         </Button>
-                      )}
 
-                      {complaint.status === "in_progress" && (
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Resolve
+                            <Button size="sm" variant="outline">
+                              <FileText className="h-4 w-4 mr-1" />
+                              Details
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="max-w-2xl">
                             <DialogHeader>
-                              <DialogTitle>Resolve Complaint</DialogTitle>
-                              <DialogDescription>
-                                Provide resolution details for {complaint.ticketNumber}
-                              </DialogDescription>
+                              <DialogTitle>{complaint.complaint_id} - Details</DialogTitle>
+                              <DialogDescription>Complete complaint information</DialogDescription>
                             </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <Label htmlFor="resolution">Resolution Details</Label>
-                                <Textarea
-                                  id="resolution"
-                                  value={resolution}
-                                  onChange={(e) => setResolution(e.target.value)}
-                                  placeholder="Describe how the issue was resolved..."
-                                  rows={4}
-                                />
-                              </div>
-                              <Button onClick={() => handleResolveComplaint(complaint.id)} className="w-full">
-                                <Save className="h-4 w-4 mr-2" />
-                                Mark as Resolved
-                              </Button>
-                            </div>
+                            <ComplaintDetailsModal complaint={complaint} />
                           </DialogContent>
                         </Dialog>
-                      )}
-
-                      <Button size="sm" variant="outline" onClick={() => handleViewOnMap(complaint.location)}>
-                        <Navigation className="h-4 w-4 mr-1" />
-                        Map
-                      </Button>
-
-                      <Button size="sm" variant="outline" onClick={() => handleCallCustomer(complaint.customer.phone)}>
-                        <Phone className="h-4 w-4 mr-1" />
-                        Call
-                      </Button>
-
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="outline">
-                            <FileText className="h-4 w-4 mr-1" />
-                            Details
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>{complaint.ticketNumber} - Details</DialogTitle>
-                            <DialogDescription>Complete complaint information and history</DialogDescription>
-                          </DialogHeader>
-                          <ComplaintDetailsModal
-                            complaint={complaint}
-                            onUpdateNotes={(notes) => handleUpdateNotes(complaint.id, notes)}
-                          />
-                        </DialogContent>
-                      </Dialog>
-
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="sm" variant="outline">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Camera className="mr-2 h-4 w-4" />
-                            Upload Photo
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <AlertTriangle className="mr-2 h-4 w-4" />
-                            Escalate
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <MessageSquare className="mr-2 h-4 w-4" />
-                            Add Notes
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              ))}
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -608,15 +563,11 @@ export default function ComplaintsPage() {
   )
 }
 
-function ComplaintDetailsModal({
-  complaint,
-  onUpdateNotes,
-}: { complaint: any; onUpdateNotes: (notes: string) => void }) {
+function ComplaintDetailsModal({ complaint }: { complaint: TechnicianComplaint }) {
   const [notes, setNotes] = useState(complaint.technicianNotes || "")
   const [hasChanges, setHasChanges] = useState(false)
 
   const handleSaveNotes = () => {
-    onUpdateNotes(notes)
     setHasChanges(false)
   }
 
@@ -628,15 +579,15 @@ function ComplaintDetailsModal({
           <div className="mt-2 space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-gray-500" />
-              <span>{complaint.customer.name}</span>
+              <span>{complaint.customerName || "Unknown"}</span>
             </div>
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-gray-500" />
-              <span>{complaint.customer.phone}</span>
+              <span>{complaint.customerPhone || "N/A"}</span>
             </div>
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-gray-500" />
-              <span>{complaint.customer.address}</span>
+              <span>{complaint.Area || "Unknown Location"}</span>
             </div>
           </div>
         </div>
@@ -645,18 +596,16 @@ function ComplaintDetailsModal({
           <Label className="text-sm font-medium">Complaint Information</Label>
           <div className="mt-2 space-y-2 text-sm">
             <div className="flex justify-between">
+              <span className="text-gray-600">Type:</span>
+              <span>{complaint.type}</span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-gray-600">Priority:</span>
-              <Badge className={getPriorityColor(complaint.priority)}>
-                {complaint.priority.charAt(0).toUpperCase() + complaint.priority.slice(1)}
-              </Badge>
+              <span className="capitalize">{complaint.priority}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Category:</span>
-              <span>{complaint.issue.category}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Severity:</span>
-              <span className="capitalize">{complaint.issue.severity}</span>
+              <span className="text-gray-600">Status:</span>
+              <span className="capitalize">{complaint.status}</span>
             </div>
           </div>
         </div>
@@ -664,13 +613,13 @@ function ComplaintDetailsModal({
 
       <div>
         <Label className="text-sm font-medium">Issue Description</Label>
-        <p className="mt-2 text-sm text-gray-600">{complaint.issue.description}</p>
+        <p className="mt-2 text-sm text-gray-600">{complaint.description}</p>
       </div>
 
-      {complaint.customerNotes && (
+      {complaint.CustomerNotes && (
         <div>
           <Label className="text-sm font-medium">Customer Notes</Label>
-          <p className="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">{complaint.customerNotes}</p>
+          <p className="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">{complaint.CustomerNotes}</p>
         </div>
       )}
 
@@ -696,27 +645,6 @@ function ComplaintDetailsModal({
           </Button>
         )}
       </div>
-
-      {complaint.resolution && (
-        <div>
-          <Label className="text-sm font-medium">Resolution</Label>
-          <p className="mt-2 text-sm text-gray-600 bg-green-50 p-3 rounded-lg">{complaint.resolution}</p>
-        </div>
-      )}
     </div>
   )
-}
-
-function getPriorityColor(priority: string) {
-  const normalizedPriority = priority.toLowerCase()
-  switch (normalizedPriority) {
-    case "high":
-      return "bg-red-100 text-red-800 border-red-200"
-    case "medium":
-      return "bg-yellow-100 text-yellow-800 border-yellow-200"
-    case "low":
-      return "bg-green-100 text-green-800 border-green-200"
-    default:
-      return "bg-gray-100 text-gray-800 border-gray-200"
-  }
 }

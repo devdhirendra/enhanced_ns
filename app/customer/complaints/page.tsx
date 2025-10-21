@@ -12,17 +12,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { complaintApi, customerApi } from "@/lib/api"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { complaintApi } from "@/lib/complaint-api"
 import {
   Headphones,
   Plus,
-  MessageSquare,
   Clock,
   CheckCircle,
   AlertTriangle,
@@ -30,26 +24,30 @@ import {
   Mail,
   Search,
   Eye,
-  Star,
-  ThumbsUp,
-  ThumbsDown,
   X,
-  User,
   Calendar,
   MoreVertical,
   XCircle,
-  AlertCircle,
   Loader2,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+
+interface CustomerComplaint {
+  complaint_id: string
+  description: string
+  type: string
+  priority: string
+  status: string
+  createdAt: string
+  updatedAt: string
+  customerName?: string
+  customerPhone?: string
+  Area?: string
+  technicianNotes?: string
+  CustomerNotes?: string
+}
 
 export default function CustomerComplaintsPage() {
   const { user } = useAuth()
@@ -61,47 +59,64 @@ export default function CustomerComplaintsPage() {
     title: "",
     description: "",
     priority: "medium" as "low" | "medium" | "high",
-    technicianId: "",
     category: "General",
   })
-  const [complaints, setComplaints] = useState<any[]>([])
-  const [filteredComplaints, setFilteredComplaints] = useState<any[]>([])
-  const [selectedComplaint, setSelectedComplaint] = useState<any>(null)
+  const [complaints, setComplaints] = useState<CustomerComplaint[]>([])
+  const [filteredComplaints, setFilteredComplaints] = useState<CustomerComplaint[]>([])
+  const [selectedComplaint, setSelectedComplaint] = useState<CustomerComplaint | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [customerId, setCustomerId] = useState("")
   const [isTableLoading, setIsTableLoading] = useState(true)
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [sortBy, setSortBy] = useState("created")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const itemsPerPage = 5
 
   // Helper function to map priority to numbers
   const getPriorityNumber = (priority: string): number => {
     switch (priority?.toLowerCase()) {
-      case "low": return 1
-      case "medium": return 3  
-      case "high": return 5
-      default: return 0
+      case "low":
+        return 1
+      case "medium":
+        return 3
+      case "high":
+        return 5
+      default:
+        return 0
     }
   }
 
   // Filter complaints function
-  const filterComplaints = (complaints: any[], searchTerm: string, priorityRange: number[]) => {
-    return complaints.filter(complaint => {
-      // Priority range filter
-      const priorityNum = getPriorityNumber(complaint.priority)
-      const isPriorityInRange = priorityNum >= priorityRange[0] && priorityNum <= priorityRange[1]
-      
-      // Search term filter (searches across multiple fields)
-      const searchLower = searchTerm.toLowerCase().trim()
-      const matchesSearch = !searchLower || 
-        complaint.description?.toLowerCase().includes(searchLower) ||
-        complaint.type?.toLowerCase().includes(searchLower) ||
-        complaint.complaint_id?.toLowerCase().includes(searchLower) ||
-        complaint.customerName?.toLowerCase().includes(searchLower) ||
-        complaint.technicianNotes?.toLowerCase().includes(searchLower) ||
-        complaint.CustomerNotes?.toLowerCase().includes(searchLower)
-      
-      return isPriorityInRange && matchesSearch
-    })
+  const filterComplaints = (complaints: CustomerComplaint[], searchTerm: string, priorityRange: number[], statusFilter: string) => {
+    return complaints
+      .filter((complaint) => {
+        const priorityNum = getPriorityNumber(complaint.priority)
+        const isPriorityInRange = priorityNum >= priorityRange[0] && priorityNum <= priorityRange[1]
+
+        const searchLower = searchTerm.toLowerCase().trim()
+        const matchesSearch =
+          !searchLower ||
+          complaint.description?.toLowerCase().includes(searchLower) ||
+          complaint.type?.toLowerCase().includes(searchLower) ||
+          complaint.complaint_id?.toLowerCase().includes(searchLower)
+
+        const matchesStatus = statusFilter === "all" || complaint.status === statusFilter
+
+        return isPriorityInRange && matchesSearch && matchesStatus
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case "created":
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          case "updated":
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          case "priority":
+            return getPriorityNumber(b.priority) - getPriorityNumber(a.priority)
+          default:
+            return 0
+        }
+      })
   }
 
   // Fetch data on component mount
@@ -110,25 +125,30 @@ export default function CustomerComplaintsPage() {
       setIsTableLoading(true)
       try {
         if (user?.user_id) {
-          console.log("User ID:", user.user_id)
+          console.log("[v0] Fetching complaints for user:", user.user_id)
 
-          const res = await customerApi.getProfile(user.user_id)
-          console.log("profiledetails", res.profileDetail)
-          setCustomerId(user.user_id)
+          const complaintsRes = await complaintApi.getUserComplaints(user.user_id)
+          console.log("[v0] Complaints fetched:", complaintsRes)
 
-          const complaintsRes = await complaintApi.getById(res.profileDetail.customerId)
-          console.log("Complaints:", complaintsRes)
-
-          setComplaints(complaintsRes)
-          setFilteredComplaints(complaintsRes) // Initialize filtered complaints
+          const complaintsArray = Array.isArray(complaintsRes?.data)
+            ? complaintsRes.data
+            : Array.isArray(complaintsRes)
+              ? complaintsRes
+              : []
+          
+          // Cast to CustomerComplaint array to fix TypeScript errors
+          setComplaints(complaintsArray as CustomerComplaint[])
+          setFilteredComplaints(complaintsArray as CustomerComplaint[])
         }
       } catch (err) {
-        console.error("Error fetching data:", err)
+        console.error("[v0] Error fetching data:", err)
         toast({
           title: "Error",
           description: "Failed to load complaints data",
           variant: "destructive",
         })
+        setComplaints([])
+        setFilteredComplaints([])
       } finally {
         setIsTableLoading(false)
       }
@@ -139,19 +159,10 @@ export default function CustomerComplaintsPage() {
 
   // Update filtered complaints when filters change
   useEffect(() => {
-    const filtered = filterComplaints(complaints, searchTerm, priorityRange)
+    const filtered = filterComplaints(complaints, searchTerm, priorityRange, statusFilter)
     setFilteredComplaints(filtered)
-  }, [complaints, searchTerm, priorityRange])
-
-  // Optional: Real-time search with debounce
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const filtered = filterComplaints(complaints, searchTerm, priorityRange)
-      setFilteredComplaints(filtered)
-    }, 300) // 300ms debounce
-
-    return () => clearTimeout(timeoutId)
-  }, [searchTerm, priorityRange, complaints])
+    setCurrentPage(1)
+  }, [complaints, searchTerm, priorityRange, statusFilter, sortBy])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -216,10 +227,9 @@ export default function CustomerComplaintsPage() {
         description: newComplaint.description,
         priority: newComplaint.priority,
         category: newComplaint.category,
-        technicianId: null,
       }
 
-      const response = await complaintApi.rise(customerId, complaintData)
+      const response = await complaintApi.createComplaint(user?.user_id || "", complaintData)
 
       if (response.success || response.message?.toLowerCase().includes("success")) {
         toast({
@@ -228,24 +238,26 @@ export default function CustomerComplaintsPage() {
         })
 
         // Refresh complaints list
-        const complaintsRes = await complaintApi.getById(customerId)
-        setComplaints(complaintsRes)
-        setFilteredComplaints(complaintsRes)
+        const complaintsRes = await complaintApi.getUserComplaints(user?.user_id || "")
+        const complaintsArray = Array.isArray(complaintsRes?.data)
+          ? complaintsRes.data
+          : Array.isArray(complaintsRes)
+            ? complaintsRes
+            : []
+        setComplaints(complaintsArray as CustomerComplaint[])
+        setFilteredComplaints(complaintsArray as CustomerComplaint[])
 
-        // Reset form
         setNewComplaint({
           title: "",
           priority: "medium",
           description: "",
-          technicianId: "",
           category: "",
         })
       } else {
         throw new Error(response.message || "Failed to submit complaint")
       }
-
     } catch (error: any) {
-      console.error("Error submitting complaint:", error)
+      console.error("[v0] Error submitting complaint:", error)
       toast({
         title: "Submission Failed",
         description: error.message || "There was an error submitting your complaint. Please try again.",
@@ -258,11 +270,9 @@ export default function CustomerComplaintsPage() {
 
   const handleStatusChange = async (complaintId: string, newStatus: string) => {
     setChangingStatusId(complaintId)
-    
+
     try {
-      const response = await complaintApi.changestatus(complaintId, {
-        status: newStatus
-      })
+      const response = await complaintApi.updateStatus(complaintId, { status: newStatus })
 
       if (response.success || response.message?.toLowerCase().includes("success")) {
         toast({
@@ -270,20 +280,16 @@ export default function CustomerComplaintsPage() {
           description: `Complaint has been marked as ${newStatus}.`,
         })
 
-        // Update the complaint in the local state
-        const updatedComplaints = complaints.map(complaint => 
-          complaint.complaint_id === complaintId 
-            ? { ...complaint, status: newStatus }
-            : complaint
+        const updatedComplaints = complaints.map((complaint) =>
+          complaint.complaint_id === complaintId ? { ...complaint, status: newStatus } : complaint,
         )
         setComplaints(updatedComplaints)
-        setFilteredComplaints(filterComplaints(updatedComplaints, searchTerm, priorityRange))
-
+        setFilteredComplaints(filterComplaints(updatedComplaints, searchTerm, priorityRange, statusFilter))
       } else {
         throw new Error(response.message || "Failed to update status")
       }
     } catch (error: any) {
-      console.error("Error changing status:", error)
+      console.error("[v0] Error changing status:", error)
       toast({
         title: "Status Change Failed",
         description: error.message || "There was an error updating the complaint status.",
@@ -294,76 +300,63 @@ export default function CustomerComplaintsPage() {
     }
   }
 
-  const handleRating = (complaintId: string, rating: number) => {
-    toast({
-      title: "Rating Submitted",
-      description: "Thank you for your feedback. It helps us improve our service.",
-    })
-  }
-
-  const handleViewComplaint = (complaint: any) => {
+  const handleViewComplaint = (complaint: CustomerComplaint) => {
     setSelectedComplaint(complaint)
     setIsDialogOpen(true)
   }
 
   const handleSearch = () => {
-    const filtered = filterComplaints(complaints, searchTerm, priorityRange)
-    setFilteredComplaints(filtered)
-    
     toast({
       title: "Search Applied",
-      description: `Found ${filtered.length} complaint${filtered.length === 1 ? '' : 's'} matching your criteria.`,
+      description: `Found ${filteredComplaints.length} complaint${filteredComplaints.length === 1 ? "" : "s"} matching your criteria.`,
     })
   }
 
   const handleClearFilters = () => {
     setSearchTerm("")
     setPriorityRange([1, 5])
+    setStatusFilter("all")
+    setSortBy("created")
     setFilteredComplaints(complaints)
-    
+
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset.",
     })
   }
 
-  const StatusActionButton = ({ complaint }: { complaint: any }) => {
+  const paginatedComplaints = filteredComplaints.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+  const totalPages = Math.ceil(filteredComplaints.length / itemsPerPage)
+
+  const StatusActionButton = ({ complaint }: { complaint: CustomerComplaint }) => {
     const isChanging = changingStatusId === complaint.complaint_id
-    
+
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button 
-            size="sm" 
-            variant="outline"
-            disabled={isChanging}
-          >
-            {isChanging ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <MoreVertical className="h-3 w-3" />
-            )}
+          <Button size="sm" variant="outline" disabled={isChanging}>
+            {isChanging ? <Loader2 className="h-3 w-3 animate-spin" /> : <MoreVertical className="h-3 w-3" />}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={() => handleStatusChange(complaint.complaint_id, "cancelled")}
             className="flex items-center"
           >
             <XCircle className="h-4 w-4 mr-2 text-red-500" />
             Cancel Ticket
           </DropdownMenuItem>
-          <DropdownMenuItem 
-            onClick={() => handleStatusChange(complaint.complaint_id, "by mistake")}
-            className="flex items-center"
-          >
-            <AlertCircle className="h-4 w-4 mr-2 text-orange-500" />
-            Mark by Mistake
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     )
   }
+
+  // Fix for the analytics section - properly type the count
+  const categoryCounts = complaints.reduce((acc, complaint) => {
+    const type = complaint.type || "Other"
+    acc[type] = (acc[type] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
 
   return (
     <DashboardLayout title="My Complaints" description="Submit and track your service complaints">
@@ -381,10 +374,10 @@ export default function CustomerComplaintsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Filter Complaints</CardTitle>
-                <CardDescription>Filter your complaints by priority and search terms</CardDescription>
+                <CardDescription>Filter your complaints by priority, status, and search terms</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
                     <Label>
                       Priority Range: {priorityRange[0]} - {priorityRange[1]}
@@ -402,32 +395,60 @@ export default function CustomerComplaintsPage() {
                       <span>High (5)</span>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Search complaints..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full"
-                      />
-                    </div>
-                    <Button variant="outline" onClick={handleSearch}>
-                      <Search className="h-4 w-4 mr-2" />
-                      Search
-                    </Button>
-                    <Button variant="outline" onClick={handleClearFilters}>
-                      <X className="h-4 w-4 mr-2" />
-                      Clear
-                    </Button>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="resolved">Resolved</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Sort By</Label>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="created">Created Date</SelectItem>
+                        <SelectItem value="updated">Updated Date</SelectItem>
+                        <SelectItem value="priority">Priority</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                
-                {/* Filter Results Summary */}
+
+                <div className="flex items-center space-x-4">
+                  <div className="flex-1">
+                    <Input
+                      placeholder="Search complaints..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  <Button variant="outline" onClick={handleSearch}>
+                    <Search className="h-4 w-4 mr-2" />
+                    Search
+                  </Button>
+                  <Button variant="outline" onClick={handleClearFilters}>
+                    <X className="h-4 w-4 mr-2" />
+                    Clear
+                  </Button>
+                </div>
+
                 <div className="flex items-center justify-between pt-4 border-t">
                   <span className="text-sm text-gray-600">
-                    Showing {filteredComplaints.filter((c) => c.status === "in-progress" || c.status === "open").length} of {complaints.filter((c) => c.status === "in-progress" || c.status === "open").length} active complaints
+                    Showing {paginatedComplaints.length} of {filteredComplaints.length} complaints
                   </span>
-                  {(searchTerm || priorityRange[0] !== 1 || priorityRange[1] !== 5) && (
+                  {(searchTerm || priorityRange[0] !== 1 || priorityRange[1] !== 5 || statusFilter !== "all") && (
                     <Badge variant="secondary">Filters Applied</Badge>
                   )}
                 </div>
@@ -447,77 +468,101 @@ export default function CustomerComplaintsPage() {
                     <span className="text-sm text-gray-500">Loading complaints...</span>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Complaint</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Priority</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Last Update</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredComplaints
-                        .filter((c) => c.status === "in-progress" || c.status === "open")
-                        .map((complaint) => (
-                          <TableRow key={complaint.complaint_id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium text-gray-900">{complaint.description}</div>
-                                <div className="text-sm text-gray-500">{complaint.complaint_id}</div>
-                                <div className="text-xs text-gray-400">Created: {formatDate(complaint.createdAt)}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{complaint.type}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={getPriorityColor(complaint.priority)}>
-                                {complaint.priority.charAt(0).toUpperCase() + complaint.priority.slice(1)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-2">
-                                {getStatusIcon(complaint.status)}
-                                <Badge className={getStatusColor(complaint.status)}>
-                                  {complaint.status.replace("-", " ").charAt(0).toUpperCase() +
-                                    complaint.status.replace("-", " ").slice(1)}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div>
-                                <div className="text-sm">{formatDate(complaint.updatedAt)}</div>
-                                <div className="text-xs text-gray-500">
-                                  {complaint.technicianId ? `Technician #${complaint.technicianId}` : "Not assigned"}
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Complaint</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Last Update</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedComplaints
+                          .filter((c) => c.status === "in-progress" || c.status === "open")
+                          .map((complaint) => (
+                            <TableRow key={complaint.complaint_id}>
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium text-gray-900">{complaint.description}</div>
+                                  <div className="text-sm text-gray-500">{complaint.complaint_id}</div>
+                                  <div className="text-xs text-gray-400">
+                                    Created: {formatDate(complaint.createdAt)}
+                                  </div>
                                 </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => handleViewComplaint(complaint)}
-                                >
-                                  <Eye className="h-3 w-3" />
-                                </Button>
-                                <StatusActionButton complaint={complaint} />
-                              </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{complaint.type}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={getPriorityColor(complaint.priority)}>
+                                  {complaint.priority.charAt(0).toUpperCase() + complaint.priority.slice(1)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center space-x-2">
+                                  {getStatusIcon(complaint.status)}
+                                  <Badge className={getStatusColor(complaint.status)}>
+                                    {complaint.status.replace("-", " ").charAt(0).toUpperCase() +
+                                      complaint.status.replace("-", " ").slice(1)}
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <div className="text-sm">{formatDate(complaint.updatedAt)}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center space-x-2">
+                                  <Button size="sm" variant="outline" onClick={() => handleViewComplaint(complaint)}>
+                                    <Eye className="h-3 w-3" />
+                                  </Button>
+                                  <StatusActionButton complaint={complaint} />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        {paginatedComplaints.filter((c) => c.status === "in-progress" || c.status === "open").length ===
+                          0 && (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                              No active complaints found matching your criteria
                             </TableCell>
                           </TableRow>
-                        ))}
-                      {filteredComplaints.filter((c) => c.status === "in-progress" || c.status === "open").length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                            No active complaints found matching your criteria
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                        )}
+                      </TableBody>
+                    </Table>
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                        <span className="text-sm text-gray-600">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -532,11 +577,9 @@ export default function CustomerComplaintsPage() {
               <CardContent>
                 <div className="mb-4 flex items-center justify-between">
                   <span className="text-sm text-gray-600">
-                    Showing {filteredComplaints.filter((c) => c.status === "resolved" || c.status === "closed" ).length} of {complaints.filter((c) => c.status === "resolved" || c.status === "closed" ).length} resolved complaints
+                    Showing {filteredComplaints.filter((c) => c.status === "resolved" || c.status === "closed").length}{" "}
+                    resolved complaints
                   </span>
-                  {(searchTerm || priorityRange[0] !== 1 || priorityRange[1] !== 5) && (
-                    <Badge variant="secondary">Filters Applied</Badge>
-                  )}
                 </div>
                 {isTableLoading ? (
                   <div className="flex items-center justify-center py-8">
@@ -549,15 +592,14 @@ export default function CustomerComplaintsPage() {
                       <TableRow>
                         <TableHead>Complaint</TableHead>
                         <TableHead>Category</TableHead>
-                        <TableHead>Resolution</TableHead>
-                        <TableHead>Rating</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Resolved Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredComplaints
-                        .filter((c) => c.status === "resolved" || c.status === "closed" || c.status === "cancelled" || c.status === "by mistake")
+                        .filter((c) => c.status === "resolved" || c.status === "closed" || c.status === "cancelled")
                         .map((complaint) => (
                           <TableRow key={complaint.complaint_id}>
                             <TableCell>
@@ -570,51 +612,24 @@ export default function CustomerComplaintsPage() {
                               <Badge variant="outline">{complaint.type}</Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="max-w-xs">
-                                <p className="text-sm text-gray-600 truncate">
-                                  {complaint.technicianNotes || complaint.CustomerNotes || "Not provided"}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {complaint.rating ? (
-                                <div className="flex items-center space-x-1">
-                                  {Array.from({ length: 5 }).map((_, i) => (
-                                    <Star
-                                      key={i}
-                                      className={`h-4 w-4 ${
-                                        i < complaint.rating ? "text-yellow-400 fill-current" : "text-gray-300"
-                                      }`}
-                                    />
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="flex items-center space-x-1">
-                                  <Button size="sm" variant="outline" onClick={() => handleRating(complaint.complaint_id, 5)}>
-                                    <ThumbsUp className="h-3 w-3" />
-                                  </Button>
-                                  <Button size="sm" variant="outline" onClick={() => handleRating(complaint.complaint_id, 2)}>
-                                    <ThumbsDown className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              )}
+                              <Badge className={getStatusColor(complaint.status)}>
+                                {complaint.status.replace("-", " ").charAt(0).toUpperCase() +
+                                  complaint.status.replace("-", " ").slice(1)}
+                              </Badge>
                             </TableCell>
                             <TableCell>{formatDate(complaint.updatedAt)}</TableCell>
                             <TableCell>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleViewComplaint(complaint)}
-                              >
+                              <Button size="sm" variant="outline" onClick={() => handleViewComplaint(complaint)}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             </TableCell>
                           </TableRow>
                         ))}
-                      {filteredComplaints.filter((c) => c.status === "resolved" || c.status === "closed").length === 0 && (
+                      {filteredComplaints.filter((c) => c.status === "resolved" || c.status === "closed").length ===
+                        0 && (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                            No resolved complaints found matching your criteria
+                          <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                            No resolved complaints found
                           </TableCell>
                         </TableRow>
                       )}
@@ -656,7 +671,9 @@ export default function CustomerComplaintsPage() {
                     <Label htmlFor="priority">Priority</Label>
                     <Select
                       value={newComplaint.priority}
-                      onValueChange={(value: "low" | "medium" | "high") => setNewComplaint((prev) => ({ ...prev, priority: value }))}
+                      onValueChange={(value: "low" | "medium" | "high") =>
+                        setNewComplaint((prev) => ({ ...prev, priority: value }))
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -692,11 +709,7 @@ export default function CustomerComplaintsPage() {
                 </div>
 
                 <div className="flex space-x-4">
-                  <Button 
-                    onClick={handleSubmitComplaint} 
-                    className="flex-1"
-                    disabled={isSubmitting}
-                  >
+                  <Button onClick={handleSubmitComplaint} className="flex-1" disabled={isSubmitting}>
                     {isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -717,7 +730,6 @@ export default function CustomerComplaintsPage() {
               </CardContent>
             </Card>
 
-            {/* Contact Information */}
             <Card>
               <CardHeader>
                 <CardTitle>Need Immediate Help?</CardTitle>
@@ -761,10 +773,8 @@ export default function CustomerComplaintsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gray-900">{filteredComplaints.length}</div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {searchTerm || priorityRange[0] !== 1 || priorityRange[1] !== 5 ? 'Filtered results' : 'All time'}
-                  </p>
+                  <div className="text-3xl font-bold text-gray-900">{complaints.length}</div>
+                  <p className="text-xs text-gray-500 mt-1">All time</p>
                 </CardContent>
               </Card>
 
@@ -777,7 +787,7 @@ export default function CustomerComplaintsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-gray-900">
-                    {filteredComplaints.filter((c) => c.status === "resolved" || c.status === "closed").length}
+                    {complaints.filter((c) => c.status === "resolved" || c.status === "closed").length}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Successfully resolved</p>
                 </CardContent>
@@ -792,7 +802,7 @@ export default function CustomerComplaintsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-gray-900">
-                    {filteredComplaints.filter((c) => c.status === "in-progress").length}
+                    {complaints.filter((c) => c.status === "in-progress").length}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Being worked on</p>
                 </CardContent>
@@ -807,7 +817,7 @@ export default function CustomerComplaintsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-gray-900">
-                    {filteredComplaints.filter((c) => c.status === "open").length}
+                    {complaints.filter((c) => c.status === "open").length}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Awaiting assignment</p>
                 </CardContent>
@@ -821,25 +831,17 @@ export default function CustomerComplaintsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {Object.entries(
-                    filteredComplaints.reduce((acc, complaint) => {
-                      acc[complaint.type] = (acc[complaint.type] || 0) + 1
-                      return acc
-                    }, {})
-                  ).length > 0 ? (
-                    Object.entries(
-                      filteredComplaints.reduce((acc, complaint) => {
-                        acc[complaint.type] = (acc[complaint.type] || 0) + 1
-                        return acc
-                      }, {})
-                    ).map(([type, count]) => (
+                  {Object.entries(categoryCounts).length > 0 ? (
+                    Object.entries(categoryCounts).map(([type, count]) => (
                       <div key={type} className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{type}</span>
-                        <span className="font-medium">{count} {count === 1 ? 'complaint' : 'complaints'}</span>
+                        <span className="font-medium">
+                          {count} {count === 1 ? "complaint" : "complaints"}
+                        </span>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-gray-500">No complaints found matching your criteria</p>
+                    <p className="text-sm text-gray-500">No complaints found</p>
                   )}
                 </div>
               </CardContent>
@@ -858,9 +860,7 @@ export default function CustomerComplaintsPage() {
                 <X className="h-4 w-4" />
               </Button>
             </DialogTitle>
-            <DialogDescription>
-              Detailed information about your complaint
-            </DialogDescription>
+            <DialogDescription>Detailed information about your complaint</DialogDescription>
           </DialogHeader>
 
           {selectedComplaint && (
@@ -914,15 +914,6 @@ export default function CustomerComplaintsPage() {
                       </span>
                       <span className="text-sm">{formatDate(selectedComplaint.updatedAt)}</span>
                     </div>
-                    {selectedComplaint.technicianId && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium flex items-center">
-                          <User className="h-4 w-4 mr-2" />
-                          Assigned To
-                        </span>
-                        <span className="text-sm">Technician #{selectedComplaint.technicianId}</span>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -934,87 +925,10 @@ export default function CustomerComplaintsPage() {
                 <CardContent className="space-y-4">
                   <div>
                     <h4 className="text-sm font-medium mb-2">Description</h4>
-                    <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-                      {selectedComplaint.description}
-                    </p>
+                    <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">{selectedComplaint.description}</p>
                   </div>
-
-                  {selectedComplaint.technicianNotes && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Technician Notes</h4>
-                      <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded-md">
-                        {selectedComplaint.technicianNotes}
-                      </p>
-                    </div>
-                  )}
-
-                  {selectedComplaint.CustomerNotes && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Your Notes</h4>
-                      <p className="text-sm text-gray-600 bg-green-50 p-3 rounded-md">
-                        {selectedComplaint.CustomerNotes}
-                      </p>
-                    </div>
-                  )}
-
-                  {selectedComplaint.Area && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Area</h4>
-                      <p className="text-sm text-gray-600">{selectedComplaint.Area}</p>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
-
-              {(selectedComplaint.status === "resolved" || selectedComplaint.status === "closed") && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Resolution & Feedback</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {selectedComplaint.rating ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center">
-                          <span className="text-sm font-medium mr-3">Your Rating:</span>
-                          <div className="flex items-center space-x-1">
-                            {Array.from({ length: 5 }).map((_, i) => (
-                              <Star
-                                key={i}
-                                className={`h-5 w-5 ${
-                                  i < selectedComplaint.rating ? "text-yellow-400 fill-current" : "text-gray-300"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <p className="text-sm text-gray-600">How would you rate our service?</p>
-                        <div className="flex space-x-2">
-                          <Button 
-                            size="sm" 
-                            onClick={() => handleRating(selectedComplaint.complaint_id, 5)}
-                            className="flex items-center"
-                          >
-                            <ThumbsUp className="h-4 w-4 mr-1" />
-                            Good
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => handleRating(selectedComplaint.complaint_id, 2)}
-                            className="flex items-center"
-                          >
-                            <ThumbsDown className="h-4 w-4 mr-1" />
-                            Poor
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
             </div>
           )}
         </DialogContent>

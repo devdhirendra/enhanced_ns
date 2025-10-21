@@ -1,13 +1,18 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
+import { userApi, type User1 } from "@/lib/user-api"
+import { complaintApi } from "@/lib/complaint-api"
+import { Search, Loader2, User, Phone, MapPin, Mail } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 interface AddComplaintFormProps {
   onClose: () => void
@@ -15,7 +20,17 @@ interface AddComplaintFormProps {
   userId?: string
 }
 
-export default function AddComplaintForm({ onClose, onSuccess }: AddComplaintFormProps) {
+interface CustomerInfo {
+  name: string
+  email: string
+  phone: string
+  customerId: string
+  address?: string
+  connectionType?: string
+  planId?: string
+}
+
+export default function AddComplaintForm({ onClose, onSuccess, userId }: AddComplaintFormProps) {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -26,28 +41,327 @@ export default function AddComplaintForm({ onClose, onSuccess }: AddComplaintFor
       email: "",
       phone: "",
       customerId: "",
-    },
+      address: "",
+      connectionType: "",
+      planId: "",
+    } as CustomerInfo,
     source: "phone",
     assignedTo: "",
     expectedResolution: "",
     attachments: [] as string[],
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    toast.success(`Complaint "${formData.title}" created successfully!`)
-    console.log("Form submitted:", formData)
+  const [technicians, setTechnicians] = useState<User1[]>([])
+  const [loadingTechnicians, setLoadingTechnicians] = useState(false)
+  const [searchingCustomer, setSearchingCustomer] = useState(false)
+  const [technicianSearch, setTechnicianSearch] = useState("")
+  const [submitting, setSubmitting] = useState(false)
 
-    if (onSuccess) {
-      onSuccess()
+  // Fetch technicians on component mount
+  useEffect(() => {
+    fetchTechnicians()
+  }, [])
+
+  const fetchTechnicians = async () => {
+    try {
+      setLoadingTechnicians(true)
+      const techniciansData = await userApi.getAllTechnicians()
+      setTechnicians(techniciansData)
+    } catch (error) {
+      console.error("[v0] Error fetching technicians:", error)
+      toast.error("Failed to load technicians")
+    } finally {
+      setLoadingTechnicians(false)
+    }
+  }
+
+  const searchCustomerByEmail = async (email: string) => {
+    if (!email || !email.includes('@')) {
+      return
     }
 
-    onClose()
+    try {
+      setSearchingCustomer(true)
+      const response = await fetch(`https://nsbackend-silk.vercel.app/api/admin/customer/email/${email}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const customerData = await response.json()
+        
+        if (customerData && customerData.profileDetail) {
+          const profile = customerData.profileDetail
+          setFormData(prev => ({
+            ...prev,
+            customerInfo: {
+              name: profile.name || "",
+              email: profile.email || email,
+              phone: profile.phone || "",
+              customerId: profile.customerId || "",
+              address: profile.address || "",
+              connectionType: profile.connectionType || "",
+              planId: profile.planId || ""
+            }
+          }))
+          toast.success("Customer details loaded successfully!")
+        } else {
+          toast.error("Customer not found")
+        }
+      } else {
+        toast.error("Customer not found or access denied")
+      }
+    } catch (error) {
+      console.error("[v0] Error searching customer:", error)
+      toast.error("Failed to search customer")
+    } finally {
+      setSearchingCustomer(false)
+    }
+  }
+
+  const handleEmailBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const email = e.target.value.trim()
+    if (email && email.includes('@')) {
+      searchCustomerByEmail(email)
+    }
+  }
+
+  const handleEmailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const email = formData.customerInfo.email.trim()
+      if (email && email.includes('@')) {
+        searchCustomerByEmail(email)
+      }
+    }
+  }
+
+  const filteredTechnicians = technicians.filter(tech =>
+    tech.profileDetail.name.toLowerCase().includes(technicianSearch.toLowerCase()) ||
+    tech.profileDetail.specialization?.toLowerCase().includes(technicianSearch.toLowerCase()) ||
+    tech.profileDetail.area?.toLowerCase().includes(technicianSearch.toLowerCase())
+  )
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Validate required fields
+    if (!formData.title || !formData.description || !formData.customerInfo.name || !formData.customerInfo.phone) {
+      toast.error("Please fill in all required fields")
+      return
+    }
+
+    // Validate customer email format
+    if (formData.customerInfo.email && !formData.customerInfo.email.includes('@')) {
+      toast.error("Please enter a valid email address")
+      return
+    }
+
+    try {
+      setSubmitting(true)
+
+      // Prepare complaint data for API
+      const complaintData = {
+        type: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        category: formData.category,
+        Area: formData.customerInfo.address || "Not specified",
+        technicianId: formData.assignedTo || undefined,
+        response: `Complaint created via ${formData.source}`,
+        // Include customer information
+        customerUserId: userId, // The admin user creating the complaint
+        customerInfo: {
+          name: formData.customerInfo.name,
+          email: formData.customerInfo.email,
+          phone: formData.customerInfo.phone,
+          customerId: formData.customerInfo.customerId,
+          address: formData.customerInfo.address
+        }
+      }
+
+      console.log("[v0] Creating complaint with data:", complaintData)
+
+      // Call the complaint creation API
+      const response = await complaintApi.createComplaint(
+        formData.customerInfo.customerId || userId || 'admin', 
+        complaintData
+      )
+
+      if (response.success || response.message?.toLowerCase().includes("success")) {
+        toast.success(`Complaint "${formData.title}" created successfully!`)
+        console.log("Complaint created:", response)
+
+        if (onSuccess) {
+          onSuccess()
+        }
+
+        onClose()
+      } else {
+        throw new Error(response.message || "Failed to create complaint")
+      }
+
+    } catch (error: any) {
+      console.error("[v0] Error creating complaint:", error)
+      toast.error(error.message || "Failed to create complaint. Please try again.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Basic Information */}
+      {/* Customer Information */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium text-gray-900">Customer Information</h3>
+        
+        {/* Email Search */}
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="customerEmail">Email Address *</Label>
+            <div className="relative">
+              <Input
+                id="customerEmail"
+                type="email"
+                value={formData.customerInfo.email}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  customerInfo: { ...formData.customerInfo, email: e.target.value }
+                })}
+                onBlur={handleEmailBlur}
+                onKeyDown={handleEmailKeyDown}
+                placeholder="Enter customer email to auto-fill details"
+                required
+              />
+              {searchingCustomer && (
+                <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-gray-500" />
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Press Enter or click away to search for customer details
+            </p>
+          </div>
+
+          {/* Customer Details Card */}
+          {(formData.customerInfo.name || formData.customerInfo.phone) && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-start space-x-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <User className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    {formData.customerInfo.name && (
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">{formData.customerInfo.name}</span>
+                        {formData.customerInfo.customerId && (
+                          <Badge variant="outline" className="text-xs">
+                            ID: {formData.customerInfo.customerId}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
+                      {formData.customerInfo.phone && (
+                        <div className="flex items-center space-x-2">
+                          <Phone className="h-4 w-4" />
+                          <span>{formData.customerInfo.phone}</span>
+                        </div>
+                      )}
+                      
+                      {formData.customerInfo.email && (
+                        <div className="flex items-center space-x-2">
+                          <Mail className="h-4 w-4" />
+                          <span>{formData.customerInfo.email}</span>
+                        </div>
+                      )}
+                      
+                      {formData.customerInfo.address && (
+                        <div className="flex items-center space-x-2 md:col-span-2">
+                          <MapPin className="h-4 w-4" />
+                          <span className="flex-1">{formData.customerInfo.address}</span>
+                        </div>
+                      )}
+                      
+                      {(formData.customerInfo.connectionType || formData.customerInfo.planId) && (
+                        <div className="flex items-center space-x-4 md:col-span-2 pt-1">
+                          {formData.customerInfo.connectionType && (
+                            <Badge variant="secondary" className="text-xs">
+                              {formData.customerInfo.connectionType}
+                            </Badge>
+                          )}
+                          {formData.customerInfo.planId && (
+                            <Badge variant="secondary" className="text-xs">
+                              Plan: {formData.customerInfo.planId}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Other Customer Fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="customerName">Customer Name *</Label>
+            <Input
+              id="customerName"
+              value={formData.customerInfo.name}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                customerInfo: { ...formData.customerInfo, name: e.target.value }
+              })}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="customerId">Customer ID</Label>
+            <Input
+              id="customerId"
+              value={formData.customerInfo.customerId}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                customerInfo: { ...formData.customerInfo, customerId: e.target.value }
+              })}
+              placeholder="Auto-filled from email search"
+            />
+          </div>
+          <div>
+            <Label htmlFor="customerPhone">Phone Number *</Label>
+            <Input
+              id="customerPhone"
+              value={formData.customerInfo.phone}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                customerInfo: { ...formData.customerInfo, phone: e.target.value }
+              })}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="customerAddress">Address</Label>
+            <Input
+              id="customerAddress"
+              value={formData.customerInfo.address}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                customerInfo: { ...formData.customerInfo, address: e.target.value }
+              })}
+              placeholder="Auto-filled from email search"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Complaint Details */}
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-gray-900">Complaint Details</h3>
         <div className="grid grid-cols-1 gap-4">
@@ -90,7 +404,7 @@ export default function AddComplaintForm({ onClose, onSuccess }: AddComplaintFor
                 <SelectItem value="billing">Billing</SelectItem>
                 <SelectItem value="service">Service Quality</SelectItem>
                 <SelectItem value="installation">Installation</SelectItem>
-                <SelectItem value="support">Customer Support</SelectItem>
+                <SelectItem value="connectivity">Connectivity</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
@@ -105,7 +419,6 @@ export default function AddComplaintForm({ onClose, onSuccess }: AddComplaintFor
                 <SelectItem value="low">Low</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="high">High</SelectItem>
-                <SelectItem value="critical">Critical</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -127,76 +440,67 @@ export default function AddComplaintForm({ onClose, onSuccess }: AddComplaintFor
         </div>
       </div>
 
-      {/* Customer Information */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-900">Customer Information</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="customerName">Customer Name *</Label>
-            <Input
-              id="customerName"
-              value={formData.customerInfo.name}
-              onChange={(e) => setFormData({ 
-                ...formData, 
-                customerInfo: { ...formData.customerInfo, name: e.target.value }
-              })}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="customerId">Customer ID</Label>
-            <Input
-              id="customerId"
-              value={formData.customerInfo.customerId}
-              onChange={(e) => setFormData({ 
-                ...formData, 
-                customerInfo: { ...formData.customerInfo, customerId: e.target.value }
-              })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="customerEmail">Email Address</Label>
-            <Input
-              id="customerEmail"
-              type="email"
-              value={formData.customerInfo.email}
-              onChange={(e) => setFormData({ 
-                ...formData, 
-                customerInfo: { ...formData.customerInfo, email: e.target.value }
-              })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="customerPhone">Phone Number *</Label>
-            <Input
-              id="customerPhone"
-              value={formData.customerInfo.phone}
-              onChange={(e) => setFormData({ 
-                ...formData, 
-                customerInfo: { ...formData.customerInfo, phone: e.target.value }
-              })}
-              required
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Assignment */}
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-gray-900">Assignment & Resolution</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="assignedTo">Assign To</Label>
+            <Label htmlFor="assignedTo">Assign To Technician</Label>
             <Select value={formData.assignedTo} onValueChange={(value) => setFormData({ ...formData, assignedTo: value })}>
               <SelectTrigger>
-                <SelectValue placeholder="Select staff member" />
+                <SelectValue placeholder="Select technician" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tech-team">Technical Team</SelectItem>
-                <SelectItem value="billing-team">Billing Team</SelectItem>
-                <SelectItem value="support-team">Support Team</SelectItem>
-                <SelectItem value="field-team">Field Team</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
+              <SelectContent className="max-h-60">
+                {/* Search Input inside Dropdown */}
+                <div className="p-2 border-b">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                    <Input
+                      placeholder="Search technicians..."
+                      value={technicianSearch}
+                      onChange={(e) => setTechnicianSearch(e.target.value)}
+                      className="pl-8 h-9 text-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                </div>
+
+                {loadingTechnicians ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <span className="text-sm">Loading technicians...</span>
+                  </div>
+                ) : filteredTechnicians.length === 0 ? (
+                  <div className="py-4 text-center text-sm text-gray-500">
+                    No technicians found
+                  </div>
+                ) : (
+                  filteredTechnicians.map((tech) => (
+                    <SelectItem 
+                      key={tech.user_id} 
+                      value={tech.profileDetail.technicianId || tech.user_id}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">{tech.profileDetail.name}</span>
+                        <div className="flex items-center space-x-2 text-xs text-gray-500">
+                          <span>{tech.profileDetail.specialization}</span>
+                          {tech.profileDetail.area && (
+                            <>
+                              <span>•</span>
+                              <span>{tech.profileDetail.area}</span>
+                            </>
+                          )}
+                          {tech.profileDetail.rating !== undefined && (
+                            <>
+                              <span>•</span>
+                              <span>Rating: {tech.profileDetail.rating}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -214,11 +518,18 @@ export default function AddComplaintForm({ onClose, onSuccess }: AddComplaintFor
 
       {/* Form Actions */}
       <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-4 pt-6 border-t">
-        <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto bg-transparent">
+        <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto bg-transparent" disabled={submitting}>
           Cancel
         </Button>
-        <Button type="submit" className="w-full sm:w-auto">
-          Create Complaint
+        <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
+          {submitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              Creating...
+            </>
+          ) : (
+            "Create Complaint"
+          )}
         </Button>
       </div>
     </form>
