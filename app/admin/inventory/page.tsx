@@ -1402,7 +1402,7 @@ function AddItemForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           <div className="flex items-center space-x-2 text-sm text-blue-800">
             <Users className="h-4 w-4" />
             <span>
-              Adding item as: <strong>{user.name || user.email}</strong> (ID: {user.user_id})
+              Adding item as: <strong>{user.profileDetail.name || user.email}</strong> (ID: {user.user_id})
             </span>
           </div>
         </div>

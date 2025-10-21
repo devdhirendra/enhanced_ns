@@ -70,14 +70,33 @@ export default function OperatorsPage() {
   const [activeFilter, setActiveFilter] = useState<{ type: string; value: string }>({ type: 'all', value: 'all' })
   const { toast } = useToast()
 
-  // Stats calculation
-  const stats = {
-    total: operators.length,
-    active: operators.filter(op => op.status === 'active').length,
-    suspended: operators.filter(op => op.status === 'suspended').length,
-    expired: operators.filter(op => op.status === "expired").length,
-    inactive: operators.filter(op => op.status === 'inactive').length,
+  useEffect(() => {
+  if (operators.length > 0) {
+    console.log("[OperatorsPage] Available status values:", operators.map(op => op.status))
+    console.log("[OperatorsPage] First operator:", operators[0])
   }
+}, [operators])
+  // Stats calculation
+// Stats calculation with normalized status
+const stats = {
+  total: operators.length,
+  active: operators.filter(op => {
+    const status = op.status?.toLowerCase() || 'active';
+    return status === 'active' || status === 'activated' || status === 'enabled';
+  }).length,
+  suspended: operators.filter(op => {
+    const status = op.status?.toLowerCase() || '';
+    return status === 'suspended' || status === 'suspension' || status === 'disabled';
+  }).length,
+  expired: operators.filter(op => {
+    const status = op.status?.toLowerCase() || '';
+    return status === 'expired' || status === 'expiration';
+  }).length,
+  inactive: operators.filter(op => {
+    const status = op.status?.toLowerCase() || '';
+    return status === 'inactive' || status === 'deactivated' || status === 'disabled';
+  }).length,
+}
 
   // Transform User to Operator helper function
   const transformUserToOperator = useCallback((user: User): Operator => {
@@ -244,22 +263,23 @@ export default function OperatorsPage() {
   const paginatedOperators = filteredOperators.slice(startIndex, startIndex + itemsPerPage)
 
   // Status badge with better logic
-  const getStatusBadge = (status = "active") => {
-    const statusConfig = {
-      active: { className: "bg-green-100 text-green-800 border-green-200", label: "Active" },
-      suspended: { className: "bg-red-100 text-red-800 border-red-200", label: "Suspended" },
-      expired: { className: "bg-orange-100 text-orange-800 border-orange-200", label: "Expired" },
-      inactive: { className: "bg-gray-100 text-gray-800 border-gray-200", label: "Inactive" },
-    }
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.inactive
-    
-    return (
-      <Badge variant="outline" className={`${config.className} font-medium`}>
-        {config.label}
-      </Badge>
-    )
+const getStatusBadge = (status = "active") => {
+  const normalizedStatus = (status || 'active').toLowerCase();
+  const statusConfig = {
+    active: { className: "bg-green-100 text-green-800 border-green-200", label: "Active" },
+    suspended: { className: "bg-red-100 text-red-800 border-red-200", label: "Suspended" },
+    expired: { className: "bg-orange-100 text-orange-800 border-orange-200", label: "Expired" },
+    inactive: { className: "bg-gray-100 text-gray-800 border-gray-200", label: "Inactive" },
   }
+  
+  const config = statusConfig[normalizedStatus as keyof typeof statusConfig] || statusConfig.inactive
+  
+  return (
+    <Badge variant="outline" className={`${config.className} font-medium`}>
+      {config.label}
+    </Badge>
+  )
+}
 
   // Export functionality
   const handleExport = () => {
