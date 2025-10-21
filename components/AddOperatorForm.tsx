@@ -25,6 +25,7 @@ const [formData, setFormData] = useState({
   ownerName: "",
   phone: "",
   email: "",
+  password: "",
   address: { 
     state: "", 
     district: "", 
@@ -67,6 +68,9 @@ const [formData, setFormData] = useState({
     }
     if (!formData.email.trim()) {
       newErrors.email = "Email address is required"
+    }
+    if (!formData.password.trim()) {
+      newErrors.email = "Password is required"
     }
 
     // Email validation
@@ -232,7 +236,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     // The API validates these fields as required and non-empty:
     const operatorData = {
       email: formData.email.toLowerCase().trim(),
-      password: "admin",
+      password: formData.password.trim(),
       profileDetail: {
         // Required fields - API checks these are not empty
         name: formData.ownerName.trim(),
@@ -405,6 +409,22 @@ const handleSubmit = async (e: React.FormEvent) => {
             />
             {errors.email && (
               <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+            )}
+          </div>
+                    <div>
+            <Label htmlFor="email">Password *</Label>
+            <Input
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => updateFormData("password", e.target.value)}
+              placeholder="network@123"
+              className={errors.passoword ? "border-red-500" : ""}
+              disabled={loading}
+              required
+            />
+            {errors.password && (
+              <p className="text-red-500 text-sm mt-1">{errors.password}</p>
             )}
           </div>
         </div>
