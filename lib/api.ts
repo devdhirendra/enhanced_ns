@@ -2244,13 +2244,24 @@ export const analyticsApi = {
   scheduleReport: (data: any) => apiClient.scheduleAnalyticsReport(data),
 }
 
+// In your productApi object, update these functions:
 export const productApi = {
   getAll: () => apiClient.getMarketplaceProducts(),
   add: (data: any) => apiClient.addMarketplaceProduct(data),
   get: (id: string) => apiClient.getProduct(id),
-  create: (data: any) => apiClient.createProduct(data), // This should be used instead of "add"
-  update: (id: string, data: any) => apiClient.updateProduct(id, data),
-  delete: (id: string) => apiClient.deleteProduct(id),
+  create: (data: any) => apiClient.createProduct(data),
+  update: (id: string, data: any) => {
+    return apiClient.request(`/inventory/update/stock/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  delete: (id: string, role: string = "admin") => {
+    return apiClient.request(`/inventory/delete/stock/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ role }),
+    });
+  },
   search: (query: string) => apiClient.searchProducts(query),
   getByCategory: (category: string) => apiClient.getProductsByCategory(category),
 }

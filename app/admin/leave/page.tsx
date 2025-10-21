@@ -238,7 +238,7 @@ const fetchLeaveRequests = async () => {
     const requests = requestsData.map((item: any) => ({
       leaveId: item.leaveId || item.id || `REQ${Date.now()}`,
       userId: item.userId || item.user_id || "",
-      userName: item.userName || item.user_name || "Unknown User",
+      userName: item.username || item.user_name || "Unknown User",
       userRole: item.userRole || item.role || "Staff",
       leaveType: item.leaveType || item.leave_type || "Annual Leave",
       policyId: item.policyId || item.policy_id || "",

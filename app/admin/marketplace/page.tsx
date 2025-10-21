@@ -222,6 +222,8 @@ export default function MarketplacePage() {
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null)
   const [showEditVendorDialog, setShowEditVendorDialog] = useState(false)
   const [activeTab, setActiveTab] = useState("products")
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [showProductDetails, setShowProductDetails] = useState(false)
 
   const [orders, setOrders] = useState<Order[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -350,12 +352,10 @@ export default function MarketplacePage() {
     })
   }
 
-  const handleViewProduct = (product: Product) => {
-    toast({
-      title: "Product Details",
-      description: `Viewing details for ${product.name}`,
-    })
-  }
+const handleViewProduct = (product: Product) => {
+  setSelectedProduct(product)
+  setShowProductDetails(true)
+}
   
 const handleViewVendor = (vendor: Vendor) => {
   setSelectedVendor(vendor)
@@ -367,10 +367,10 @@ const handleEditVendor = (vendor: Vendor) => {
   setEditingVendor(vendor)
   setShowEditVendorDialog(true)
 }
-  const handleEditProduct = (product: Product) => {
-    setEditingProduct(product)
-    setShowEditProductDialog(true)
-  }
+const handleEditProduct = (product: Product) => {
+  setEditingProduct(product)
+  setShowEditProductDialog(true)
+}
   const handleEditVendorSuccess = () => {
   setShowEditVendorDialog(false)
   setEditingVendor(null)
@@ -381,29 +381,32 @@ const handleEditVendor = (vendor: Vendor) => {
   })
 }
 
-  const handleDeleteProduct = async (product: Product) => {
-    try {
-      console.log("[v0] Deleting product:", product.productId)
-
-      // Note: This would need to be implemented in the API
-      // await productApi.delete(product.productId)
-
-      toast({
-        title: "Product Deleted",
-        description: `${product.name} has been deleted successfully.`,
-      })
-
-      // Refresh the data
-      fetchMarketplaceData()
-    } catch (error) {
-      console.error("[v0] Error deleting product:", error)
-      toast({
-        title: "Delete Failed",
-        description: "Failed to delete product. Please try again.",
-        variant: "destructive",
-      })
-    }
+const handleDeleteProduct = async (product: Product) => {
+  if (!confirm(`Are you sure you want to delete "${product.name}"? This action cannot be undone.`)) {
+    return
   }
+
+  try {
+    console.log("Deleting product:", product.productId)
+
+    await productApi.delete(product.productId, "admin")
+
+    toast({
+      title: "Product Deleted",
+      description: `${product.name} has been deleted successfully.`,
+    })
+
+    // Refresh the data
+    fetchMarketplaceData()
+  } catch (error) {
+    console.error("Error deleting product:", error)
+    toast({
+      title: "Delete Failed",
+      description: "Failed to delete product. Please try again.",
+      variant: "destructive",
+    })
+  }
+}
   
 
   // Update handleUpdateOrderStatus
@@ -839,23 +842,33 @@ const Pagination = () => (
                         <div className="text-xs text-gray-500">by {product.vendor || "Unknown Vendor"}</div>
                       </div>
                     </CardContent>
-                    <div className="p-4 pt-0 flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 bg-transparent text-xs"
-                        onClick={() => handleViewProduct(product)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)} className="text-xs">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDeleteProduct(product)} className="text-xs">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+<div className="p-4 pt-0 flex gap-2">
+  <Button
+    variant="outline"
+    size="sm"
+    className="flex-1 bg-transparent text-xs"
+    onClick={() => handleViewProduct(product)}
+  >
+    <Eye className="h-4 w-4 mr-1" />
+    View
+  </Button>
+  <Button 
+    variant="outline" 
+    size="sm" 
+    onClick={() => handleEditProduct(product)} 
+    className="text-xs"
+  >
+    <Edit className="h-4 w-4" />
+  </Button>
+  <Button 
+    variant="outline" 
+    size="sm" 
+    onClick={() => handleDeleteProduct(product)} 
+    className="text-xs"
+  >
+    <Trash2 className="h-4 w-4" />
+  </Button>
+</div>
                   </Card>
                 ))
               )}
@@ -1434,6 +1447,118 @@ const Pagination = () => (
     )}
   </DialogContent>
 </Dialog>
+{/* Product Details Dialog */}
+<Dialog open={showProductDetails} onOpenChange={setShowProductDetails}>
+  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Product Details</DialogTitle>
+      <DialogDescription>Complete information for {selectedProduct?.name}</DialogDescription>
+    </DialogHeader>
+    {selectedProduct && (
+      <div className="space-y-6">
+        {/* Product Header */}
+        <div className="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+          <div className="bg-gradient-to-r from-blue-500 to-purple-500 p-3 rounded-lg">
+            <Package className="h-8 w-8 text-white" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">{selectedProduct.name}</h3>
+            <p className="text-gray-600">{selectedProduct.category}</p>
+          </div>
+          <Badge className="bg-green-100 text-green-800 ml-auto">
+            {selectedProduct.stock && selectedProduct.stock > 0 ? 'In Stock' : 'Out of Stock'}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Product Image */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Product Image</Label>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <img
+                src={selectedProduct.images?.[0] || "/placeholder.svg?height=300&width=300&text=Product"}
+                alt={selectedProduct.name}
+                className="w-full h-48 object-cover rounded-lg"
+              />
+            </div>
+          </div>
+
+          {/* Basic Information */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Basic Information</Label>
+            <div className="p-3 bg-gray-50 rounded-lg space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Price:</span>
+                <span className="font-medium">{formatCurrency(selectedProduct.price)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Stock:</span>
+                <span className="font-medium">{selectedProduct.stock || 0} units</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Category:</span>
+                <span className="font-medium">{selectedProduct.category}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Vendor:</span>
+                <span className="font-medium">{selectedProduct.vendor || "Unknown"}</span>
+              </div>
+              {selectedProduct.rating && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Rating:</span>
+                  <div className="flex items-center">
+                    <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                    <span className="font-medium">
+                      {selectedProduct.rating} ({selectedProduct.reviews || 0} reviews)
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Description</Label>
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-700">{selectedProduct.description}</p>
+          </div>
+        </div>
+
+        {/* Specifications */}
+        {selectedProduct.specifications && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Specifications</Label>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                {JSON.stringify(selectedProduct.specifications, null, 2)}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowProductDetails(false)}
+          >
+            Close
+          </Button>
+          <Button 
+            onClick={() => {
+              setShowProductDetails(false)
+              handleEditProduct(selectedProduct)
+            }}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Product
+          </Button>
+        </div>
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
 
       </div>
     </DashboardLayout>
@@ -1904,12 +2029,14 @@ function EditProductForm({
   vendors: Vendor[]
 }) {
   const [formData, setFormData] = useState({
-    name: product.name || "",
+    itemName: product.name || "",
+    quantity: product.stock || 1,
+    unitPrice: product.price || 0,
     category: product.category || "",
-    price: product.price || 0,
+    brand: product.vendor || "",
     description: product.description || "",
-    specifications: product.specifications ? JSON.stringify(product.specifications, null, 2) : "",
-    vendorId: product.vendorId || "",
+    specification: product.specifications ? JSON.stringify(product.specifications, null, 2) : "",
+    status: "Available", // Default status
   })
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
@@ -1917,7 +2044,7 @@ function EditProductForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.name || !formData.category || formData.price <= 0) {
+    if (!formData.itemName || !formData.category || formData.unitPrice <= 0) {
       toast({
         title: "Invalid Data",
         description: "Please fill in all required fields with valid data.",
@@ -1928,21 +2055,24 @@ function EditProductForm({
 
     try {
       setLoading(true)
-      console.log("[v0] Updating product:", product.productId)
+      console.log("Updating product:", product.productId)
 
-      // Note: This would need to be implemented in the API
-      // await productApi.update(product.productId, {
-      //   name: formData.name,
-      //   category: formData.category,
-      //   price: formData.price,
-      //   description: formData.description,
-      //   specifications: formData.specifications ? JSON.parse(formData.specifications) : {},
-      // })
+      await productApi.update(product.productId, {
+        itemName: formData.itemName,
+        quantity: formData.quantity,
+        unitPrice: formData.unitPrice,
+        category: formData.category,
+        brand: formData.brand,
+        description: formData.description,
+        specification: formData.specification,
+        status: formData.status,
+        role: "admin"
+      })
 
-      console.log("[v0] Product updated successfully")
+      console.log("Product updated successfully")
       onSuccess()
     } catch (error) {
-      console.error("[v0] Error updating product:", error)
+      console.error("Error updating product:", error)
       toast({
         title: "Update Failed",
         description: "Failed to update product. Please try again.",
@@ -1954,14 +2084,14 @@ function EditProductForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="edit-name">Product Name *</Label>
+          <Label htmlFor="edit-itemName">Product Name *</Label>
           <Input
-            id="edit-name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            id="edit-itemName"
+            value={formData.itemName}
+            onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
             required
             disabled={loading}
           />
@@ -1980,29 +2110,54 @@ function EditProductForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="edit-price">Price *</Label>
+          <Label htmlFor="edit-unitPrice">Price *</Label>
           <Input
-            id="edit-price"
+            id="edit-unitPrice"
             type="number"
             step="0.01"
-            value={formData.price}
-            onChange={(e) => setFormData({ ...formData, price: Number.parseFloat(e.target.value) || 0 })}
+            value={formData.unitPrice}
+            onChange={(e) => setFormData({ ...formData, unitPrice: Number.parseFloat(e.target.value) || 0 })}
             required
             disabled={loading}
           />
         </div>
         <div>
-          <Label htmlFor="edit-vendorId">Vendor</Label>
-          <Select value={formData.vendorId} onValueChange={(value) => setFormData({ ...formData, vendorId: value })}>
+          <Label htmlFor="edit-quantity">Quantity *</Label>
+          <Input
+            id="edit-quantity"
+            type="number"
+            value={formData.quantity}
+            onChange={(e) => setFormData({ ...formData, quantity: Number.parseInt(e.target.value) || 1 })}
+            required
+            disabled={loading}
+            min="1"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="edit-brand">Brand</Label>
+          <Input
+            id="edit-brand"
+            value={formData.brand}
+            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+            disabled={loading}
+          />
+        </div>
+        <div>
+          <Label htmlFor="edit-status">Status</Label>
+          <Select 
+            value={formData.status} 
+            onValueChange={(value) => setFormData({ ...formData, status: value })}
+          >
             <SelectTrigger>
-              <SelectValue placeholder="Select vendor" />
+              <SelectValue placeholder="Select status" />
             </SelectTrigger>
             <SelectContent>
-              {vendors.map((vendor) => (
-                <SelectItem key={vendor.user_id} value={vendor.user_id}>
-                  {vendor.profileDetail.companyName || vendor.profileDetail.name}
-                </SelectItem>
-              ))}
+              <SelectItem value="Available">Available</SelectItem>
+              <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+              <SelectItem value="Discontinued">Discontinued</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -2020,13 +2175,14 @@ function EditProductForm({
       </div>
 
       <div>
-        <Label htmlFor="edit-specifications">Specifications (JSON format)</Label>
+        <Label htmlFor="edit-specification">Specifications</Label>
         <Textarea
-          id="edit-specifications"
-          value={formData.specifications}
-          onChange={(e) => setFormData({ ...formData, specifications: e.target.value })}
+          id="edit-specification"
+          value={formData.specification}
+          onChange={(e) => setFormData({ ...formData, specification: e.target.value })}
           rows={3}
           disabled={loading}
+          placeholder="Enter product specifications"
         />
       </div>
 
