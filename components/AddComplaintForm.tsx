@@ -13,6 +13,7 @@ import { complaintApi } from "@/lib/complaint-api"
 import { Search, Loader2, User, Phone, MapPin, Mail } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface AddComplaintFormProps {
   onClose: () => void
@@ -34,7 +35,7 @@ export default function AddComplaintForm({ onClose, onSuccess, userId }: AddComp
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    category: "technical",
+    category: "Internet Services",
     priority: "medium",
     customerInfo: {
       name: "",
@@ -56,6 +57,7 @@ export default function AddComplaintForm({ onClose, onSuccess, userId }: AddComp
   const [searchingCustomer, setSearchingCustomer] = useState(false)
   const [technicianSearch, setTechnicianSearch] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const { user } = useAuth()
 
   // Fetch technicians on component mount
   useEffect(() => {
@@ -144,72 +146,97 @@ export default function AddComplaintForm({ onClose, onSuccess, userId }: AddComp
     tech.profileDetail.area?.toLowerCase().includes(technicianSearch.toLowerCase())
   )
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Validate required fields
-    if (!formData.title || !formData.description || !formData.customerInfo.name || !formData.customerInfo.phone) {
-      toast.error("Please fill in all required fields")
-      return
-    }
-
-    // Validate customer email format
-    if (formData.customerInfo.email && !formData.customerInfo.email.includes('@')) {
-      toast.error("Please enter a valid email address")
-      return
-    }
-
-    try {
-      setSubmitting(true)
-
-      // Prepare complaint data for API
-      const complaintData = {
-        type: formData.title,
-        description: formData.description,
-        priority: formData.priority,
-        category: formData.category,
-        Area: formData.customerInfo.address || "Not specified",
-        technicianId: formData.assignedTo || undefined,
-        response: `Complaint created via ${formData.source}`,
-        // Include customer information
-        customerUserId: userId, // The admin user creating the complaint
-        customerInfo: {
-          name: formData.customerInfo.name,
-          email: formData.customerInfo.email,
-          phone: formData.customerInfo.phone,
-          customerId: formData.customerInfo.customerId,
-          address: formData.customerInfo.address
-        }
-      }
-
-      console.log("[v0] Creating complaint with data:", complaintData)
-
-      // Call the complaint creation API
-      const response = await complaintApi.createComplaint(
-        formData.customerInfo.customerId || userId || 'admin', 
-        complaintData
-      )
-
-      if (response.success || response.message?.toLowerCase().includes("success")) {
-        toast.success(`Complaint "${formData.title}" created successfully!`)
-        console.log("Complaint created:", response)
-
-        if (onSuccess) {
-          onSuccess()
-        }
-
-        onClose()
-      } else {
-        throw new Error(response.message || "Failed to create complaint")
-      }
-
-    } catch (error: any) {
-      console.error("[v0] Error creating complaint:", error)
-      toast.error(error.message || "Failed to create complaint. Please try again.")
-    } finally {
-      setSubmitting(false)
-    }
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+  
+  // Validate required fields
+  if (!formData.title || !formData.description || !formData.customerInfo.name || !formData.customerInfo.phone) {
+    toast.error("Please fill in all required fields")
+    return
   }
+
+  try {
+    setSubmitting(true)
+
+    // Prepare complaint data for API - EXACT FIELD NAMES AS REQUIRED
+    const complaintData = {
+      type: formData.title,
+      priority: formData.priority === "medium" ? "Medium" : 
+               formData.priority === "high" ? "High" : "Low",
+      description: formData.description,
+      technicianId: formData.assignedTo || "",
+      Area: formData.customerInfo.address || "Not specified",
+      category: formData.category,
+      response: `Complaint created via ${formData.source}`,
+      customerName: formData.customerInfo.name,
+      customerphoneNumber: formData.customerInfo.phone,
+      address: formData.customerInfo.address || "Not specified",
+      customerID: formData.customerInfo.customerId || `CUST_${Date.now()}`
+    }
+
+    console.log("[v0] Creating complaint with data:", complaintData)
+
+    // Determine the user ID to use - use the customer's user ID if available
+    let targetUserId = userId || 'admin'
+    
+    // If we have customer info from email search, try to use their user ID
+    if (formData.customerInfo.customerId) {
+      // We need to get the actual user_id for this customer
+      try {
+        const customerResponse = await fetch(`https://nsbackend-silk.vercel.app/api/admin/customer/email/${formData.customerInfo.email}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (customerResponse.ok) {
+          const customerData = await customerResponse.json()
+          if (customerData.user_id) {
+            targetUserId = customerData.user_id
+            console.log("[v0] Using customer user_id:", targetUserId)
+          }
+        }
+      } catch (error) {
+        console.warn("[v0] Could not fetch customer user_id, using default:", error)
+      }
+    }
+
+    // Call the complaint creation API
+    const response = await complaintApi.createComplaint(targetUserId, complaintData)
+
+    console.log("[v0] Complaint creation FULL response:", response)
+    console.log("[v0] Complaint data in response:", response.data)
+
+    if (response.success || response.message?.toLowerCase().includes("success") || response.data) {
+      toast.success(`Complaint "${formData.title}" created successfully!`)
+      
+      if (onSuccess) {
+        onSuccess()
+      }
+
+      onClose()
+    } else {
+      throw new Error(response.message || "Failed to create complaint")
+    }
+
+  } catch (error: any) {
+    console.error("[v0] Error creating complaint:", error)
+    
+    let errorMessage = "Failed to create complaint. Please try again."
+    if (error.message.includes("AUTHENTICATION_FAILED")) {
+      errorMessage = "Authentication failed. Please log in again."
+    } else if (error.message.includes("ACCESS_DENIED")) {
+      errorMessage = "You don't have permission to create complaints."
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    toast.error(errorMessage)
+  } finally {
+    setSubmitting(false)
+  }
+}
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -347,7 +374,7 @@ export default function AddComplaintForm({ onClose, onSuccess, userId }: AddComp
             />
           </div>
           <div>
-            <Label htmlFor="customerAddress">Address</Label>
+            <Label htmlFor="customerAddress">Address *</Label>
             <Input
               id="customerAddress"
               value={formData.customerInfo.address}
@@ -355,7 +382,8 @@ export default function AddComplaintForm({ onClose, onSuccess, userId }: AddComp
                 ...formData, 
                 customerInfo: { ...formData.customerInfo, address: e.target.value }
               })}
-              placeholder="Auto-filled from email search"
+              placeholder="Customer address"
+              required
             />
           </div>
         </div>
@@ -400,12 +428,13 @@ export default function AddComplaintForm({ onClose, onSuccess, userId }: AddComp
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="technical">Technical Issue</SelectItem>
-                <SelectItem value="billing">Billing</SelectItem>
-                <SelectItem value="service">Service Quality</SelectItem>
-                <SelectItem value="installation">Installation</SelectItem>
-                <SelectItem value="connectivity">Connectivity</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                <SelectItem value="Internet Services">Internet Services</SelectItem>
+                <SelectItem value="Billing">Billing</SelectItem>
+                <SelectItem value="Service Quality">Service Quality</SelectItem>
+                <SelectItem value="Installation">Installation</SelectItem>
+                <SelectItem value="Connectivity">Connectivity</SelectItem>
+                <SelectItem value="Technical Issue">Technical Issue</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
               </SelectContent>
             </Select>
           </div>

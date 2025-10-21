@@ -49,6 +49,10 @@ export default function ComplaintsPage() {
   const [loading, setLoading] = useState(true)
   const [techniciansLoading, setTechniciansLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activeFilter, setActiveFilter] = useState<{
+  type: 'all' | 'status' | 'priority',
+  value: string
+}>({ type: 'all', value: 'all' })
   const { toast } = useToast()
   const { user } = useAuth()
 
@@ -292,8 +296,8 @@ const handleDelete = async (complaintId: string) => {
   const handleExport = () => {
     const exportData = filteredComplaints.map((complaint) => ({
       "Complaint ID": complaint.complaint_id,
-      Customer: complaint.createdBy?.name || "N/A",
-      Email: complaint.createdBy?.email || "N/A",
+      Customer: complaint.customerName || "N/A",
+      Email: complaint.customerEmail || "N/A",
       Phone: complaint.createdBy?.phone || "N/A",
       Type: complaint.type,
       Area: complaint.Area,
@@ -338,62 +342,117 @@ const handleDelete = async (complaintId: string) => {
           )}
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-4">
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total</CardTitle>
-                <FileText className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.total}</div>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1">All complaints</p>
-              </CardContent>
-            </Card>
+<div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-4">
+  {/* Total Card */}
+  <Card 
+    className={`border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100 cursor-pointer transition-all duration-200 hover:scale-105 ${
+      activeFilter.type === 'all' ? 'ring-2 ring-blue-500' : ''
+    }`}
+    onClick={() => {
+      setActiveFilter({ type: 'all', value: 'all' })
+      setStatusFilter('all')
+      setPriorityFilter('all')
+      setCurrentPage(1)
+    }}
+  >
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total</CardTitle>
+      <FileText className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.total}</div>
+      <p className="text-xs sm:text-sm text-gray-600 mt-1">All complaints</p>
+    </CardContent>
+  </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Open</CardTitle>
-                <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-orange-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.open}</div>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1">Awaiting action</p>
-              </CardContent>
-            </Card>
+  {/* Open Card */}
+  <Card 
+    className={`border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100 cursor-pointer transition-all duration-200 hover:scale-105 ${
+      activeFilter.type === 'status' && activeFilter.value === 'open' ? 'ring-2 ring-orange-500' : ''
+    }`}
+    onClick={() => {
+      setActiveFilter({ type: 'status', value: 'open' })
+      setStatusFilter('open')
+      setPriorityFilter('all')
+      setCurrentPage(1)
+    }}
+  >
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Open</CardTitle>
+      <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-orange-600" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.open}</div>
+      <p className="text-xs sm:text-sm text-gray-600 mt-1">Awaiting action</p>
+    </CardContent>
+  </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Assigned</CardTitle>
-                <UserCheck className="h-4 w-4 lg:h-5 lg:w-5 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.assigned}</div>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1">To technicians</p>
-              </CardContent>
-            </Card>
+  {/* Assigned Card */}
+  <Card 
+    className={`border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100 cursor-pointer transition-all duration-200 hover:scale-105 ${
+      activeFilter.type === 'status' && activeFilter.value === 'assigned' ? 'ring-2 ring-purple-500' : ''
+    }`}
+    onClick={() => {
+      setActiveFilter({ type: 'status', value: 'assigned' })
+      setStatusFilter('assigned')
+      setPriorityFilter('all')
+      setCurrentPage(1)
+    }}
+  >
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Assigned</CardTitle>
+      <UserCheck className="h-4 w-4 lg:h-5 lg:w-5 text-purple-600" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.assigned}</div>
+      <p className="text-xs sm:text-sm text-gray-600 mt-1">To technicians</p>
+    </CardContent>
+  </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-yellow-100">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Progress</CardTitle>
-                <Timer className="h-4 w-4 lg:h-5 lg:w-5 text-yellow-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.inProgress}</div>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1">Being worked on</p>
-              </CardContent>
-            </Card>
+  {/* Progress Card */}
+  <Card 
+    className={`border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-yellow-100 cursor-pointer transition-all duration-200 hover:scale-105 ${
+      activeFilter.type === 'status' && activeFilter.value === 'in-progress' ? 'ring-2 ring-yellow-500' : ''
+    }`}
+    onClick={() => {
+      setActiveFilter({ type: 'status', value: 'in-progress' })
+      setStatusFilter('in-progress')
+      setPriorityFilter('all')
+      setCurrentPage(1)
+    }}
+  >
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Progress</CardTitle>
+      <Timer className="h-4 w-4 lg:h-5 lg:w-5 text-yellow-600" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.inProgress}</div>
+      <p className="text-xs sm:text-sm text-gray-600 mt-1">Being worked on</p>
+    </CardContent>
+  </Card>
 
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Resolved</CardTitle>
-                <CheckCircle className="h-4 w-4 lg:h-5 lg:w-5 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.resolved}</div>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1">Completed</p>
-              </CardContent>
-            </Card>
-          </div>
+  {/* Resolved Card */}
+  <Card 
+    className={`border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100 cursor-pointer transition-all duration-200 hover:scale-105 ${
+      activeFilter.type === 'status' && activeFilter.value === 'resolved' ? 'ring-2 ring-green-500' : ''
+    }`}
+    onClick={() => {
+      setActiveFilter({ type: 'status', value: 'resolved' })
+      setStatusFilter('resolved')
+      setPriorityFilter('all')
+      setCurrentPage(1)
+    }}
+  >
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Resolved</CardTitle>
+      <CheckCircle className="h-4 w-4 lg:h-5 lg:w-5 text-green-600" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-xl sm:text-2xl lg:text-3xl font-bold">{stats.resolved}</div>
+      <p className="text-xs sm:text-sm text-gray-600 mt-1">Completed</p>
+    </CardContent>
+  </Card>
+</div>
 
           {/* Search and Filters */}
           <Card className="shadow-sm">
@@ -522,6 +581,20 @@ const handleDelete = async (complaintId: string) => {
               >
                 Sort {sortOrder === "asc" ? "↑" : "↓"}
               </Button>
+              <Button
+  variant="outline"
+  size="sm"
+  onClick={() => {
+    setActiveFilter({ type: 'all', value: 'all' })
+    setStatusFilter('all')
+    setPriorityFilter('all')
+    setCurrentPage(1)
+  }}
+  disabled={activeFilter.type === 'all'}
+  className="h-9"
+>
+  Clear Filters
+</Button>
             </div>
 
             <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -554,17 +627,30 @@ const handleDelete = async (complaintId: string) => {
 
           {/* Complaints Table */}
           <Card className="border-0 shadow-lg">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl font-semibold">Complaints ({filteredComplaints.length})</CardTitle>
-                  <CardDescription className="mt-1">
-                    Page {currentPage} of {totalPages || 1} • {ITEMS_PER_PAGE} per page
-                  </CardDescription>
-                </div>
-                {loading && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>}
-              </div>
-            </CardHeader>
+<CardHeader className="pb-4">
+  <div className="flex items-center justify-between">
+    <div>
+      <CardTitle className="text-xl font-semibold">
+        Complaints ({filteredComplaints.length})
+        {activeFilter.type !== 'all' && (
+          <Badge variant="secondary" className="ml-2">
+            {activeFilter.type === 'status' && `Status: ${activeFilter.value}`}
+            {activeFilter.type === 'priority' && `Priority: ${activeFilter.value}`}
+          </Badge>
+        )}
+      </CardTitle>
+      <CardDescription className="mt-1">
+        Page {currentPage} of {totalPages || 1} • {ITEMS_PER_PAGE} per page
+        {activeFilter.type !== 'all' && (
+          <span className="ml-2 text-blue-600">
+            • Showing {activeFilter.type === 'status' ? activeFilter.value : activeFilter.value} complaints
+          </span>
+        )}
+      </CardDescription>
+    </div>
+    {loading && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>}
+  </div>
+</CardHeader>
 
             <CardContent className="p-0">
               {loading ? (
@@ -603,10 +689,10 @@ const handleDelete = async (complaintId: string) => {
                               </TableCell>
                               <TableCell className="text-sm">
                                 <div className="font-medium text-gray-900 truncate">
-                                  {complaint.customerName || "N/A"}
+                                  {complaint.customerName || complaint.createdBy.name || "N/A"}
                                 </div>
                                 <div className="text-xs text-gray-500 truncate">
-                                  {complaint.customerEmail|| "N/A"}
+                                  {complaint.customerEmail|| complaint.createdBy.email || "N/A"}
                                 </div>
                               </TableCell>
                               <TableCell className="text-sm">
