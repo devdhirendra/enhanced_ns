@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
@@ -260,6 +261,7 @@ export default function InventoryPage() {
   }
 
   return (
+    <DashboardLayout title="My Inventory" description="View and manage the inventory">
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
@@ -599,6 +601,7 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   )
 }
 

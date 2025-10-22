@@ -113,6 +113,7 @@ const operatorNavItems = [
     title: "Dashboard & Analytics",
     items: [
       { title: "Dashboard", url: "/operator/dashboard", icon: LayoutDashboard },
+      { title: "Attendance", url: "/operator/attendance", icon: Users },
       { title: "Reports", url: "/operator/reports", icon: BarChart3 },
     ],
   },
@@ -131,7 +132,9 @@ const operatorNavItems = [
       { title: "Technicians", url: "/operator/technicians", icon: HardHat },
       { title: "Inventory", url: "/operator/inventory", icon: Package },
       { title: "Network Map", url: "/operator/network-map", icon: MapPin },
-      { title: "Onboarding", url: "/operator/onboarding", icon: UserCheck },
+      { title: "Onboarding", url: "/operator/onboarding", icon: UserCheck },      
+      { title: "Tasks", url: "/operator/tasks", icon: Database },
+      
     ],
   },
   {

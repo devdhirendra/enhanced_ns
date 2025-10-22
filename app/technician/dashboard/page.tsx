@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 import { technicianApi, inventoryApi, complaintApi, taskApi } from "@/lib/api"
 import Link from "next/link"
+import DashboardLayout from "@/components/layout/DashboardLayout"
 import {
   CheckCircle,
   Clock,
@@ -499,6 +500,7 @@ export default function TechnicianDashboardPage() {
   }
 
   return (
+    <DashboardLayout title="Dashboard" description="View all summary">
     <div className="space-y-6">
       {/* Welcome Header */}
       <div className="bg-gradient-to-r from-orange-50 via-blue-50 to-green-50 rounded-lg p-6 border-0 shadow-lg">
@@ -865,5 +867,6 @@ export default function TechnicianDashboardPage() {
         </Card>
       </div>
     </div>
+    </DashboardLayout>
   )
 }

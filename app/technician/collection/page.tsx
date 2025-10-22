@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
@@ -230,6 +231,7 @@ export default function CollectionPage() {
   }
 
   return (
+    <DashboardLayout title="My Collection" description="View and manage Collections">
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
@@ -530,6 +532,7 @@ export default function CollectionPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   )
 }
 

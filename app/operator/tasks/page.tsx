@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import OperatorTaskList from "@/components/tasks/operator-task-list"
 
-export default function StaffTasksPage() {
+export default function OperatorTasksPage() {
   const { user } = useAuth()
 
   if (!user) {

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
@@ -271,6 +272,7 @@ export default function NetworkMapPage() {
   const utilizationPercentage = Math.round((networkStats.totalLoad / networkStats.totalCapacity) * 100)
 
   return (
+    <DashboardLayout title="Network Map" description="View and manage Network Map">
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
@@ -751,4 +753,5 @@ export default function NetworkMapPage() {
           </Dialog>
         )}
         </div>
+        </DashboardLayout>
   )}

@@ -11,7 +11,6 @@ import { CalendarIcon, Download } from "lucide-react"
 import { attendanceApi } from "@/lib/attendance-api"
 import { useToast } from "@/hooks/use-toast"
 import { showConfirmation } from "@/lib/confirmation-dialog"
-import DashboardLayout from "@/components/layout/DashboardLayout"
 import { CheckInOutCard } from "@/components/attendance/check-in-out-card"
 import { AttendanceStatsCards } from "@/components/attendance/attendance-stats-cards"
 import { AttendancePagination } from "@/components/attendance/attendance-pagination"
@@ -24,12 +23,11 @@ interface AttendanceRecord {
   location: string
 }
 
-export default function TechnicianAttendancePage() {
+export default function StaffAttendancePage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([])
-  const [currentTime, setCurrentTime] = useState(new Date())
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
@@ -50,7 +48,6 @@ export default function TechnicianAttendancePage() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date())
       if (currentAttendance.status === "checked_in" && currentAttendance.checkInTime) {
         updateWorkingHours()
       }
@@ -82,15 +79,12 @@ export default function TechnicianAttendancePage() {
     }
   }
 
-const fetchAttendanceData = async () => {
-  if (!user?.user_id) return
+  const fetchAttendanceData = async () => {
+    if (!user?.user_id) return
 
-  try {
-    setLoading(true)
-    const response = await attendanceApi.getAllAttendance(user.user_id)
-    
-    if (response.success) {
-      const records = response.data
+    try {
+      setLoading(true)
+      const records = await attendanceApi.getAllAttendance(user.user_id)
       const transformedData = Array.isArray(records)
         ? records.map((record: any) => ({
             date: record.date,
@@ -104,10 +98,10 @@ const fetchAttendanceData = async () => {
       setAttendanceData(transformedData)
 
       const today = new Date().toISOString().split("T")[0]
-      const todayResponse = await attendanceApi.getDaySummary(user.user_id, today)
-      
-      if (todayResponse.success && todayResponse.data?.sessions && todayResponse.data.sessions.length > 0) {
-        const latestSession = todayResponse.data.sessions[todayResponse.data.sessions.length - 1]
+      const todaySummary = await attendanceApi.getDaySummary(user.user_id, today)
+
+      if (todaySummary?.sessions && todaySummary.sessions.length > 0) {
+        const latestSession = todaySummary.sessions[todaySummary.sessions.length - 1]
         setCurrentAttendance({
           status: latestSession.checkOut ? "checked_out" : "checked_in",
           checkInTime: latestSession.checkIn ? new Date(latestSession.checkIn).toTimeString().split(" ")[0] : null,
@@ -118,46 +112,41 @@ const fetchAttendanceData = async () => {
           isInGeofence: true,
         })
       }
-    } else {
-      throw new Error(response.error)
+    } catch (error) {
+      console.error("[v0] Error fetching attendance:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load attendance data",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
-  } catch (error) {
-    console.error("[v0] Error fetching attendance:", error)
-    toast({
-      title: "Error",
-      description: "Failed to load attendance data",
-      variant: "destructive",
-    })
-  } finally {
-    setLoading(false)
   }
-}
 
+  const handleCheckIn = async () => {
+    if (!user?.user_id) return
 
-const handleCheckIn = async () => {
-  if (!user?.user_id) return
-
-  const confirmed = await showConfirmation({
-    title: "Check In",
-    message: "Are you sure you want to check in for today?",
-    confirmText: "Check In",
-    cancelText: "Cancel",
-  })
-
-  if (!confirmed) return
-
-  try {
-    setCheckInLoading(true)
-    const now = new Date()
-
-    const response = await attendanceApi.checkIn(user.user_id, {
-      at: now.toISOString(),
-      location: "Current Location",
-      date: now.toISOString().split("T")[0],
+    const confirmed = await showConfirmation({
+      title: "Check In",
+      message: "Are you sure you want to check in for today?",
+      confirmText: "Check In",
+      cancelText: "Cancel",
     })
 
-    if (response.success) {
+    if (!confirmed) return
+
+    try {
+      setCheckInLoading(true)
+      const now = new Date()
       const checkInTime = now.toTimeString().split(" ")[0]
+
+      await attendanceApi.checkIn(user.user_id, {
+        at: now.toISOString(),
+        location: "Current Location",
+        date: now.toISOString().split("T")[0],
+      })
+
       setCurrentAttendance((prev) => ({
         ...prev,
         status: "checked_in",
@@ -168,28 +157,25 @@ const handleCheckIn = async () => {
         title: "Checked In",
         description: "You have successfully checked in for today.",
       })
-    } else {
-      throw new Error(response.error)
+    } catch (error) {
+      console.error("[v0] Check-in error:", error)
+      toast({
+        title: "Check In Failed",
+        description: "Failed to check in. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setCheckInLoading(false)
     }
-  } catch (error) {
-    console.error("[v0] Check-in error:", error)
-    toast({
-      title: "Check In Failed",
-      description: "Failed to check in. Please try again.",
-      variant: "destructive",
-    })
-  } finally {
-    setCheckInLoading(false)
   }
-}
-const handleCheckOut = async (notes: string) => {
-  if (!user?.user_id) return
 
-  try {
-    setCheckOutLoading(true)
-    const response = await attendanceApi.checkOut(user.user_id)
+  const handleCheckOut = async (notes: string) => {
+    if (!user?.user_id) return
 
-    if (response.success) {
+    try {
+      setCheckOutLoading(true)
+      await attendanceApi.checkOut(user.user_id)
+
       setCurrentAttendance((prev) => ({
         ...prev,
         status: "checked_out",
@@ -201,20 +187,17 @@ const handleCheckOut = async (notes: string) => {
       })
 
       fetchAttendanceData()
-    } else {
-      throw new Error(response.error)
+    } catch (error) {
+      console.error("[v0] Check-out error:", error)
+      toast({
+        title: "Check Out Failed",
+        description: "Failed to check out. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setCheckOutLoading(false)
     }
-  } catch (error) {
-    console.error("[v0] Check-out error:", error)
-    toast({
-      title: "Check Out Failed",
-      description: "Failed to check out. Please try again.",
-      variant: "destructive",
-    })
-  } finally {
-    setCheckOutLoading(false)
   }
-}
 
   const monthlyStats = {
     totalDays: attendanceData.length,
@@ -229,21 +212,25 @@ const handleCheckOut = async (notes: string) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
   return (
-    <DashboardLayout title="My Attendance" description="View and manage Attendance">
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Attendance Tracking</h1>
+          <p className="text-gray-500">Monitor your daily attendance and working hours</p>
+        </div>
+        <Button onClick={fetchAttendanceData} variant="outline" disabled={loading}>
+          <Download className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </div>
-      
 
       <CheckInOutCard
-      
         status={currentAttendance.status}
         checkInTime={currentAttendance.checkInTime}
         workingHours={currentAttendance.workingHours}
@@ -252,10 +239,6 @@ const handleCheckOut = async (notes: string) => {
         onCheckOut={handleCheckOut}
         loading={checkInLoading || checkOutLoading}
       />
-              <Button onClick={fetchAttendanceData} variant="outline" disabled={loading}>
-          <Download className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
 
       <AttendanceStatsCards
         attendanceRate={attendancePercentage}
@@ -369,6 +352,5 @@ const handleCheckOut = async (notes: string) => {
         </Card>
       </div>
     </div>
-    </DashboardLayout>
   )
 }

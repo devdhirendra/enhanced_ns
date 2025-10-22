@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import DashboardLayout from "@/components/layout/DashboardLayout"
 import {
   Search,
   Plus,
@@ -372,6 +373,7 @@ export default function LeavePage() {
   }
 
   return (
+    <DashboardLayout title="My Leaves" description="View and manage your leaves">
     <div className="space-y-6 p-4 md:p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
@@ -773,6 +775,7 @@ export default function LeavePage() {
         </TabsContent>
       </Tabs>
     </div>
+    </DashboardLayout>
   )
 }
 
