@@ -45,7 +45,9 @@ export default function VendorAttendancePage() {
 
     try {
       setLoading(true)
-      const records = await attendanceApi.getAllAttendance(user.user_id)
+      const response = await attendanceApi.getAllAttendance(user.user_id)
+
+      const records = Array.isArray(response) ? response : response.data || []
       const transformedData = Array.isArray(records)
         ? records.map((record: any) => ({
             date: record.date,

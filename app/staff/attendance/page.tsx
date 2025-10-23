@@ -7,20 +7,31 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { CalendarIcon, Download } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { CalendarIcon, RefreshCw } from "lucide-react"
 import { attendanceApi } from "@/lib/attendance-api"
+import DashboardLayout from "@/components/layout/DashboardLayout"
 import { useToast } from "@/hooks/use-toast"
-import { showConfirmation } from "@/lib/confirmation-dialog"
 import { CheckInOutCard } from "@/components/attendance/check-in-out-card"
 import { AttendanceStatsCards } from "@/components/attendance/attendance-stats-cards"
 import { AttendancePagination } from "@/components/attendance/attendance-pagination"
 
 interface AttendanceRecord {
+  sessionId: string
   date: string
   checkIn: string
   checkOut: string | null
   durationMinutes: number
   location: string
+}
+
+interface CurrentSession {
+  isCheckedIn: boolean
+  checkInTime: string | null
+  checkOutTime: string | null
+  sessionId: string | null
+  location: string
+  workingHours: string
 }
 
 export default function StaffAttendancePage() {
@@ -31,15 +42,15 @@ export default function StaffAttendancePage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
-  const [checkInLoading, setCheckInLoading] = useState(false)
-  const [checkOutLoading, setCheckOutLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [currentAttendance, setCurrentAttendance] = useState({
-    status: "checked_out" as "checked_in" | "checked_out",
-    checkInTime: null as string | null,
-    currentLocation: "Unknown Location",
+  const [currentSession, setCurrentSession] = useState<CurrentSession>({
+    isCheckedIn: false,
+    checkInTime: null,
+    checkOutTime: null,
+    sessionId: null,
+    location: "Web App",
     workingHours: "0h 0m",
-    isInGeofence: true,
   })
 
   const itemsPerPage = 10
@@ -47,35 +58,55 @@ export default function StaffAttendancePage() {
   const paginatedData = attendanceData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (currentAttendance.status === "checked_in" && currentAttendance.checkInTime) {
-        updateWorkingHours()
-      }
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [currentAttendance.checkInTime, currentAttendance.status])
-
-  useEffect(() => {
     if (user?.user_id) {
       fetchAttendanceData()
     }
   }, [user])
 
-  const updateWorkingHours = () => {
-    if (currentAttendance.checkInTime && currentAttendance.status === "checked_in") {
-      const checkInDate = new Date()
-      const [hours, minutes, seconds] = currentAttendance.checkInTime.split(":")
-      checkInDate.setHours(Number.parseInt(hours), Number.parseInt(minutes), Number.parseInt(seconds || "0"))
+  // FIXED: Separate effect to fetch current session status
+  useEffect(() => {
+    if (user?.user_id) {
+      fetchCurrentSession()
+    }
+  }, [user])
 
-      const now = new Date()
-      const diffMs = now.getTime() - checkInDate.getTime()
-      const diffMinutes = Math.floor(diffMs / (1000 * 60))
-      const workingHours = `${Math.floor(diffMinutes / 60)}h ${diffMinutes % 60}m`
+  const fetchCurrentSession = async () => {
+    if (!user?.user_id) return
 
-      setCurrentAttendance((prev) => ({
-        ...prev,
-        workingHours,
-      }))
+    try {
+      const today = new Date().toISOString().split("T")[0]
+      const todayResponse = await attendanceApi.getDaySummary(user.user_id, today)
+
+      if (todayResponse.success && todayResponse.data) {
+        const sessions = todayResponse.data.sessions || []
+        if (sessions.length > 0) {
+          const latestSession = sessions[sessions.length - 1]
+          const isCheckedIn = !!latestSession.checkIn && !latestSession.checkOut
+
+          setCurrentSession({
+            isCheckedIn,
+            checkInTime: latestSession.checkIn,
+            checkOutTime: latestSession.checkOut || null,
+            sessionId: latestSession.sessionId,
+            location: latestSession.location || "Web App",
+            workingHours: latestSession.durationMinutes
+              ? `${Math.floor(latestSession.durationMinutes / 60)}h ${latestSession.durationMinutes % 60}m`
+              : "0h 0m",
+          })
+        } else {
+          // No session for today - reset to default
+          setCurrentSession({
+            isCheckedIn: false,
+            checkInTime: null,
+            checkOutTime: null,
+            sessionId: null,
+            location: "Web App",
+            workingHours: "0h 0m",
+          })
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching current session:", error)
     }
   }
 
@@ -84,33 +115,26 @@ export default function StaffAttendancePage() {
 
     try {
       setLoading(true)
-      const records = await attendanceApi.getAllAttendance(user.user_id)
-      const transformedData = Array.isArray(records)
-        ? records.map((record: any) => ({
-            date: record.date,
-            checkIn: record.checkIn,
-            checkOut: record.checkOut,
-            durationMinutes: record.durationMinutes || 0,
-            location: record.location || "Unknown Location",
-          }))
-        : []
+      const response = await attendanceApi.getAllAttendance(user.user_id, {
+        limit: 100,
+        page: 1,
+      })
 
-      setAttendanceData(transformedData)
-
-      const today = new Date().toISOString().split("T")[0]
-      const todaySummary = await attendanceApi.getDaySummary(user.user_id, today)
-
-      if (todaySummary?.sessions && todaySummary.sessions.length > 0) {
-        const latestSession = todaySummary.sessions[todaySummary.sessions.length - 1]
-        setCurrentAttendance({
-          status: latestSession.checkOut ? "checked_out" : "checked_in",
-          checkInTime: latestSession.checkIn ? new Date(latestSession.checkIn).toTimeString().split(" ")[0] : null,
-          currentLocation: latestSession.location || "Unknown Location",
-          workingHours: latestSession.durationMinutes
-            ? `${Math.floor(latestSession.durationMinutes / 60)}h ${latestSession.durationMinutes % 60}m`
-            : "0h 0m",
-          isInGeofence: true,
-        })
+      if (response.success && response.data) {
+        const attendanceData = response.data.attendance || response.data
+        const records = Array.isArray(attendanceData) ? attendanceData : []
+        
+        const transformedData: AttendanceRecord[] = records.map((record: any) => ({
+          sessionId: record.sessionId || `session_${user.user_id}_${record.date}`,
+          date: record.date,
+          checkIn: record.checkIn,
+          checkOut: record.checkOut,
+          durationMinutes: record.durationMinutes || 0,
+          location: record.location || "Web App",
+        }))
+        setAttendanceData(transformedData)
+      } else {
+        throw new Error(response.error || "Failed to fetch attendance data")
       }
     } catch (error) {
       console.error("[v0] Error fetching attendance:", error)
@@ -127,45 +151,47 @@ export default function StaffAttendancePage() {
   const handleCheckIn = async () => {
     if (!user?.user_id) return
 
-    const confirmed = await showConfirmation({
-      title: "Check In",
-      message: "Are you sure you want to check in for today?",
-      confirmText: "Check In",
-      cancelText: "Cancel",
-    })
-
-    if (!confirmed) return
-
     try {
-      setCheckInLoading(true)
-      const now = new Date()
-      const checkInTime = now.toTimeString().split(" ")[0]
-
-      await attendanceApi.checkIn(user.user_id, {
-        at: now.toISOString(),
-        location: "Current Location",
-        date: now.toISOString().split("T")[0],
+      setActionLoading(true)
+      const response = await attendanceApi.checkIn(user.user_id, {
+        location: "Web App",
       })
 
-      setCurrentAttendance((prev) => ({
-        ...prev,
-        status: "checked_in",
-        checkInTime: checkInTime,
-      }))
-
-      toast({
-        title: "Checked In",
-        description: "You have successfully checked in for today.",
-      })
+      if (response.success) {
+        const session = response.data?.session || response.data
+        
+        // FIXED: Immediately update current session state
+        setCurrentSession({
+          isCheckedIn: true,
+          checkInTime: session?.checkIn || new Date().toISOString(),
+          checkOutTime: null,
+          sessionId: session?.sessionId,
+          location: session?.location || "Web App",
+          workingHours: "0h 0m",
+        })
+        
+        toast({
+          title: "Success",
+          description: "Checked in successfully",
+        })
+        
+        // Refresh both current session and attendance data
+        await Promise.all([
+          fetchCurrentSession(),
+          fetchAttendanceData()
+        ])
+      } else {
+        throw new Error(response.error || "Failed to check in")
+      }
     } catch (error) {
       console.error("[v0] Check-in error:", error)
       toast({
         title: "Check In Failed",
-        description: "Failed to check in. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to check in. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setCheckInLoading(false)
+      setActionLoading(false)
     }
   }
 
@@ -173,41 +199,83 @@ export default function StaffAttendancePage() {
     if (!user?.user_id) return
 
     try {
-      setCheckOutLoading(true)
-      await attendanceApi.checkOut(user.user_id)
+      setActionLoading(true)
+      const response = await attendanceApi.checkOut(user.user_id)
 
-      setCurrentAttendance((prev) => ({
-        ...prev,
-        status: "checked_out",
-      }))
-
-      toast({
-        title: "Checked Out",
-        description: "You have successfully checked out for today.",
-      })
-
-      fetchAttendanceData()
+      if (response.success) {
+        const session = response.data?.session || response.data
+        
+        // FIXED: Immediately update current session state
+        setCurrentSession(prev => ({
+          ...prev,
+          isCheckedIn: false,
+          checkOutTime: session?.checkOut || new Date().toISOString(),
+          workingHours: session?.durationMinutes
+            ? `${Math.floor(session.durationMinutes / 60)}h ${session.durationMinutes % 60}m`
+            : "0h 0m",
+        }))
+        
+        toast({
+          title: "Success",
+          description: "Checked out successfully",
+        })
+        
+        // Refresh both current session and attendance data
+        await Promise.all([
+          fetchCurrentSession(),
+          fetchAttendanceData()
+        ])
+      } else {
+        throw new Error(response.error || "Failed to check out")
+      }
     } catch (error) {
       console.error("[v0] Check-out error:", error)
       toast({
         title: "Check Out Failed",
-        description: "Failed to check out. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to check out. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setCheckOutLoading(false)
+      setActionLoading(false)
     }
+  }
+
+  const calculateAverageCheckIn = (records: AttendanceRecord[]) => {
+    const validRecords = records.filter(record => record.checkIn && record.checkOut)
+    if (validRecords.length === 0) return "09:00"
+    
+    const totalMinutes = validRecords.reduce((acc, record) => {
+      const checkInTime = new Date(record.checkIn)
+      return acc + (checkInTime.getHours() * 60 + checkInTime.getMinutes())
+    }, 0)
+    
+    const averageMinutes = Math.round(totalMinutes / validRecords.length)
+    const hours = Math.floor(averageMinutes / 60)
+    const minutes = averageMinutes % 60
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
   }
 
   const monthlyStats = {
     totalDays: attendanceData.length,
-    presentDays: attendanceData.filter((d) => d.checkIn).length,
+    presentDays: attendanceData.filter((d) => d.checkIn && d.checkOut).length,
     totalHours: Math.round(attendanceData.reduce((acc, d) => acc + (d.durationMinutes || 0), 0) / 60),
-    averageCheckIn: "09:15",
+    averageCheckIn: calculateAverageCheckIn(attendanceData),
   }
 
   const attendancePercentage =
     monthlyStats.totalDays > 0 ? Math.round((monthlyStats.presentDays / monthlyStats.totalDays) * 100) : 0
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      fetchCurrentSession(),
+      fetchAttendanceData()
+    ])
+    toast({
+      title: "Refreshed",
+      description: "Attendance data updated",
+    })
+  }
 
   if (loading) {
     return (
@@ -218,26 +286,19 @@ export default function StaffAttendancePage() {
   }
 
   return (
+        <DashboardLayout title="My Attendance" description="Monitor your daily attendance and working hours">
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Attendance Tracking</h1>
-          <p className="text-gray-500">Monitor your daily attendance and working hours</p>
-        </div>
-        <Button onClick={fetchAttendanceData} variant="outline" disabled={loading}>
-          <Download className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
-      </div>
 
       <CheckInOutCard
-        status={currentAttendance.status}
-        checkInTime={currentAttendance.checkInTime}
-        workingHours={currentAttendance.workingHours}
-        location={currentAttendance.currentLocation}
+        isCheckedIn={currentSession.isCheckedIn}
+        checkInTime={currentSession.checkInTime}
+        checkOutTime={currentSession.checkOutTime}
+        workingHours={currentSession.workingHours}
+        location={currentSession.location}
+        sessionId={currentSession.sessionId || undefined}
         onCheckIn={handleCheckIn}
         onCheckOut={handleCheckOut}
-        loading={checkInLoading || checkOutLoading}
+        loading={actionLoading}
       />
 
       <AttendanceStatsCards
@@ -296,6 +357,7 @@ export default function StaffAttendancePage() {
                   <SelectContent>
                     <SelectItem value="2025">2025</SelectItem>
                     <SelectItem value="2024">2024</SelectItem>
+                    <SelectItem value="2023">2023</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -311,22 +373,37 @@ export default function StaffAttendancePage() {
                     <TableHead>Check-out</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Location</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedData.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                         No attendance records found
                       </TableCell>
                     </TableRow>
                   ) : (
-                    paginatedData.map((record, index) => (
-                      <TableRow key={index}>
+                    paginatedData.map((record) => (
+                      <TableRow key={record.sessionId}>
                         <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
-                        <TableCell>{record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : "---"}</TableCell>
                         <TableCell>
-                          {record.checkOut ? new Date(record.checkOut).toLocaleTimeString() : "---"}
+                          {record.checkIn
+                            ? new Date(record.checkIn).toLocaleTimeString("en-IN", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
+                            : "---"}
+                        </TableCell>
+                        <TableCell>
+                          {record.checkOut
+                            ? new Date(record.checkOut).toLocaleTimeString("en-IN", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
+                            : "---"}
                         </TableCell>
                         <TableCell>
                           {record.durationMinutes
@@ -334,6 +411,15 @@ export default function StaffAttendancePage() {
                             : "---"}
                         </TableCell>
                         <TableCell>{record.location}</TableCell>
+                        <TableCell>
+                          {record.checkOut ? (
+                            <Badge className="bg-green-100 text-green-800">Present</Badge>
+                          ) : record.checkIn ? (
+                            <Badge className="bg-yellow-100 text-yellow-800">Checked In</Badge>
+                          ) : (
+                            <Badge className="bg-red-100 text-red-800">Absent</Badge>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -352,5 +438,6 @@ export default function StaffAttendancePage() {
         </Card>
       </div>
     </div>
+    </DashboardLayout>
   )
 }

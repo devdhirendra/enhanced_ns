@@ -83,7 +83,8 @@ const adminNavItems = [
       { title: "Leave Management", url: "/admin/leave", icon: Calendar },
       { title: "Complaint Management", url: "/admin/complaints", icon: UserCog },
       { title: "Tasks Management", url: "/admin/tasks", icon: UserCog },
-      { title: "Onboarding", url: "/admin/onboarding", icon: UserCheck },
+      { title: "Onboarding Management", url: "/admin/onboarding", icon: UserCheck },
+      { title: "Attendance Management", url: "/admin/attendance", icon: Calendar },
     ],
   },
   {
@@ -231,6 +232,7 @@ const staffNavItems = [
     items: [
       { title: "Dashboard", url: "/staff/dashboard", icon: LayoutDashboard },
       { title: "My Tasks", url: "/staff/tasks", icon: ClipboardList },
+      { title: "My Attendance", url: "/staff/attendance", icon: Calendar },
       { title: "Assigned Tickets", url: "/staff/tickets", icon: Headphones },
       { title: "My Onboarding", url: "/staff/my-onboarding", icon: UserCheck },
     ],

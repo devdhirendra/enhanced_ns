@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Download } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 import { attendanceApi } from "@/lib/attendance-api"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { useToast } from "@/hooks/use-toast"
@@ -15,6 +15,7 @@ import { AttendanceStatsCards } from "@/components/attendance/attendance-stats-c
 import { AttendancePagination } from "@/components/attendance/attendance-pagination"
 
 interface AttendanceRecord {
+  sessionId: string
   date: string
   checkIn: string
   checkOut: string | null
@@ -46,18 +47,23 @@ export default function OperatorAttendancePage() {
 
     try {
       setLoading(true)
-      const records = await attendanceApi.getAllAttendance(user.user_id)
-      const transformedData = Array.isArray(records)
-        ? records.map((record: any) => ({
-            date: record.date,
-            checkIn: record.checkIn,
-            checkOut: record.checkOut,
-            durationMinutes: record.durationMinutes || 0,
-            location: record.location || "Unknown Location",
-          }))
-        : []
+      const response = await attendanceApi.getAllAttendance(user.user_id, {
+        limit: 100,
+        page: 1,
+      })
 
-      setAttendanceData(transformedData)
+      if (response.success && response.data) {
+        const records = Array.isArray(response.data) ? response.data : response.data.attendance || []
+        const transformedData = records.map((record: any) => ({
+          sessionId: record.sessionId,
+          date: record.date,
+          checkIn: record.checkIn,
+          checkOut: record.checkOut,
+          durationMinutes: record.durationMinutes || 0,
+          location: record.location || "Web App",
+        }))
+        setAttendanceData(transformedData)
+      }
     } catch (error) {
       console.error("[v0] Error fetching attendance:", error)
       toast({
@@ -90,110 +96,137 @@ export default function OperatorAttendancePage() {
 
   return (
     <DashboardLayout title="Attendance" description="View and manage Attendance">
-    <div className="space-y-6">
-
-
-      <AttendanceStatsCards
-        attendanceRate={attendancePercentage}
-        totalHours={monthlyStats.totalHours}
-        averageCheckIn={monthlyStats.averageCheckIn}
-        totalTasks={monthlyStats.presentDays}
-      />
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-            <div>
-              <CardTitle>Attendance Records</CardTitle>
-              <CardDescription>Your complete attendance history</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Select
-                value={selectedMonth.toString()}
-                onValueChange={(value) => setSelectedMonth(Number.parseInt(value))}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <SelectItem key={i} value={i.toString()}>
-                      {new Date(0, i).toLocaleString("default", { month: "long" })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={selectedYear.toString()}
-                onValueChange={(value) => setSelectedYear(Number.parseInt(value))}
-              >
-                <SelectTrigger className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2025">2025</SelectItem>
-                  <SelectItem value="2024">2024</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Attendance Records</h1>
+            <p className="text-gray-500">View your attendance history</p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Check-in</TableHead>
-                  <TableHead>Check-out</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedData.length === 0 ? (
+          <Button onClick={fetchAttendanceData} variant="outline" disabled={loading}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+
+        <AttendanceStatsCards
+          attendanceRate={attendancePercentage}
+          totalHours={monthlyStats.totalHours}
+          averageCheckIn={monthlyStats.averageCheckIn}
+          totalTasks={monthlyStats.presentDays}
+        />
+
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+              <div>
+                <CardTitle>Attendance Records</CardTitle>
+                <CardDescription>Your complete attendance history</CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Select
+                  value={selectedMonth.toString()}
+                  onValueChange={(value) => setSelectedMonth(Number.parseInt(value))}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <SelectItem key={i} value={i.toString()}>
+                        {new Date(0, i).toLocaleString("default", { month: "long" })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={selectedYear.toString()}
+                  onValueChange={(value) => setSelectedYear(Number.parseInt(value))}
+                >
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2025">2025</SelectItem>
+                    <SelectItem value="2024">2024</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                      No attendance records found
-                    </TableCell>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Check-in</TableHead>
+                    <TableHead>Check-out</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
-                ) : (
-                  paginatedData.map((record, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
-                      <TableCell>{record.checkIn ? new Date(record.checkIn).toLocaleTimeString() : "---"}</TableCell>
-                      <TableCell>{record.checkOut ? new Date(record.checkOut).toLocaleTimeString() : "---"}</TableCell>
-                      <TableCell>
-                        {record.durationMinutes
-                          ? `${Math.floor(record.durationMinutes / 60)}h ${record.durationMinutes % 60}m`
-                          : "---"}
-                      </TableCell>
-                      <TableCell>{record.location}</TableCell>
-                      <TableCell>
-                        {record.checkIn ? (
-                          <Badge className="bg-green-100 text-green-800">Present</Badge>
-                        ) : (
-                          <Badge className="bg-red-100 text-red-800">Absent</Badge>
-                        )}
+                </TableHeader>
+                <TableBody>
+                  {paginatedData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                        No attendance records found
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    paginatedData.map((record) => (
+                      <TableRow key={record.sessionId}>
+                        <TableCell>{new Date(record.date).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          {record.checkIn
+                            ? new Date(record.checkIn).toLocaleTimeString("en-IN", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
+                            : "---"}
+                        </TableCell>
+                        <TableCell>
+                          {record.checkOut
+                            ? new Date(record.checkOut).toLocaleTimeString("en-IN", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
+                            : "---"}
+                        </TableCell>
+                        <TableCell>
+                          {record.durationMinutes
+                            ? `${Math.floor(record.durationMinutes / 60)}h ${record.durationMinutes % 60}m`
+                            : "---"}
+                        </TableCell>
+                        <TableCell>{record.location}</TableCell>
+                        <TableCell>
+                          {record.checkOut ? (
+                            <Badge className="bg-green-100 text-green-800">Present</Badge>
+                          ) : record.checkIn ? (
+                            <Badge className="bg-yellow-100 text-yellow-800">Checked In</Badge>
+                          ) : (
+                            <Badge className="bg-red-100 text-red-800">Absent</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-          <AttendancePagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            itemsPerPage={itemsPerPage}
-            totalItems={attendanceData.length}
-          />
-        </CardContent>
-      </Card>
-    </div>
+            <AttendancePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              itemsPerPage={itemsPerPage}
+              totalItems={attendanceData.length}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </DashboardLayout>
   )
 }
