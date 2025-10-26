@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,19 +17,22 @@ import {
   ArrowDown,
   Calendar,
   Settings,
-  Star,
   Download,
   Upload,
+  AlertCircle,
 } from "lucide-react"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatDate } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import { useToast } from "@/hooks/use-toast"
+import { planSubscriptionApi } from "@/lib/plan-subscription-api"
 
 export default function CustomerPlanPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState("")
+  const [availablePlans, setAvailablePlans] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
 
   // Mock current plan data
   const currentPlan = {
@@ -58,79 +61,26 @@ export default function CustomerPlanPage() {
     startDate: "2023-06-15",
   }
 
-  const availablePlans = [
-    {
-      id: "basic-50",
-      name: "Basic Fiber 50 Mbps",
-      speed: "50 Mbps",
-      price: 999,
-      type: "Fiber",
-      popular: false,
-      features: [
-        "50 Mbps Download Speed",
-        "10 Mbps Upload Speed",
-        "500 GB Data",
-        "Business Hours Support",
-        "Router Rental",
-      ],
-      comparison: "downgrade",
-    },
-    {
-      id: "premium-100",
-      name: "Premium Fiber 100 Mbps",
-      speed: "100 Mbps",
-      price: 1999,
-      type: "Fiber",
-      popular: false,
-      current: true,
-      features: [
-        "100 Mbps Download Speed",
-        "20 Mbps Upload Speed",
-        "Unlimited Data",
-        "24/7 Support",
-        "Free Router",
-        "Static IP Available",
-      ],
-      comparison: "current",
-    },
-    {
-      id: "premium-200",
-      name: "Premium Fiber 200 Mbps",
-      speed: "200 Mbps",
-      price: 2999,
-      type: "Fiber",
-      popular: true,
-      features: [
-        "200 Mbps Download Speed",
-        "40 Mbps Upload Speed",
-        "Unlimited Data",
-        "Priority Support",
-        "Free Router + Mesh",
-        "Static IP Included",
-        "Free Installation",
-      ],
-      comparison: "upgrade",
-    },
-    {
-      id: "enterprise-500",
-      name: "Enterprise Fiber 500 Mbps",
-      speed: "500 Mbps",
-      price: 4999,
-      type: "Fiber",
-      popular: false,
-      features: [
-        "500 Mbps Download Speed",
-        "100 Mbps Upload Speed",
-        "Unlimited Data",
-        "Dedicated Support",
-        "Enterprise Router",
-        "Multiple Static IPs",
-        "SLA Guarantee",
-        "Free Installation",
-      ],
-      comparison: "upgrade",
-    },
-  ]
+  useEffect(() => {
+    fetchPlans()
+  }, [])
+
+  const fetchPlans = async () => {
+    try {
+      setLoading(true)
+      const plans = await planSubscriptionApi.getPlansByStatus("Approved")
+      setAvailablePlans(Array.isArray(plans) ? plans : [])
+    } catch (error) {
+      console.error("Error fetching plans:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch available plans",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const planHistory = [
     {
@@ -211,7 +161,7 @@ export default function CustomerPlanPage() {
                     <CardDescription>Your current active plan</CardDescription>
                   </div>
                   <div className="text-right">
-                    <div className="text-3xl font-bold text-gray-900">{formatCurrency(currentPlan.price)}</div>
+                    <div className="text-3xl font-bold text-gray-900">₹{currentPlan.price}</div>
                     <Badge className="bg-green-100 text-green-800 mt-1">
                       {currentPlan.status.charAt(0).toUpperCase() + currentPlan.status.slice(1)}
                     </Badge>
@@ -327,79 +277,57 @@ export default function CustomerPlanPage() {
           </TabsContent>
 
           <TabsContent value="available" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {availablePlans.map((plan) => (
-                <Card key={plan.id} className={`border-0 shadow-lg relative ${getComparisonColor(plan.comparison)}`}>
-                  {plan.popular && (
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <Badge className="bg-orange-500 text-white">
-                        <Star className="h-3 w-3 mr-1" />
-                        Most Popular
-                      </Badge>
-                    </div>
-                  )}
-                  {plan.current && (
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <Badge className="bg-blue-500 text-white">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Current Plan
-                      </Badge>
-                    </div>
-                  )}
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center">
-                          {getComparisonIcon(plan.comparison)}
-                          <span className="ml-2">{plan.name}</span>
-                        </CardTitle>
-                        <CardDescription>{plan.type} Connection</CardDescription>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-gray-900">{formatCurrency(plan.price)}</div>
-                        <p className="text-sm text-gray-500">per month</p>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      {plan.features.map((feature, index) => (
-                        <div key={index} className="flex items-center space-x-2">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                          <span className="text-sm text-gray-700">{feature}</span>
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              </div>
+            ) : availablePlans.length === 0 ? (
+              <Card className="border-0 shadow-lg">
+                <CardContent className="py-12 text-center">
+                  <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No plans available at the moment</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {availablePlans.map((plan) => (
+                  <Card key={plan.plan_id} className="border-0 shadow-lg relative">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center">
+                            <Zap className="h-4 w-4 mr-2 text-blue-600" />
+                            {plan.name}
+                          </CardTitle>
+                          <CardDescription>{plan.speed}</CardDescription>
                         </div>
-                      ))}
-                    </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-gray-900">₹{plan.price}</div>
+                          <p className="text-sm text-gray-500">per {plan.validity_days} days</p>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Data Limit:</span>
+                          <span className="font-medium">{plan.data_limit_gb} GB</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Max Customers:</span>
+                          <span className="font-medium">{plan.max_customers}</span>
+                        </div>
+                      </div>
 
-                    {!plan.current && (
-                      <Button
-                        className="w-full"
-                        variant={plan.comparison === "upgrade" ? "default" : "outline"}
-                        onClick={() => handlePlanChange(plan.id, plan.comparison)}
-                      >
-                        {plan.comparison === "upgrade" ? (
-                          <>
-                            <ArrowUp className="h-4 w-4 mr-2" />
-                            Upgrade to This Plan
-                          </>
-                        ) : (
-                          <>
-                            <ArrowDown className="h-4 w-4 mr-2" />
-                            Downgrade to This Plan
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    {plan.current && (
-                      <Button className="w-full" disabled>
+                      <Button className="w-full">
                         <CheckCircle className="h-4 w-4 mr-2" />
-                        Current Plan
+                        Subscribe to This Plan
                       </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="usage" className="space-y-6">
@@ -566,7 +494,7 @@ export default function CustomerPlanPage() {
               <div className="p-4 bg-blue-50 rounded-lg">
                 <h4 className="font-medium text-gray-900">Current Plan</h4>
                 <p className="text-sm text-gray-600">
-                  {currentPlan.name} - {formatCurrency(currentPlan.price)}/month
+                  {currentPlan.name} - ₹{currentPlan.price}/month
                 </p>
               </div>
               <div className="flex justify-end space-x-4">

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Plus,
@@ -27,18 +26,20 @@ import {
   Eye,
   Edit,
   Trash2,
-  Download,
   CreditCard,
   Users,
   Calendar,
   DollarSign,
   MoreHorizontal,
+  CheckCircle,
+  X,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import { confirmDelete, confirmAction } from "@/lib/confirmation-dialog"
 import { exportToCSV, formatCurrency, formatDate, getStatusColor } from "@/lib/utils"
-import { toast } from "react-toastify"
+import { planSubscriptionApi } from "@/lib/plan-subscription-api"
+import { useAuth } from "@/contexts/AuthContext"
 
 // Demo data for plans
 const plans = [
@@ -134,13 +135,105 @@ export default function PlansPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [showAddPlanDialog, setShowAddPlanDialog] = useState(false)
   const [activeTab, setActiveTab] = useState("plans")
+  const [plans, setPlans] = useState<any[]>([])
+  const [pendingPlans, setPendingPlans] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const { user } = useAuth()
   const { toast } = useToast()
+
+  useEffect(() => {
+    fetchPlans()
+  }, [])
+
+  const fetchPlans = async () => {
+    try {
+      setLoading(true)
+      const approvedPlans = await planSubscriptionApi.getPlansByStatus("Approved")
+      const pendingPlansData = await planSubscriptionApi.getPlansByStatus("Pending")
+      setPlans(Array.isArray(approvedPlans) ? approvedPlans : [])
+      setPendingPlans(Array.isArray(pendingPlansData) ? pendingPlansData : [])
+    } catch (error) {
+      console.error("Error fetching plans:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch plans",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredPlans = plans.filter((plan) => {
     const matchesSearch = plan.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || plan.status === statusFilter
+    const matchesStatus = statusFilter === "all" || plan.approval_status === statusFilter
     return matchesSearch && matchesStatus
   })
+
+  const handleApprovePlan = async (plan: any) => {
+    try {
+      await planSubscriptionApi.approvePlan(plan.plan_id, {
+        approved_by: user?.user_id || "",
+        approval_status: "Approved",
+        comment: "Approved by admin",
+      })
+      toast({
+        title: "Success",
+        description: `Plan ${plan.name} approved successfully`,
+      })
+      fetchPlans()
+    } catch (error) {
+      console.error("Error approving plan:", error)
+      toast({
+        title: "Error",
+        description: "Failed to approve plan",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleRejectPlan = async (plan: any) => {
+    try {
+      await planSubscriptionApi.approvePlan(plan.plan_id, {
+        approved_by: user?.user_id || "",
+        approval_status: "Rejected",
+        comment: "Rejected by admin",
+      })
+      toast({
+        title: "Success",
+        description: `Plan ${plan.name} rejected`,
+      })
+      fetchPlans()
+    } catch (error) {
+      console.error("Error rejecting plan:", error)
+      toast({
+        title: "Error",
+        description: "Failed to reject plan",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeletePlan = async (plan: any) => {
+    try {
+      const confirmed = await confirmDelete(`plan "${plan.name}"`)
+      if (confirmed) {
+        await planSubscriptionApi.deletePlan(plan.plan_id, user?.user_id || "")
+        toast({
+          title: "Success",
+          description: `Plan ${plan.name} deleted successfully`,
+        })
+        fetchPlans()
+      }
+    } catch (error) {
+      console.error("Error deleting plan:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete plan",
+        variant: "destructive",
+      })
+    }
+  }
 
   const filteredSubscriptions = subscriptions.filter((sub) => {
     const matchesSearch = sub.operator.toLowerCase().includes(searchTerm.toLowerCase())
@@ -198,27 +291,6 @@ export default function PlansPage() {
       description: `Editing plan: ${plan.name}`,
     })
     console.log("Edit plan:", plan)
-  }
-
-  const handleDeletePlan = async (plan: any) => {
-    try {
-      const confirmed = await confirmDelete(`plan "${plan.name}"`)
-
-      if (confirmed) {
-        toast({
-          title: "Plan Deleted",
-          description: `Plan ${plan.name} deleted successfully`,
-        })
-        console.log("Delete plan:", plan)
-      }
-    } catch (error) {
-      console.error("Error deleting plan:", error)
-      toast({
-        title: "Delete Failed",
-        description: "Failed to delete plan. Please try again.",
-        variant: "destructive",
-      })
-    }
   }
 
   const handleViewSubscription = (subscription: any) => {
@@ -331,38 +403,26 @@ export default function PlansPage() {
         {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="plans">Subscription Plans</TabsTrigger>
-              <TabsTrigger value="subscriptions">Active Subscriptions</TabsTrigger>
+            <TabsList className="grid w-full max-w-md grid-cols-3">
+              <TabsTrigger value="plans">Approved Plans</TabsTrigger>
+              <TabsTrigger value="pending">Pending ({pendingPlans.length})</TabsTrigger>
+              <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
             </TabsList>
-            <div className="flex items-center space-x-2 w-full sm:w-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={activeTab === "plans" ? handleExportPlans : handleExportSubscriptions}
-                className="flex-1 sm:flex-none bg-transparent"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-              {activeTab === "plans" && (
-                <Dialog open={showAddPlanDialog} onOpenChange={setShowAddPlanDialog}>
-                  <DialogTrigger asChild>
-                    <Button className="flex-1 sm:flex-none">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Plan
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Create New Plan</DialogTitle>
-                      <DialogDescription>Create a new subscription plan for operators</DialogDescription>
-                    </DialogHeader>
-                    <AddPlanForm onClose={() => setShowAddPlanDialog(false)} />
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
+            <Dialog open={showAddPlanDialog} onOpenChange={setShowAddPlanDialog}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Plan
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Create New Plan</DialogTitle>
+                  <DialogDescription>Create a new subscription plan</DialogDescription>
+                </DialogHeader>
+                <AddPlanForm onClose={() => setShowAddPlanDialog(false)} onSuccess={fetchPlans} />
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* Search and Filter */}
@@ -390,62 +450,101 @@ export default function PlansPage() {
             </Select>
           </div>
 
-          {/* Plans Tab */}
+          {/* Approved Plans Tab */}
           <TabsContent value="plans" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {filteredPlans.map((plan) => (
-                <Card key={plan.id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+                <Card key={plan.plan_id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg font-bold text-gray-900">{plan.name}</CardTitle>
-                      <Badge className={getStatusColor(plan.status)}>{plan.status}</Badge>
+                      <Badge className="bg-green-100 text-green-800">{plan.approval_status}</Badge>
                     </div>
-                    <CardDescription>{plan.description}</CardDescription>
+                    <CardDescription>{plan.speed}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900">{formatCurrency(plan.price)}</div>
-                      <div className="text-sm text-gray-500">per {plan.billingCycle}</div>
+                      <div className="text-3xl font-bold text-gray-900">₹{plan.price}</div>
+                      <div className="text-sm text-gray-500">per {plan.validity_days} days</div>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Subscribers:</span>
-                        <span className="font-medium">{plan.subscribers}</span>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Data Limit:</span>
+                        <span className="font-medium">{plan.data_limit_gb} GB</span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Max Connections:</span>
-                        <span className="font-medium">
-                          {plan.maxConnections === -1 ? "Unlimited" : plan.maxConnections}
-                        </span>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Max Customers:</span>
+                        <span className="font-medium">{plan.max_customers}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Max OLTs:</span>
-                        <span className="font-medium">{plan.maxOLTs === -1 ? "Unlimited" : plan.maxOLTs}</span>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Created:</span>
+                        <span className="font-medium">{new Date(plan.created_at).toLocaleDateString()}</span>
                       </div>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 mb-2">Features:</p>
-                      <ul className="text-xs text-gray-500 space-y-1">
-                        {plan.features.map((feature, index) => (
-                          <li key={index}>• {feature}</li>
-                        ))}
-                      </ul>
                     </div>
                     <div className="flex space-x-2 pt-2">
                       <Button
                         variant="outline"
                         size="sm"
                         className="flex-1 bg-transparent"
-                        onClick={() => handleViewPlan(plan)}
+                        onClick={() => handleDeletePlan(plan)}
                       >
-                        <Eye className="h-4 w-4 mr-2" />
-                        View
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleEditPlan(plan)}>
-                        <Edit className="h-4 w-4" />
+                      <Button variant="outline" size="sm" className="flex-1 bg-transparent">
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDeletePlan(plan)}>
-                        <Trash2 className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          {/* Pending Plans Tab */}
+          <TabsContent value="pending" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {pendingPlans.map((plan) => (
+                <Card key={plan.plan_id} className="border-0 shadow-lg border-l-4 border-l-yellow-500">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg font-bold text-gray-900">{plan.name}</CardTitle>
+                      <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
+                    </div>
+                    <CardDescription>Awaiting approval</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-gray-900">₹{plan.price}</div>
+                      <div className="text-sm text-gray-500">per {plan.validity_days} days</div>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Speed:</span>
+                        <span className="font-medium">{plan.speed}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Data Limit:</span>
+                        <span className="font-medium">{plan.data_limit_gb} GB</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Created By:</span>
+                        <span className="font-medium text-xs">{plan.created_by.substring(0, 8)}...</span>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2 pt-2">
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                        onClick={() => handleApprovePlan(plan)}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Approve
+                      </Button>
+                      <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleRejectPlan(plan)}>
+                        <X className="h-4 w-4 mr-2" />
+                        Reject
                       </Button>
                     </div>
                   </CardContent>
@@ -558,44 +657,40 @@ export default function PlansPage() {
   )
 }
 
-// Add Plan Form Component
-function AddPlanForm({ onClose }: { onClose: () => void }) {
+function AddPlanForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [formData, setFormData] = useState({
     name: "",
-    description: "",
+    speed: "",
     price: 0,
-    billingCycle: "monthly",
-    maxConnections: 0,
-    maxOLTs: 0,
-    features: [""],
-    status: "active",
+    validity_days: 30,
+    data_limit_gb: 100,
+    max_customers: 1000,
   })
+  const [loading, setLoading] = useState(false)
+  const { user } = useAuth()
+  const { toast } = useToast()
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    toast({
-      title: "Plan Created",
-      description: `Plan ${formData.name} created successfully!`,
-    })
-    console.log("Plan form submitted:", formData)
-    onClose()
-  }
-
-  const addFeature = () => {
-    setFormData({ ...formData, features: [...formData.features, ""] })
-  }
-
-  const removeFeature = (index: number) => {
-    setFormData({
-      ...formData,
-      features: formData.features.filter((_, i) => i !== index),
-    })
-  }
-
-  const updateFeature = (index: number, value: string) => {
-    const newFeatures = [...formData.features]
-    newFeatures[index] = value
-    setFormData({ ...formData, features: newFeatures })
+    try {
+      setLoading(true)
+      await planSubscriptionApi.createPlan(user?.user_id || "", formData)
+      toast({
+        title: "Success",
+        description: `Plan ${formData.name} created successfully (pending approval)`,
+      })
+      onSuccess()
+      onClose()
+    } catch (error) {
+      console.error("Error creating plan:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create plan",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -611,7 +706,19 @@ function AddPlanForm({ onClose }: { onClose: () => void }) {
           />
         </div>
         <div>
-          <Label htmlFor="price">Price *</Label>
+          <Label htmlFor="speed">Speed *</Label>
+          <Input
+            id="speed"
+            value={formData.speed}
+            onChange={(e) => setFormData({ ...formData, speed: e.target.value })}
+            placeholder="e.g., 100 Mbps"
+            required
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="price">Price (₹) *</Label>
           <Input
             id="price"
             type="number"
@@ -620,82 +727,46 @@ function AddPlanForm({ onClose }: { onClose: () => void }) {
             required
           />
         </div>
-      </div>
-      <div>
-        <Label htmlFor="description">Description</Label>
-        <Textarea
-          id="description"
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          rows={3}
-        />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <Label htmlFor="billingCycle">Billing Cycle</Label>
-          <Select
-            value={formData.billingCycle}
-            onValueChange={(value) => setFormData({ ...formData, billingCycle: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="monthly">Monthly</SelectItem>
-              <SelectItem value="quarterly">Quarterly</SelectItem>
-              <SelectItem value="annually">Annually</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="maxConnections">Max Connections</Label>
+          <Label htmlFor="validity">Validity (Days) *</Label>
           <Input
-            id="maxConnections"
+            id="validity"
             type="number"
-            value={formData.maxConnections}
-            onChange={(e) => setFormData({ ...formData, maxConnections: Number.parseInt(e.target.value) || 0 })}
-          />
-        </div>
-        <div>
-          <Label htmlFor="maxOLTs">Max OLTs</Label>
-          <Input
-            id="maxOLTs"
-            type="number"
-            value={formData.maxOLTs}
-            onChange={(e) => setFormData({ ...formData, maxOLTs: Number.parseInt(e.target.value) || 0 })}
+            value={formData.validity_days}
+            onChange={(e) => setFormData({ ...formData, validity_days: Number.parseInt(e.target.value) || 30 })}
+            required
           />
         </div>
       </div>
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <Label>Features</Label>
-          <Button type="button" variant="outline" size="sm" onClick={addFeature}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Feature
-          </Button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="dataLimit">Data Limit (GB) *</Label>
+          <Input
+            id="dataLimit"
+            type="number"
+            value={formData.data_limit_gb}
+            onChange={(e) => setFormData({ ...formData, data_limit_gb: Number.parseInt(e.target.value) || 100 })}
+            required
+          />
         </div>
-        <div className="space-y-2">
-          {formData.features.map((feature, index) => (
-            <div key={index} className="flex items-center space-x-2">
-              <Input
-                value={feature}
-                onChange={(e) => updateFeature(index, e.target.value)}
-                placeholder="Enter feature"
-              />
-              {formData.features.length > 1 && (
-                <Button type="button" variant="ghost" size="icon" onClick={() => removeFeature(index)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          ))}
+        <div>
+          <Label htmlFor="maxCustomers">Max Customers *</Label>
+          <Input
+            id="maxCustomers"
+            type="number"
+            value={formData.max_customers}
+            onChange={(e) => setFormData({ ...formData, max_customers: Number.parseInt(e.target.value) || 1000 })}
+            required
+          />
         </div>
       </div>
       <div className="flex justify-end space-x-4 pt-4">
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit">Create Plan</Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Creating..." : "Create Plan"}
+        </Button>
       </div>
     </form>
   )
