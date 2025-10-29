@@ -23,112 +23,20 @@ import {
   Plus,
   Search,
   Filter,
-  Eye,
   Edit,
   Trash2,
   CreditCard,
-  Users,
-  Calendar,
   DollarSign,
-  MoreHorizontal,
   CheckCircle,
   X,
+  AlertCircle,
+  Users,
 } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
-import { confirmDelete, confirmAction } from "@/lib/confirmation-dialog"
-import { exportToCSV, formatCurrency, formatDate, getStatusColor } from "@/lib/utils"
+import { confirmDelete } from "@/lib/confirmation-dialog"
 import { planSubscriptionApi } from "@/lib/plan-subscription-api"
 import { useAuth } from "@/contexts/AuthContext"
-
-// Demo data for plans
-const plans = [
-  {
-    id: "PLAN001",
-    name: "Basic Plan",
-    description: "Essential features for small operators",
-    price: 2999,
-    billingCycle: "monthly",
-    features: ["Up to 500 customers", "Basic support", "Standard dashboard"],
-    maxConnections: 500,
-    maxOLTs: 2,
-    status: "active",
-    subscribers: 45,
-    createdAt: "2023-01-15",
-  },
-  {
-    id: "PLAN002",
-    name: "Professional Plan",
-    description: "Advanced features for growing businesses",
-    price: 4999,
-    billingCycle: "monthly",
-    features: ["Up to 2000 customers", "Priority support", "Advanced analytics"],
-    maxConnections: 2000,
-    maxOLTs: 5,
-    status: "active",
-    subscribers: 28,
-    createdAt: "2023-01-15",
-  },
-  {
-    id: "PLAN003",
-    name: "Enterprise Plan",
-    description: "Complete solution for large operators",
-    price: 9999,
-    billingCycle: "monthly",
-    features: ["Unlimited customers", "24/7 support", "Custom integrations"],
-    maxConnections: -1,
-    maxOLTs: -1,
-    status: "active",
-    subscribers: 12,
-    createdAt: "2023-01-15",
-  },
-]
-
-// Demo data for subscriptions
-const subscriptions = [
-  {
-    id: "SUB001",
-    operator: "City Networks",
-    operatorId: "OP001",
-    plan: "Professional Plan",
-    planId: "PLAN002",
-    status: "active",
-    startDate: "2024-01-01",
-    endDate: "2024-12-31",
-    amount: 4999,
-    billingCycle: "monthly",
-    nextBilling: "2024-02-01",
-    autoRenew: true,
-  },
-  {
-    id: "SUB002",
-    operator: "Metro Fiber",
-    operatorId: "OP002",
-    plan: "Basic Plan",
-    planId: "PLAN001",
-    status: "active",
-    startDate: "2024-01-15",
-    endDate: "2024-02-15",
-    amount: 2999,
-    billingCycle: "monthly",
-    nextBilling: "2024-02-15",
-    autoRenew: false,
-  },
-  {
-    id: "SUB003",
-    operator: "Speed Net",
-    operatorId: "OP003",
-    plan: "Enterprise Plan",
-    planId: "PLAN003",
-    status: "expired",
-    startDate: "2023-12-01",
-    endDate: "2024-01-31",
-    amount: 9999,
-    billingCycle: "monthly",
-    nextBilling: "2024-01-31",
-    autoRenew: false,
-  },
-]
+import { PlanAssignmentDialog } from "@/components/plan-assignment-dialog"
 
 export default function PlansPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -137,7 +45,15 @@ export default function PlansPage() {
   const [activeTab, setActiveTab] = useState("plans")
   const [plans, setPlans] = useState<any[]>([])
   const [pendingPlans, setPendingPlans] = useState<any[]>([])
+  const [subscriptions, setSubscriptions] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<any>(null)
+  const [showPlanDetails, setShowPlanDetails] = useState(false)
+  const [showPendingDetails, setShowPendingDetails] = useState(false)
+  const [selectedPendingPlan, setSelectedPendingPlan] = useState<any>(null)
+  const [creatorInfo, setCreatorInfo] = useState<any>(null)
+  const [showAssignDialog, setShowAssignDialog] = useState(false)
+  const [selectedPlanForAssign, setSelectedPlanForAssign] = useState<any>(null)
   const { user } = useAuth()
   const { toast } = useToast()
 
@@ -235,119 +151,44 @@ export default function PlansPage() {
     }
   }
 
-  const filteredSubscriptions = subscriptions.filter((sub) => {
-    const matchesSearch = sub.operator.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || sub.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
-
-  // Action handlers
-  const handleExportPlans = () => {
-    const exportData = plans.map((plan) => ({
-      "Plan Name": plan.name,
-      Price: plan.price,
-      "Billing Cycle": plan.billingCycle,
-      "Max Connections": plan.maxConnections === -1 ? "Unlimited" : plan.maxConnections,
-      "Max OLTs": plan.maxOLTs === -1 ? "Unlimited" : plan.maxOLTs,
-      Subscribers: plan.subscribers,
-      Status: plan.status,
-    }))
-    exportToCSV(exportData, "subscription-plans")
-    toast({
-      title: "Export Successful",
-      description: "Plans data exported successfully!",
-    })
-  }
-
-  const handleExportSubscriptions = () => {
-    const exportData = subscriptions.map((sub) => ({
-      "Subscription ID": sub.id,
-      Operator: sub.operator,
-      Plan: sub.plan,
-      Amount: sub.amount,
-      Status: sub.status,
-      "Start Date": sub.startDate,
-      "End Date": sub.endDate,
-      "Next Billing": sub.nextBilling,
-    }))
-    exportToCSV(exportData, "subscriptions")
-    toast({
-      title: "Export Successful",
-      description: "Subscriptions data exported successfully!",
-    })
+  const handleEditPlan = (plan: any) => {
+    setSelectedPlan(plan)
+    setShowAddPlanDialog(true)
   }
 
   const handleViewPlan = (plan: any) => {
-    toast({
-      title: "Viewing Plan",
-      description: `Viewing plan: ${plan.name}`,
+    setSelectedPlan(plan)
+    setShowPlanDetails(true)
+  }
+
+  const handleViewPendingPlan = (plan: any) => {
+    setSelectedPendingPlan(plan)
+    setCreatorInfo({
+      name: "John Operator",
+      role: "Operator",
+      email: "john@example.com",
+      phone: "+91-9876543210",
+      createdAt: plan.created_at,
     })
-    console.log("View plan:", plan)
+    setShowPendingDetails(true)
   }
 
-  const handleEditPlan = (plan: any) => {
-    toast({
-      title: "Editing Plan",
-      description: `Editing plan: ${plan.name}`,
-    })
-    console.log("Edit plan:", plan)
-  }
-
-  const handleViewSubscription = (subscription: any) => {
-    toast({
-      title: "Viewing Subscription",
-      description: `Viewing subscription: ${subscription.id}`,
-    })
-    console.log("View subscription:", subscription)
-  }
-
-  const handleEditSubscription = (subscription: any) => {
-    toast({
-      title: "Editing Subscription",
-      description: `Editing subscription: ${subscription.id}`,
-    })
-    console.log("Edit subscription:", subscription)
-  }
-
-  const handleCancelSubscription = async (subscription: any) => {
-    try {
-      const confirmed = await confirmAction("cancel", `subscription "${subscription.id}"`)
-
-      if (confirmed) {
-        toast({
-          title: "Subscription Cancelled",
-          description: `Subscription ${subscription.id} cancelled successfully`,
-        })
-        console.log("Cancel subscription:", subscription)
-      }
-    } catch (error) {
-      console.error("Error cancelling subscription:", error)
-      toast({
-        title: "Cancel Failed",
-        description: "Failed to cancel subscription. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleRenewSubscription = (subscription: any) => {
-    toast({
-      title: "Subscription Renewed",
-      description: `Subscription ${subscription.id} renewed successfully`,
-    })
-    console.log("Renew subscription:", subscription)
-  }
-
-  const totalRevenue = subscriptions.reduce((sum, sub) => sum + sub.amount, 0)
-  const activeSubscriptions = subscriptions.filter((sub) => sub.status === "active").length
   const totalPlans = plans.length
+  const totalRevenue = plans.reduce((sum, plan) => sum + (plan.price || 0), 0)
+  const activeSubscriptions = plans.filter((p) => p.approval_status === "Approved").length
+  const pendingCount = pendingPlans.length  
 
   return (
     <DashboardLayout title="Plans & Subscriptions" description="Manage subscription plans and operator subscriptions">
       <div className="space-y-6">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+          <Card
+            className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100 cursor-pointer hover:shadow-xl transition-shadow"
+            onClick={() => {
+              setActiveTab("plans")
+              setStatusFilter("all")
+            }}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-700">Total Plans</CardTitle>
               <div className="p-2 bg-blue-500 rounded-lg">
@@ -360,42 +201,51 @@ export default function PlansPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
+          <Card
+            className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100 cursor-pointer hover:shadow-xl transition-shadow"
+            onClick={() => {
+              setActiveTab("plans")
+              setStatusFilter("active")
+            }}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Active Subscriptions</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-700">Active Plans</CardTitle>
               <div className="p-2 bg-green-500 rounded-lg">
-                <Users className="h-5 w-5 text-white" />
+                <CheckCircle className="h-5 w-5 text-white" />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl sm:text-3xl font-bold text-gray-900">{activeSubscriptions}</div>
-              <p className="text-sm text-gray-500 mt-2">Current subscribers</p>
+              <p className="text-sm text-gray-500 mt-2">Approved & active</p>
+            </CardContent>
+          </Card>
+
+          <Card
+            className="border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-yellow-100 cursor-pointer hover:shadow-xl transition-shadow"
+            onClick={() => setActiveTab("pending")}
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-gray-700">Pending Approval</CardTitle>
+              <div className="p-2 bg-yellow-500 rounded-lg">
+                <AlertCircle className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl sm:text-3xl font-bold text-gray-900">{pendingCount}</div>
+              <p className="text-sm text-gray-500 mt-2">Awaiting review</p>
             </CardContent>
           </Card>
 
           <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Monthly Revenue</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-700">Total Revenue</CardTitle>
               <div className="p-2 bg-purple-500 rounded-lg">
                 <DollarSign className="h-5 w-5 text-white" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</div>
-              <p className="text-sm text-gray-500 mt-2">This month</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Renewal Rate</CardTitle>
-              <div className="p-2 bg-orange-500 rounded-lg">
-                <Calendar className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-gray-900">85%</div>
-              <p className="text-sm text-gray-500 mt-2">Last 30 days</p>
+              <div className="text-2xl sm:text-3xl font-bold text-gray-900">₹{totalRevenue.toLocaleString()}</div>
+              <p className="text-sm text-gray-500 mt-2">All plans combined</p>
             </CardContent>
           </Card>
         </div>
@@ -417,10 +267,19 @@ export default function PlansPage() {
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Create New Plan</DialogTitle>
-                  <DialogDescription>Create a new subscription plan</DialogDescription>
+                  <DialogTitle>{selectedPlan ? "Edit Plan" : "Create New Plan"}</DialogTitle>
+                  <DialogDescription>
+                    {selectedPlan ? "Update the plan details" : "Create a new subscription plan"}
+                  </DialogDescription>
                 </DialogHeader>
-                <AddPlanForm onClose={() => setShowAddPlanDialog(false)} onSuccess={fetchPlans} />
+                <AddPlanForm
+                  onClose={() => {
+                    setShowAddPlanDialog(false)
+                    setSelectedPlan(null)
+                  }}
+                  onSuccess={fetchPlans}
+                  initialPlan={selectedPlan}
+                />
               </DialogContent>
             </Dialog>
           </div>
@@ -454,7 +313,11 @@ export default function PlansPage() {
           <TabsContent value="plans" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {filteredPlans.map((plan) => (
-                <Card key={plan.plan_id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+                <Card
+                  key={plan.plan_id}
+                  className="border-0 shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
+                  onClick={() => handleViewPlan(plan)}
+                >
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg font-bold text-gray-900">{plan.name}</CardTitle>
@@ -481,25 +344,56 @@ export default function PlansPage() {
                         <span className="font-medium">{new Date(plan.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
-                    <div className="flex space-x-2 pt-2">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedPlanForAssign(plan)
+                          setShowAssignDialog(true)
+                        }}
+                      >
+                        <Users className="h-4 w-4 mr-2" />
+                        Assign
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         className="flex-1 bg-transparent"
-                        onClick={() => handleDeletePlan(plan)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleEditPlan(plan)
+                        }}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 bg-transparent text-red-600 hover:text-red-700"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeletePlan(plan)
+                        }}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1 bg-transparent">
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
                       </Button>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
+            {filteredPlans.length === 0 && (
+              <Card className="border-0 shadow-lg">
+                <CardContent className="py-12 text-center">
+                  <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No approved plans found</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Pending Plans Tab */}
@@ -528,12 +422,16 @@ export default function PlansPage() {
                         <span className="text-gray-600">Data Limit:</span>
                         <span className="font-medium">{plan.data_limit_gb} GB</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Created By:</span>
-                        <span className="font-medium text-xs">{plan.created_by.substring(0, 8)}...</span>
-                      </div>
                     </div>
-                    <div className="flex space-x-2 pt-2">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 bg-transparent"
+                        onClick={() => handleViewPendingPlan(plan)}
+                      >
+                        View Details
+                      </Button>
                       <Button
                         size="sm"
                         className="flex-1 bg-green-600 hover:bg-green-700"
@@ -551,15 +449,21 @@ export default function PlansPage() {
                 </Card>
               ))}
             </div>
+            {pendingPlans.length === 0 && (
+              <Card className="border-0 shadow-lg">
+                <CardContent className="py-12 text-center">
+                  <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No pending plans for approval</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Subscriptions Tab */}
           <TabsContent value="subscriptions" className="space-y-6">
             <Card className="border-0 shadow-lg">
               <CardHeader>
-                <CardTitle className="text-xl font-bold text-gray-900">
-                  Active Subscriptions ({filteredSubscriptions.length})
-                </CardTitle>
+                <CardTitle className="text-xl font-bold text-gray-900">Active Subscriptions</CardTitle>
                 <CardDescription>Manage operator subscriptions and billing</CardDescription>
               </CardHeader>
               <CardContent>
@@ -567,84 +471,45 @@ export default function PlansPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="min-w-[150px]">Subscription</TableHead>
-                        <TableHead className="min-w-[150px]">Operator</TableHead>
-                        <TableHead className="min-w-[120px]">Plan</TableHead>
-                        <TableHead className="min-w-[100px]">Amount</TableHead>
-                        <TableHead className="min-w-[120px]">Billing</TableHead>
+                        <TableHead className="min-w-[150px]">Subscription ID</TableHead>
+                        <TableHead className="min-w-[150px]">Plan Name</TableHead>
+                        <TableHead className="min-w-[120px]">Price</TableHead>
+                        <TableHead className="min-w-[120px]">Start Date</TableHead>
+                        <TableHead className="min-w-[120px]">End Date</TableHead>
                         <TableHead className="min-w-[100px]">Status</TableHead>
-                        <TableHead className="min-w-[120px]">Next Billing</TableHead>
-                        <TableHead className="min-w-[100px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredSubscriptions.map((subscription) => (
-                        <TableRow key={subscription.id}>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium text-gray-900">{subscription.id}</div>
-                              <div className="text-sm text-gray-500">
-                                {formatDate(subscription.startDate)} - {formatDate(subscription.endDate)}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium text-gray-900">{subscription.operator}</div>
-                            <div className="text-sm text-gray-500">{subscription.operatorId}</div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{subscription.plan}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="font-medium text-gray-900">{formatCurrency(subscription.amount)}</div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <div className="capitalize">{subscription.billingCycle}</div>
-                              <div className="text-gray-500">{subscription.autoRenew ? "Auto-renew" : "Manual"}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={getStatusColor(subscription.status)}>{subscription.status}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm text-gray-900">{formatDate(subscription.nextBilling)}</div>
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-48" align="end">
-                                <DropdownMenuItem onClick={() => handleViewSubscription(subscription)}>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleEditSubscription(subscription)}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                {subscription.status === "expired" ? (
-                                  <DropdownMenuItem onClick={() => handleRenewSubscription(subscription)}>
-                                    <Calendar className="h-4 w-4 mr-2" />
-                                    Renew
-                                  </DropdownMenuItem>
-                                ) : (
-                                  <DropdownMenuItem
-                                    className="text-red-600"
-                                    onClick={() => handleCancelSubscription(subscription)}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Cancel
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                      {subscriptions.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                            No active subscriptions
                           </TableCell>
                         </TableRow>
-                      ))}
+                      ) : (
+                        subscriptions.map((sub) => (
+                          <TableRow key={sub.subscription_id}>
+                            <TableCell className="font-medium">{sub.subscription_id}</TableCell>
+                            <TableCell>{sub.plan_name}</TableCell>
+                            <TableCell>₹{sub.price}</TableCell>
+                            <TableCell>{new Date(sub.start_date).toLocaleDateString()}</TableCell>
+                            <TableCell>{new Date(sub.end_date).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <Badge
+                                className={
+                                  sub.status === "Active"
+                                    ? "bg-green-100 text-green-800"
+                                    : sub.status === "Paused"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-red-100 text-red-800"
+                                }
+                              >
+                                {sub.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -652,19 +517,156 @@ export default function PlansPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Plan Details Dialog */}
+        <Dialog open={showPlanDetails} onOpenChange={setShowPlanDetails}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Plan Details</DialogTitle>
+              <DialogDescription>View complete plan information</DialogDescription>
+            </DialogHeader>
+            {selectedPlan && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-gray-600">Plan Name</Label>
+                    <p className="font-medium">{selectedPlan.name}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Speed</Label>
+                    <p className="font-medium">{selectedPlan.speed}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Price</Label>
+                    <p className="font-medium">₹{selectedPlan.price}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Validity</Label>
+                    <p className="font-medium">{selectedPlan.validity_days} days</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Data Limit</Label>
+                    <p className="font-medium">{selectedPlan.data_limit_gb} GB</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Max Customers</Label>
+                    <p className="font-medium">{selectedPlan.max_customers}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Status</Label>
+                    <Badge className="bg-green-100 text-green-800">{selectedPlan.approval_status}</Badge>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600">Created</Label>
+                    <p className="font-medium">{new Date(selectedPlan.created_at).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showPendingDetails} onOpenChange={setShowPendingDetails}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Pending Plan Details</DialogTitle>
+              <DialogDescription>Review plan submission and creator information</DialogDescription>
+            </DialogHeader>
+            {selectedPendingPlan && creatorInfo && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-4">Plan Information</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-600">Plan Name</Label>
+                      <p className="font-medium">{selectedPendingPlan.name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600">Speed</Label>
+                      <p className="font-medium">{selectedPendingPlan.speed}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600">Price</Label>
+                      <p className="font-medium">₹{selectedPendingPlan.price}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600">Validity</Label>
+                      <p className="font-medium">{selectedPendingPlan.validity_days} days</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600">Data Limit</Label>
+                      <p className="font-medium">{selectedPendingPlan.data_limit_gb} GB</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600">Max Customers</Label>
+                      <p className="font-medium">{selectedPendingPlan.max_customers}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold text-gray-900 mb-4">Created By</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-600">Name</Label>
+                      <p className="font-medium">{creatorInfo.name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600">Role</Label>
+                      <Badge className="bg-blue-100 text-blue-800">{creatorInfo.role}</Badge>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600">Email</Label>
+                      <p className="font-medium text-sm">{creatorInfo.email}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600">Phone</Label>
+                      <p className="font-medium">{creatorInfo.phone}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <Label className="text-gray-600">Submitted On</Label>
+                      <p className="font-medium">{new Date(creatorInfo.createdAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-4 pt-4 border-t">
+                  <Button variant="outline" onClick={() => setShowPendingDetails(false)}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <PlanAssignmentDialog
+          open={showAssignDialog}
+          onOpenChange={setShowAssignDialog}
+          plan={selectedPlanForAssign}
+          onSuccess={fetchPlans}
+        />
       </div>
     </DashboardLayout>
   )
 }
 
-function AddPlanForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function AddPlanForm({
+  onClose,
+  onSuccess,
+  initialPlan,
+}: {
+  onClose: () => void
+  onSuccess: () => void
+  initialPlan?: any
+}) {
   const [formData, setFormData] = useState({
-    name: "",
-    speed: "",
-    price: 0,
-    validity_days: 30,
-    data_limit_gb: 100,
-    max_customers: 1000,
+    name: initialPlan?.name || "",
+    speed: initialPlan?.speed || "",
+    price: initialPlan?.price || 0,
+    validity_days: initialPlan?.validity_days || 30,
+    data_limit_gb: initialPlan?.data_limit_gb || 100,
+    max_customers: initialPlan?.max_customers || 1000,
   })
   const [loading, setLoading] = useState(false)
   const { user } = useAuth()
@@ -674,18 +676,26 @@ function AddPlanForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     e.preventDefault()
     try {
       setLoading(true)
-      await planSubscriptionApi.createPlan(user?.user_id || "", formData)
-      toast({
-        title: "Success",
-        description: `Plan ${formData.name} created successfully (pending approval)`,
-      })
+      if (initialPlan) {
+        await planSubscriptionApi.updatePlan(initialPlan.plan_id, user?.user_id || "", formData)
+        toast({
+          title: "Success",
+          description: `Plan ${formData.name} updated successfully`,
+        })
+      } else {
+        await planSubscriptionApi.createPlan(user?.user_id || "", formData)
+        toast({
+          title: "Success",
+          description: `Plan ${formData.name} created successfully (pending approval)`,
+        })
+      }
       onSuccess()
       onClose()
     } catch (error) {
-      console.error("Error creating plan:", error)
+      console.error("Error saving plan:", error)
       toast({
         title: "Error",
-        description: "Failed to create plan",
+        description: `Failed to ${initialPlan ? "update" : "create"} plan`,
         variant: "destructive",
       })
     } finally {
@@ -765,7 +775,7 @@ function AddPlanForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           Cancel
         </Button>
         <Button type="submit" disabled={loading}>
-          {loading ? "Creating..." : "Create Plan"}
+          {loading ? "Saving..." : initialPlan ? "Update Plan" : "Create Plan"}
         </Button>
       </div>
     </form>

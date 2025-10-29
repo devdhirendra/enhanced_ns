@@ -9,19 +9,37 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, Eye, Download, Wifi, DollarSign, Users, TrendingUp, Package, Zap, AlertCircle } from "lucide-react"
-import { exportToCSV } from "@/lib/utils"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Search,
+  Eye,
+  Download,
+  Wifi,
+  DollarSign,
+  Users,
+  TrendingUp,
+  Package,
+  Zap,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { planSubscriptionApi } from "@/lib/plan-subscription-api"
+import { PlanAssignmentDialog } from "@/components/plan-assignment-dialog"
 
 export default function OperatorPlansPage() {
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
+  const [sortBy, setSortBy] = useState("name")
+  const [currentPage, setCurrentPage] = useState(1)
   const [selectedPlan, setSelectedPlan] = useState<any>(null)
   const [showPlanDetailsDialog, setShowPlanDetailsDialog] = useState(false)
+  const [showAssignDialog, setShowAssignDialog] = useState(false)
+  const [selectedPlanForAssign, setSelectedPlanForAssign] = useState<any>(null)
   const [approvedPlans, setApprovedPlans] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
+  const itemsPerPage = 10
 
   useEffect(() => {
     fetchPlans()
@@ -44,27 +62,65 @@ export default function OperatorPlansPage() {
     }
   }
 
-  const filteredPlans = approvedPlans.filter((plan) => {
-    const matchesSearch =
-      plan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      plan.speed.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesSearch
-  })
+  const getFilteredAndSortedPlans = () => {
+    const filtered = approvedPlans.filter((plan) => {
+      const matchesSearch =
+        plan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        plan.speed.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        plan.plan_id.toLowerCase().includes(searchTerm.toLowerCase())
+      return matchesSearch
+    })
+
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "price-low":
+          return a.price - b.price
+        case "price-high":
+          return b.price - a.price
+        case "speed":
+          return Number.parseInt(b.speed) - Number.parseInt(a.speed)
+        case "date":
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        default:
+          return a.name.localeCompare(b.name)
+      }
+    })
+
+    return filtered
+  }
+
+  const filteredPlans = getFilteredAndSortedPlans()
+  const totalPages = Math.ceil(filteredPlans.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const displayedPlans = filteredPlans.slice(startIndex, startIndex + itemsPerPage)
 
   const handleExport = () => {
-    const exportData = approvedPlans.map((plan) => ({
-      ID: plan.plan_id,
-      Name: plan.name,
-      Speed: plan.speed,
-      Price: plan.price,
-      "Data Limit": plan.data_limit_gb,
-      "Max Customers": plan.max_customers,
-      "Created Date": new Date(plan.created_at).toLocaleDateString(),
-    }))
-    exportToCSV(exportData, "approved-plans")
+    const csv = [
+      ["Plan ID", "Name", "Speed", "Price", "Data Limit", "Max Customers", "Created Date"],
+      ...filteredPlans.map((p) => [
+        p.plan_id,
+        p.name,
+        p.speed,
+        p.price,
+        p.data_limit_gb,
+        p.max_customers,
+        new Date(p.created_at).toLocaleDateString(),
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n")
+
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `plans-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+
     toast({
-      title: "Export Successful",
-      description: "Plans data has been exported to CSV file.",
+      title: "Success",
+      description: "Plans exported successfully",
     })
   }
 
@@ -160,12 +216,33 @@ export default function OperatorPlansPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Search plans..."
+                  placeholder="Search by name, speed, or ID..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value)
+                    setCurrentPage(1)
+                  }}
                   className="pl-10"
                 />
               </div>
+              <Select
+                value={sortBy}
+                onValueChange={(value) => {
+                  setSortBy(value)
+                  setCurrentPage(1)
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Name (A-Z)</SelectItem>
+                  <SelectItem value="price-low">Price (Low to High)</SelectItem>
+                  <SelectItem value="price-high">Price (High to Low)</SelectItem>
+                  <SelectItem value="speed">Speed (Highest)</SelectItem>
+                  <SelectItem value="date">Newest First</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Plans Grid View */}
@@ -173,7 +250,7 @@ export default function OperatorPlansPage() {
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
               </div>
-            ) : filteredPlans.length === 0 ? (
+            ) : displayedPlans.length === 0 ? (
               <Card className="border-0 shadow-lg">
                 <CardContent className="py-12 text-center">
                   <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -181,121 +258,162 @@ export default function OperatorPlansPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPlans.map((plan) => (
-                  <Card key={plan.plan_id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-lg font-bold text-gray-900">{plan.name}</CardTitle>
-                          <CardDescription className="mt-1">{plan.speed}</CardDescription>
-                        </div>
-                        <Badge className="bg-green-100 text-green-800">Approved</Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-blue-600">₹{plan.price}</div>
-                        <p className="text-sm text-gray-500">per {plan.validity_days} days</p>
-                      </div>
-
-                      <div className="space-y-2">
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {displayedPlans.map((plan) => (
+                    <Card key={plan.plan_id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+                      <CardHeader>
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <Wifi className="h-4 w-4 text-gray-400 mr-2" />
-                            <span className="text-sm">Speed</span>
+                          <div>
+                            <CardTitle className="text-lg font-bold text-gray-900">{plan.name}</CardTitle>
+                            <CardDescription className="mt-1">{plan.speed}</CardDescription>
                           </div>
-                          <span className="font-medium">{plan.speed}</span>
+                          <Badge className="bg-green-100 text-green-800">Approved</Badge>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <Package className="h-4 w-4 text-gray-400 mr-2" />
-                            <span className="text-sm">Data Limit</span>
-                          </div>
-                          <span className="font-medium">{plan.data_limit_gb} GB</span>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-blue-600">₹{plan.price}</div>
+                          <p className="text-sm text-gray-500">per {plan.validity_days} days</p>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <Users className="h-4 w-4 text-gray-400 mr-2" />
-                            <span className="text-sm">Max Customers</span>
-                          </div>
-                          <span className="font-medium">{plan.max_customers}</span>
-                        </div>
-                      </div>
 
-                      <Button variant="outline" className="w-full bg-transparent" onClick={() => handleViewPlan(plan)}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Details
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <Wifi className="h-4 w-4 text-gray-400 mr-2" />
+                              <span className="text-sm">Speed</span>
+                            </div>
+                            <span className="font-medium">{plan.speed}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <Package className="h-4 w-4 text-gray-400 mr-2" />
+                              <span className="text-sm">Data Limit</span>
+                            </div>
+                            <span className="font-medium">{plan.data_limit_gb} GB</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <Users className="h-4 w-4 text-gray-400 mr-2" />
+                              <span className="text-sm">Max Customers</span>
+                            </div>
+                            <span className="font-medium">{plan.max_customers}</span>
+                          </div>
+                        </div>
 
-            {/* Plans Table View */}
-            {filteredPlans.length > 0 && (
-              <Card className="border-0 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="text-xl font-bold text-gray-900">
-                    Available Plans ({filteredPlans.length})
-                  </CardTitle>
-                  <CardDescription>Detailed view of all approved plans</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="min-w-[200px]">Plan Details</TableHead>
-                          <TableHead className="min-w-[120px]">Speed & Price</TableHead>
-                          <TableHead className="min-w-[120px]">Data Limit</TableHead>
-                          <TableHead className="min-w-[120px]">Max Customers</TableHead>
-                          <TableHead className="min-w-[120px]">Created</TableHead>
-                          <TableHead className="min-w-[100px]">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredPlans.map((plan) => (
-                          <TableRow key={plan.plan_id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium text-gray-900">{plan.name}</div>
-                                <div className="text-sm text-gray-500">{plan.plan_id}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div>
-                                <div className="flex items-center font-medium">
-                                  <Wifi className="h-4 w-4 mr-1 text-gray-400" />
-                                  {plan.speed}
-                                </div>
-                                <div className="flex items-center text-sm font-medium text-green-600">
-                                  <DollarSign className="h-3 w-3 mr-1" />₹{plan.price}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <span className="font-medium">{plan.data_limit_gb} GB</span>
-                            </TableCell>
-                            <TableCell>
-                              <span className="font-medium">{plan.max_customers}</span>
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-sm">{new Date(plan.created_at).toLocaleDateString()}</span>
-                            </TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="icon" onClick={() => handleViewPlan(plan)}>
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="flex-1 bg-transparent"
+                            onClick={() => handleViewPlan(plan)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Details
+                          </Button>
+                          <Button
+                            className="flex-1"
+                            onClick={() => {
+                              setSelectedPlanForAssign(plan)
+                              setShowAssignDialog(true)
+                            }}
+                          >
+                            <Users className="h-4 w-4 mr-2" />
+                            Assign
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-6">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-gray-600">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </div>
-                </CardContent>
-              </Card>
+                )}
+
+                {/* Plans Table View */}
+                <Card className="border-0 shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-gray-900">
+                      Available Plans ({filteredPlans.length})
+                    </CardTitle>
+                    <CardDescription>Detailed view of all approved plans</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[200px]">Plan Details</TableHead>
+                            <TableHead className="min-w-[120px]">Speed & Price</TableHead>
+                            <TableHead className="min-w-[120px]">Data Limit</TableHead>
+                            <TableHead className="min-w-[120px]">Max Customers</TableHead>
+                            <TableHead className="min-w-[120px]">Created</TableHead>
+                            <TableHead className="min-w-[100px]">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {displayedPlans.map((plan) => (
+                            <TableRow key={plan.plan_id}>
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium text-gray-900">{plan.name}</div>
+                                  <div className="text-sm text-gray-500">{plan.plan_id}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <div className="flex items-center font-medium">
+                                    <Wifi className="h-4 w-4 mr-1 text-gray-400" />
+                                    {plan.speed}
+                                  </div>
+                                  <div className="flex items-center text-sm font-medium text-green-600">
+                                    <DollarSign className="h-3 w-3 mr-1" />₹{plan.price}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span className="font-medium">{plan.data_limit_gb} GB</span>
+                              </TableCell>
+                              <TableCell>
+                                <span className="font-medium">{plan.max_customers}</span>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm">{new Date(plan.created_at).toLocaleDateString()}</span>
+                              </TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="icon" onClick={() => handleViewPlan(plan)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
             )}
           </TabsContent>
 
@@ -377,12 +495,19 @@ export default function OperatorPlansPage() {
             {selectedPlan && <PlanDetailsView plan={selectedPlan} />}
           </DialogContent>
         </Dialog>
+
+        {/* Plan Assignment Dialog */}
+        <PlanAssignmentDialog
+          open={showAssignDialog}
+          onOpenChange={setShowAssignDialog}
+          plan={selectedPlanForAssign}
+          onSuccess={fetchPlans}
+        />
       </div>
     </DashboardLayout>
   )
 }
 
-// Plan Details View Component
 function PlanDetailsView({ plan }: { plan: any }) {
   return (
     <div className="space-y-6">

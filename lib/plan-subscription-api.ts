@@ -35,6 +35,23 @@ const apiCall = async (endpoint: string, method = "GET", body?: any) => {
   return response.json()
 }
 
+const getAllCustomers = async () => {
+  try {
+    const response = await fetch("https://nsbackend-silk.vercel.app/api/customer/all", {
+      headers: {
+        Authorization: `Bearer ${getAuthToken()}`,
+      },
+    })
+    if (!response.ok) {
+      throw new Error(`Failed to fetch customers: ${response.status}`)
+    }
+    return response.json()
+  } catch (error) {
+    console.error("Error fetching customers:", error)
+    return []
+  }
+}
+
 // Plan API Functions
 export const planSubscriptionApi = {
   // Get all plans
@@ -113,11 +130,39 @@ export const planSubscriptionApi = {
     return apiCall("/audit/all")
   },
 
-  // Allocate plan to customer (custom endpoint)
-  allocatePlanToCustomer: async (planId: string, customerId: string, allocationData: any) => {
-    return apiCall(`/allocate/${planId}`, "POST", {
-      customer_id: customerId,
-      ...allocationData,
-    })
+  // The API docs show POST /plan/subscribe/:userId/:planId is the correct endpoint
+
+  // Subscribe user to a plan
+  subscribeToPlan: async (userId: string, planId: string) => {
+    return apiCall(`/subscribe/${userId}/${planId}`, "POST")
   },
+
+  // Get active subscription for user
+  getActiveSubscription: async (userId: string) => {
+    return apiCall(`/subscription/active/${userId}`)
+  },
+
+  // Get subscription history for user
+  getSubscriptionHistory: async (userId: string) => {
+    return apiCall(`/subscription/history/${userId}`)
+  },
+
+  // Change subscription status (Pause, Resume, Cancel)
+  updateSubscriptionStatus: async (
+    subscriptionId: string,
+    statusData: {
+      status: "Active" | "Paused" | "Cancelled" | "Expired"
+      reason?: string
+      admin_id: string
+    },
+  ) => {
+    return apiCall(`/subscription/status/${subscriptionId}`, "PATCH", statusData)
+  },
+
+  // Auto-expire subscriptions (admin/cron job)
+  autoExpireSubscriptions: async () => {
+    return apiCall("/subscription/auto-expire", "POST")
+  },
+
+  getAllCustomers,
 }

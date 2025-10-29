@@ -91,8 +91,7 @@ const adminNavItems = [
     title: "Finance & Billing",
     items: [
       { title: "Billing", url: "/admin/billing", icon: CreditCard },
-      { title: "Subscriptions", url: "/admin/subscriptions", icon: FileText },
-      { title: "Plans", url: "/admin/plans", icon: Calculator },
+      { title: "Subscription & Plans", url: "/admin/plans", icon: Calculator },
     ],
   },
   {
@@ -143,7 +142,7 @@ const operatorNavItems = [
     items: [
       { title: "Payments", url: "/operator/payments", icon: CreditCard },
       { title: "Invoicing", url: "/operator/invoicing", icon: Receipt },
-      { title: "Plans", url: "/operator/plans", icon: Calculator },
+      { title: "Subscription & Plans", url: "/operator/plans", icon: Calculator },
     ],
   },
   {
@@ -178,6 +177,7 @@ const technicianNavItems = [
     items: [
       { title: "My Inventory", url: "/technician/inventory", icon: Package },
       { title: "Cash Collection", url: "/technician/collection", icon: CreditCard },
+      { title: "Subscription & Plans", url: "/technician/plans", icon: Calculator },
     ],
   },
   {
@@ -218,7 +218,7 @@ const customerNavItems = [
   {
     title: "Account Management",
     items: [
-      { title: "Plan Details", url: "/customer/plan", icon: Package },
+      { title: "Subscription & Plans", url: "/customer/plan", icon: Package },
       { title: "Notifications", url: "/customer/notifications", icon: Bell },
       { title: "Referrals", url: "/customer/referrals", icon: Users },
     ],
@@ -251,6 +251,7 @@ const staffNavItems = [
       { title: "Operator Management", url: "/staff/operators", icon: Building2 },
       { title: "Vendor Relations", url: "/staff/vendors", icon: ShoppingCart },
       { title: "Quality Control", url: "/staff/quality", icon: CheckCircle },
+      { title: "Subscription & Plans", url: "/staff/plans", icon: Calculator },
     ],
   },
   {
@@ -279,7 +280,8 @@ const vendorNavItems = [
     items: [
       { title: "Inventory", url: "/vendor/inventory", icon: Database },
       { title: "Shipping & Delivery", url: "/vendor/shipping", icon: MapPin },
-      { title: "Returns & Refunds", url: "/vendor/returns", icon: ArrowUpRight },
+      { title: "Returns & Refunds", url: "/vendor/returns", icon: ArrowUpRight },     
+      { title: "Subscription & Plans", url: "/vendor/plans", icon: Calculator },
     ],
   },
   {

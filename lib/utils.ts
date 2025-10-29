@@ -14,17 +14,23 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
-export function formatDate(date: string): string {
-  return new Intl.DateTimeFormat("en-IN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,   // 🔹 shows AM/PM
-  }).format(new Date(date))
+export function formatDate(date: string | Date | null | undefined): string {
+  if (!date) return "N/A"
+  try {
+    const dateObj = typeof date === "string" ? new Date(date) : date
+    if (isNaN(dateObj.getTime())) return "N/A"
+    return new Intl.DateTimeFormat("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    }).format(dateObj)
+  } catch {
+    return "N/A"
+  }
 }
-
 
 export function getPriorityColor(priority: string): string {
   switch (priority) {
