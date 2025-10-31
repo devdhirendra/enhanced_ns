@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, Eye, Wifi, Package, AlertCircle } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Search, Eye, Package, AlertCircle, Zap, DollarSign } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { planSubscriptionApi } from "@/lib/plan-subscription-api"
 import { PlanSkeletonGrid, StatsCardSkeleton } from "@/components/plan-skeleton"
 
-export default function TechnicianPlansPage() {
+export default function VendorPlansPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [sortBy, setSortBy] = useState("name")
   const [selectedPlan, setSelectedPlan] = useState<any>(null)
   const [showPlanDetailsDialog, setShowPlanDetailsDialog] = useState(false)
   const [approvedPlans, setApprovedPlans] = useState<any[]>([])
@@ -41,12 +43,31 @@ export default function TechnicianPlansPage() {
     }
   }
 
-  const filteredPlans = approvedPlans.filter((plan) => {
-    const matchesSearch =
-      plan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      plan.speed.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesSearch
-  })
+  const getFilteredAndSortedPlans = () => {
+    const filtered = approvedPlans.filter((plan) => {
+      const matchesSearch =
+        plan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        plan.speed.toLowerCase().includes(searchTerm.toLowerCase())
+      return matchesSearch
+    })
+
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "price-low":
+          return a.price - b.price
+        case "price-high":
+          return b.price - a.price
+        case "speed":
+          return Number.parseInt(b.speed) - Number.parseInt(a.speed)
+        default:
+          return a.name.localeCompare(b.name)
+      }
+    })
+
+    return filtered
+  }
+
+  const filteredPlans = getFilteredAndSortedPlans()
 
   const handleViewPlan = (plan: any) => {
     setSelectedPlan(plan)
@@ -54,13 +75,13 @@ export default function TechnicianPlansPage() {
   }
 
   return (
-    <DashboardLayout title="Available Plans" description="View approved subscription plans">
+    <DashboardLayout title="Available Plans" description="Browse available subscription plans">
       <div className="space-y-6">
         {/* Stats */}
         {loading ? (
-          <StatsCardSkeleton count={3} />
+          <StatsCardSkeleton count={4} />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-gray-700">Total Plans</CardTitle>
@@ -76,28 +97,42 @@ export default function TechnicianPlansPage() {
 
             <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-700">Avg Speed</CardTitle>
+                <CardTitle className="text-sm font-medium text-gray-700">Avg Price</CardTitle>
                 <div className="p-2 bg-green-500 rounded-lg">
-                  <Wifi className="h-5 w-5 text-white" />
+                  <DollarSign className="h-5 w-5 text-white" />
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl md:text-3xl font-bold text-gray-900">
+                  ₹
                   {approvedPlans.length > 0
-                    ? Math.round(
-                        approvedPlans.reduce((sum, p) => sum + Number.parseInt(p.speed), 0) / approvedPlans.length,
-                      )
-                    : 0}{" "}
-                  Mbps
+                    ? Math.round(approvedPlans.reduce((sum, p) => sum + p.price, 0) / approvedPlans.length)
+                    : 0}
                 </div>
-                <p className="text-sm text-gray-500 mt-2">Across all plans</p>
+                <p className="text-sm text-gray-500 mt-2">Per plan</p>
               </CardContent>
             </Card>
 
             <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-700">Status</CardTitle>
+                <CardTitle className="text-sm font-medium text-gray-700">Max Speed</CardTitle>
                 <div className="p-2 bg-purple-500 rounded-lg">
+                  <Zap className="h-5 w-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900">
+                  {approvedPlans.length > 0 ? Math.max(...approvedPlans.map((p) => Number.parseInt(p.speed) || 0)) : 0}{" "}
+                  Mbps
+                </div>
+                <p className="text-sm text-gray-500 mt-2">Highest speed</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-700">Status</CardTitle>
+                <div className="p-2 bg-orange-500 rounded-lg">
                   <Badge className="bg-green-100 text-green-800">Active</Badge>
                 </div>
               </CardHeader>
@@ -109,7 +144,7 @@ export default function TechnicianPlansPage() {
           </div>
         )}
 
-        {/* Search */}
+        {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -120,6 +155,17 @@ export default function TechnicianPlansPage() {
               className="pl-10"
             />
           </div>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name">Name (A-Z)</SelectItem>
+              <SelectItem value="price-low">Price (Low to High)</SelectItem>
+              <SelectItem value="price-high">Price (High to Low)</SelectItem>
+              <SelectItem value="speed">Speed (Highest)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Plans Grid */}
@@ -135,7 +181,11 @@ export default function TechnicianPlansPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredPlans.map((plan) => (
-              <Card key={plan.plan_id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
+              <Card
+                key={plan.plan_id}
+                className="border-0 shadow-lg hover:shadow-xl transition-shadow cursor-pointer"
+                onClick={() => handleViewPlan(plan)}
+              >
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
@@ -153,22 +203,23 @@ export default function TechnicianPlansPage() {
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Wifi className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-sm">Speed</span>
-                      </div>
-                      <span className="font-medium">{plan.speed}</span>
+                      <span className="text-sm text-gray-600">Data Limit:</span>
+                      <span className="font-medium">{plan.data_limit_gb} GB</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Package className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-sm">Data Limit</span>
-                      </div>
-                      <span className="font-medium">{plan.data_limit_gb} GB</span>
+                      <span className="text-sm text-gray-600">Max Customers:</span>
+                      <span className="font-medium">{plan.max_customers}</span>
                     </div>
                   </div>
 
-                  <Button variant="outline" className="w-full bg-transparent" onClick={() => handleViewPlan(plan)}>
+                  <Button
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleViewPlan(plan)
+                    }}
+                  >
                     <Eye className="h-4 w-4 mr-2" />
                     View Details
                   </Button>

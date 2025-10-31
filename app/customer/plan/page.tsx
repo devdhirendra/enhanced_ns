@@ -6,22 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import {
-  Wifi,
-  Zap,
-  Clock,
-  CheckCircle,
-  ArrowUp,
-  ArrowDown,
-  Calendar,
-  Settings,
-  Download,
-  Upload,
-  AlertCircle,
-  Lock,
-} from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Wifi, Zap, CheckCircle, ArrowUp, AlertCircle, Lock, ChevronLeft, ChevronRight } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import { useToast } from "@/hooks/use-toast"
@@ -30,19 +17,23 @@ import { planSubscriptionApi } from "@/lib/plan-subscription-api"
 export default function CustomerPlanPage() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false)
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<any>(null)
   const [availablePlans, setAvailablePlans] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [currentPlan, setCurrentPlan] = useState<any>(null)
   const [planHistory, setPlanHistory] = useState<any[]>([])
+  const [historySortBy, setHistorySortBy] = useState("date")
+  const [historyPage, setHistoryPage] = useState(1)
+  const historyPerPage = 5
+  const [loadingCurrentPlan, setLoadingCurrentPlan] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   useEffect(() => {
-    fetchPlans()
-    fetchCurrentSubscription()
-    fetchPlanHistory()
-  }, [])
+    if (user?.user_id) {
+      Promise.all([fetchPlans(), fetchCurrentSubscription(), fetchPlanHistory()])
+    }
+  }, [user?.user_id])
 
   const fetchPlans = async () => {
     try {
@@ -63,41 +54,37 @@ export default function CustomerPlanPage() {
 
   const fetchCurrentSubscription = async () => {
     try {
+      setLoadingCurrentPlan(true)
       if (user?.user_id) {
         const subscription = await planSubscriptionApi.getActiveSubscription(user.user_id)
-        setCurrentPlan(subscription)
+        if (subscription) {
+          setCurrentPlan(subscription)
+        }
       }
     } catch (error) {
       console.error("Error fetching current subscription:", error)
+    } finally {
+      setLoadingCurrentPlan(false)
     }
   }
 
   const fetchPlanHistory = async () => {
     try {
+      setLoadingHistory(true)
       if (user?.user_id) {
-        const history = await planSubscriptionApi.getPlanHistory(user.user_id)
+        const history = await planSubscriptionApi.getSubscriptionHistory(user.user_id)
         setPlanHistory(Array.isArray(history) ? history : [])
       }
     } catch (error) {
       console.error("Error fetching plan history:", error)
-    }
-  }
-
-  const handlePlanChange = (planId: string, action: string) => {
-    if (action === "upgrade") {
       toast({
-        title: "Upgrade Initiated",
-        description:
-          "Your plan upgrade request has been submitted. Changes will take effect on your next billing cycle.",
+        title: "Error",
+        description: "Failed to fetch plan history",
+        variant: "destructive",
       })
-    } else if (action === "downgrade") {
-      toast({
-        title: "Downgrade Requested",
-        description:
-          "Your plan downgrade request has been submitted. Changes will take effect on your next billing cycle.",
-      })
+    } finally {
+      setLoadingHistory(false)
     }
-    setIsUpgradeDialogOpen(false)
   }
 
   const handleSubscribeToPlan = async (plan: any) => {
@@ -116,14 +103,7 @@ export default function CustomerPlanPage() {
         variant: "default",
       })
 
-      // Once payment is integrated, uncomment this:
-      // await planSubscriptionApi.subscribeToPlan(user.user_id, selectedPlan.plan_id)
-      // toast({
-      //   title: "Success",
-      //   description: `Successfully subscribed to ${selectedPlan.name}`,
-      // })
-      // fetchCurrentSubscription()
-      // setIsPaymentDialogOpen(false)
+      setIsPaymentDialogOpen(false)
     } catch (error) {
       console.error("Error subscribing to plan:", error)
       toast({
@@ -134,178 +114,128 @@ export default function CustomerPlanPage() {
     }
   }
 
-  const getComparisonIcon = (comparison: string) => {
-    switch (comparison) {
-      case "upgrade":
-        return <ArrowUp className="h-4 w-4 text-green-600" />
-      case "downgrade":
-        return <ArrowDown className="h-4 w-4 text-red-600" />
-      default:
-        return <CheckCircle className="h-4 w-4 text-blue-600" />
+  const getSortedHistory = () => {
+    if (!planHistory.length) return []
+    const sorted = [...planHistory]
+    if (historySortBy === "date") {
+      sorted.sort((a, b) => new Date(b.start_date || 0).getTime() - new Date(a.start_date || 0).getTime())
+    } else if (historySortBy === "price") {
+      sorted.sort((a, b) => (b.plan_id || 0) - (a.plan_id || 0))
     }
+    return sorted
   }
 
-  const getComparisonColor = (comparison: string) => {
-    switch (comparison) {
-      case "upgrade":
-        return "border-green-200 bg-green-50"
-      case "downgrade":
-        return "border-red-200 bg-red-50"
-      case "current":
-        return "border-blue-200 bg-blue-50"
-      default:
-        return "border-gray-200 bg-white"
-    }
-  }
+  const sortedHistory = getSortedHistory()
+  const paginatedHistory = sortedHistory.slice((historyPage - 1) * historyPerPage, historyPage * historyPerPage)
+  const totalHistoryPages = Math.ceil(sortedHistory.length / historyPerPage)
 
   return (
-    <DashboardLayout title="Plan Management" description="Manage your internet plan and usage">
+    <DashboardLayout title="Plan Management" description="Manage your internet subscription and billing">
       <div className="space-y-6">
         <Tabs defaultValue="current" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="current">Current Plan</TabsTrigger>
             <TabsTrigger value="available">Available Plans</TabsTrigger>
-            <TabsTrigger value="usage">Usage Details</TabsTrigger>
             <TabsTrigger value="history">Plan History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="current" className="space-y-6">
-            {/* Current Plan Overview */}
-            <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-indigo-50">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xl">{currentPlan?.name || "No Active Plan"}</CardTitle>
-                    <CardDescription>Your current active plan</CardDescription>
+            {loadingCurrentPlan ? (
+              <div className="space-y-4">
+                <div className="h-48 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg animate-pulse" />
+              </div>
+            ) : currentPlan?.subscription_id ? (
+              <Card className="border-0 shadow-lg bg-gradient-to-r from-blue-50 to-indigo-50">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-2xl font-bold text-gray-900">
+                        {currentPlan.name || "Active Plan"}
+                      </CardTitle>
+                      <CardDescription className="text-gray-600 mt-2">Your current subscription</CardDescription>
+                    </div>
+                    <div className="text-right">
+                      <Badge className="bg-green-100 text-green-800 text-sm px-3 py-1">
+                        {currentPlan.status || "Active"}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold text-gray-900">₹{currentPlan?.price || "0"}</div>
-                    <Badge className="bg-green-100 text-green-800 mt-1">
-                      {currentPlan?.status
-                        ? currentPlan.status.charAt(0).toUpperCase() + currentPlan.status.slice(1)
-                        : "Inactive"}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              {currentPlan && (
+                </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
-                      <h4 className="font-semibold text-gray-900">Plan Details</h4>
+                      <h4 className="font-semibold text-gray-900 text-lg">Subscription Details</h4>
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">Plan Type:</span>
-                          <span className="font-medium">{currentPlan?.type || "Standard"}</span>
+                        <div className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200">
+                          <span className="text-sm text-gray-600">Plan Speed:</span>
+                          <span className="font-semibold text-gray-900">{currentPlan.speed || "N/A"}</span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">Speed:</span>
-                          <span className="font-medium">{currentPlan?.speed}</span>
+                        <div className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200">
+                          <span className="text-sm text-gray-600">Monthly Price:</span>
+                          <span className="font-bold text-blue-600 text-lg">₹{currentPlan.price || "0"}</span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">Billing Cycle:</span>
-                          <span className="font-medium capitalize">{currentPlan?.billingCycle || "Monthly"}</span>
+                        <div className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200">
+                          <span className="text-sm text-gray-600">Start Date:</span>
+                          <span className="font-semibold text-gray-900">{formatDate(currentPlan.start_date)}</span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">Next Billing:</span>
-                          <span className="font-medium">{formatDate(currentPlan?.nextBilling)}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">Plan Start:</span>
-                          <span className="font-medium">{formatDate(currentPlan?.startDate)}</span>
+                        <div className="flex justify-between items-center p-3 bg-white rounded-lg border border-gray-200">
+                          <span className="text-sm text-gray-600">End Date:</span>
+                          <span className="font-semibold text-gray-900">{formatDate(currentPlan.end_date)}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-4">
-                      <h4 className="font-semibold text-gray-900">Plan Features</h4>
-                      <div className="space-y-2">
-                        {currentPlan?.features && Array.isArray(currentPlan.features) ? (
-                          currentPlan.features.map((feature: string, index: number) => (
-                            <div key={index} className="flex items-center space-x-2">
-                              <CheckCircle className="h-4 w-4 text-green-600" />
-                              <span className="text-sm text-gray-700">{feature}</span>
+                      <h4 className="font-semibold text-gray-900 text-lg">Status & Duration</h4>
+                      <div className="p-6 bg-white rounded-lg border border-green-200 space-y-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-3 h-3 bg-green-600 rounded-full" />
+                          <span className="text-green-700 font-semibold">Active & Running</span>
+                        </div>
+                        <div className="pt-4 border-t border-green-100">
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-green-600">
+                              {Math.max(
+                                0,
+                                Math.floor(
+                                  (new Date(currentPlan.end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+                                ),
+                              )}
                             </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-gray-500">No features available</p>
-                        )}
+                            <div className="text-sm text-gray-600 mt-2">Days remaining in plan</div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex space-x-4">
-                    <Button onClick={() => setIsUpgradeDialogOpen(true)} className="flex-1">
+                  <div className="flex gap-3 pt-4">
+                    <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={fetchCurrentSubscription}>
                       <ArrowUp className="h-4 w-4 mr-2" />
-                      Upgrade Plan
+                      Refresh Status
                     </Button>
-                    <Button variant="outline" className="flex-1 bg-transparent">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Modify Plan
-                    </Button>
-                    <Button variant="outline">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Billing History
-                    </Button>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-
-            {/* Quick Usage Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="border-0 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Download className="h-5 w-5 mr-2" />
-                    Data Usage
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Used this month:</span>
-                      <span className="font-medium">{currentPlan?.usage?.dataUsed || "0"} GB</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Plan limit:</span>
-                      <span className="font-medium">{currentPlan?.usage?.dataLimit || "Unlimited"}</span>
-                    </div>
-                    <Progress value={65} className="w-full" />
-                    <p className="text-xs text-gray-500">65% of typical monthly usage</p>
                   </div>
                 </CardContent>
               </Card>
-
+            ) : (
               <Card className="border-0 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Zap className="h-5 w-5 mr-2" />
-                    Speed Performance
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Average speed:</span>
-                      <span className="font-medium">{currentPlan?.usage?.speedUsed || "0"} Mbps</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Plan speed:</span>
-                      <span className="font-medium">{currentPlan?.usage?.speedLimit || "0"} Mbps</span>
-                    </div>
-                    <Progress value={87} className="w-full" />
-                    <p className="text-xs text-gray-500">87% of plan speed achieved</p>
-                  </div>
+                <CardContent className="py-16 text-center">
+                  <AlertCircle className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No Active Plan</h3>
+                  <p className="text-gray-600 mb-6">Subscribe to a plan to get started with our services</p>
+                  <Button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+                    Browse Available Plans
+                  </Button>
                 </CardContent>
               </Card>
-            </div>
+            )}
           </TabsContent>
 
           <TabsContent value="available" className="space-y-6">
             {loading ? (
               <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading plans...</p>
               </div>
             ) : availablePlans.length === 0 ? (
               <Card className="border-0 shadow-lg">
@@ -315,39 +245,45 @@ export default function CustomerPlanPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {availablePlans.map((plan) => (
-                  <Card key={plan.plan_id} className="border-0 shadow-lg relative">
+                  <Card
+                    key={plan.plan_id}
+                    className="border-0 shadow-lg hover:shadow-xl transition-shadow overflow-hidden"
+                  >
+                    <div className="h-1 bg-gradient-to-r from-blue-500 to-blue-600" />
                     <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="flex items-center">
-                            <Zap className="h-4 w-4 mr-2 text-blue-600" />
-                            {plan.name}
-                          </CardTitle>
-                          <CardDescription>{plan.speed}</CardDescription>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-gray-900">₹{plan.price}</div>
-                          <p className="text-sm text-gray-500">per {plan.validity_days} days</p>
-                        </div>
-                      </div>
+                      <CardTitle className="flex items-center text-lg font-bold text-gray-900">
+                        <Zap className="h-5 w-5 mr-2 text-blue-600" />
+                        {plan.name}
+                      </CardTitle>
+                      <CardDescription className="text-gray-600 mt-1">{plan.speed}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Data Limit:</span>
-                          <span className="font-medium">{plan.data_limit_gb} GB</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Max Customers:</span>
-                          <span className="font-medium">{plan.max_customers}</span>
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-gray-900">₹{plan.price}</div>
+                          <p className="text-sm text-gray-600 mt-1">per {plan.validity_days} days</p>
                         </div>
                       </div>
 
-                      <Button className="w-full" onClick={() => handleSubscribeToPlan(plan)}>
+                      <div className="space-y-2 text-sm border-t border-gray-200 pt-4">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Data Limit:</span>
+                          <span className="font-semibold">{plan.data_limit_gb} GB</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Max Connections:</span>
+                          <span className="font-semibold">{plan.max_customers}</span>
+                        </div>
+                      </div>
+
+                      <Button
+                        className="w-full bg-blue-600 hover:bg-blue-700 mt-4"
+                        onClick={() => handleSubscribeToPlan(plan)}
+                      >
                         <CheckCircle className="h-4 w-4 mr-2" />
-                        Subscribe to This Plan
+                        Subscribe Now
                       </Button>
                     </CardContent>
                   </Card>
@@ -356,155 +292,119 @@ export default function CustomerPlanPage() {
             )}
           </TabsContent>
 
-          <TabsContent value="usage" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Download Speed</CardTitle>
-                  <Download className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">87 Mbps</div>
-                  <p className="text-xs text-gray-500 mt-1">Average this month</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Upload Speed</CardTitle>
-                  <Upload className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">18 Mbps</div>
-                  <p className="text-xs text-gray-500 mt-1">Average this month</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Data Used</CardTitle>
-                  <Wifi className="h-4 w-4 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">328 GB</div>
-                  <p className="text-xs text-gray-500 mt-1">This month</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">Uptime</CardTitle>
-                  <Clock className="h-4 w-4 text-orange-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">99.2%</div>
-                  <p className="text-xs text-gray-500 mt-1">This month</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
+          <TabsContent value="history" className="space-y-6">
+            <Card className="border-0 shadow-lg">
               <CardHeader>
-                <CardTitle>Detailed Usage Breakdown</CardTitle>
-                <CardDescription>Your internet usage patterns and statistics</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Data Usage Progress</span>
-                      <span className="text-sm text-gray-500">328 GB used</span>
-                    </div>
-                    <Progress value={65} className="w-full" />
-                    <p className="text-xs text-gray-500 mt-1">65% of typical monthly usage</p>
+                    <CardTitle className="text-xl font-bold text-gray-900">Plan Change History</CardTitle>
+                    <CardDescription className="text-gray-600">Your subscription history</CardDescription>
                   </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Speed Efficiency</span>
-                      <span className="text-sm text-gray-500">87% of plan speed</span>
-                    </div>
-                    <Progress value={87} className="w-full" />
-                    <p className="text-xs text-gray-500 mt-1">Excellent performance</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-3">Peak Usage Hours</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">8:00 PM - 10:00 PM</span>
-                          <span className="font-medium">Highest</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">6:00 PM - 8:00 PM</span>
-                          <span className="font-medium">High</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">2:00 AM - 6:00 AM</span>
-                          <span className="font-medium">Lowest</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-3">Usage by Device Type</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">Mobile Devices</span>
-                          <span className="font-medium">45%</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">Laptops/PCs</span>
-                          <span className="font-medium">35%</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">Smart TV/Streaming</span>
-                          <span className="font-medium">20%</span>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="flex gap-2">
+                    <Select value={historySortBy} onValueChange={setHistorySortBy}>
+                      <SelectTrigger className="w-full sm:w-48">
+                        <SelectValue placeholder="Sort by" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date">Newest First</SelectItem>
+                        <SelectItem value="price">Plan ID</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={fetchPlanHistory} disabled={loadingHistory}>
+                      Refresh
+                    </Button>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="history" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Plan Change History</CardTitle>
-                <CardDescription>Your plan upgrade and downgrade history</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {planHistory && planHistory.length > 0 ? (
-                    planHistory.map((history: any, index: number) => (
-                      <div key={index} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                        <div className="flex-shrink-0">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <Wifi className="h-5 w-5 text-blue-600" />
+                  {loadingHistory ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading history...</p>
+                    </div>
+                  ) : paginatedHistory && paginatedHistory.length > 0 ? (
+                    <>
+                      {paginatedHistory.map((history: any, index: number) => (
+                        <div
+                          key={index}
+                          className="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100"
+                        >
+                          <div className="flex-shrink-0">
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                history.status === "Active"
+                                  ? "bg-green-100"
+                                  : history.status === "Paused"
+                                    ? "bg-yellow-100"
+                                    : history.status === "Expired"
+                                      ? "bg-gray-100"
+                                      : "bg-blue-100"
+                              }`}
+                            >
+                              <Wifi
+                                className={`h-5 w-5 ${
+                                  history.status === "Active"
+                                    ? "text-green-600"
+                                    : history.status === "Paused"
+                                      ? "text-yellow-600"
+                                      : history.status === "Expired"
+                                        ? "text-gray-600"
+                                        : "text-blue-600"
+                                }`}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">Plan ID: {history.plan_id}</h4>
+                            <p className="text-sm text-gray-600">
+                              {formatDate(history.start_date)} to {formatDate(history.end_date)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <Badge
+                              className={
+                                history.status === "Active"
+                                  ? "bg-green-100 text-green-800"
+                                  : history.status === "Paused"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : history.status === "Expired"
+                                      ? "bg-gray-100 text-gray-800"
+                                      : "bg-blue-100 text-blue-800"
+                              }
+                            >
+                              {history.status}
+                            </Badge>
                           </div>
                         </div>
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">{history.planName}</h4>
-                          <p className="text-sm text-gray-600">
-                            {formatDate(history.startDate)} -{" "}
-                            {history.endDate === "Current" ? "Current" : formatDate(history.endDate)}
-                          </p>
-                          <p className="text-sm text-gray-500">Duration: {history.duration}</p>
+                      ))}
+                      {totalHistoryPages > 1 && (
+                        <div className="flex items-center justify-center gap-2 mt-6">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setHistoryPage(Math.max(1, historyPage - 1))}
+                            disabled={historyPage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <span className="text-sm text-gray-600">
+                            Page {historyPage} of {totalHistoryPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setHistoryPage(Math.min(totalHistoryPages, historyPage + 1))}
+                            disabled={historyPage === totalHistoryPages}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-600">{history.reason}</p>
-                          {history.endDate === "Current" && (
-                            <Badge className="bg-green-100 text-green-800 mt-1">Active</Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))
+                      )}
+                    </>
                   ) : (
                     <div className="text-center py-8">
-                      <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                       <p className="text-gray-600">No plan history available</p>
                     </div>
                   )}
@@ -513,32 +413,6 @@ export default function CustomerPlanPage() {
             </Card>
           </TabsContent>
         </Tabs>
-
-        {/* Upgrade Dialog */}
-        <Dialog open={isUpgradeDialogOpen} onOpenChange={setIsUpgradeDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Confirm Plan Change</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to change your plan? Changes will take effect on your next billing cycle.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <h4 className="font-medium text-gray-900">Current Plan</h4>
-                <p className="text-sm text-gray-600">
-                  {currentPlan?.name} - ₹{currentPlan?.price}/month
-                </p>
-              </div>
-              <div className="flex justify-end space-x-4">
-                <Button variant="outline" onClick={() => setIsUpgradeDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={() => handlePlanChange(selectedPlan?.plan_id, "upgrade")}>Confirm Change</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
           <DialogContent className="max-w-md">
@@ -549,7 +423,7 @@ export default function CustomerPlanPage() {
             {selectedPlan && (
               <div className="space-y-4">
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <h4 className="font-medium text-gray-900 mb-2">{selectedPlan.name}</h4>
+                  <h4 className="font-semibold text-gray-900 mb-2">{selectedPlan.name}</h4>
                   <div className="space-y-1 text-sm text-gray-600">
                     <p>Speed: {selectedPlan.speed}</p>
                     <p>Data Limit: {selectedPlan.data_limit_gb} GB</p>
@@ -560,11 +434,10 @@ export default function CustomerPlanPage() {
                 <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200 flex items-start gap-3">
                   <Lock className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                   <div className="text-sm text-yellow-800">
-                    <p className="font-medium mb-1">Payment Integration in Development</p>
+                    <p className="font-medium mb-1">Payment in Development</p>
                     <p>
-                      This is the development phase. Payment methods are not yet integrated. Please contact{" "}
-                      <span className="font-medium">admin@networksolutions.com</span> to complete your subscription
-                      manually.
+                      Contact <span className="font-medium">admin@networksolutions.com</span> to complete your
+                      subscription.
                     </p>
                   </div>
                 </div>
@@ -575,7 +448,9 @@ export default function CustomerPlanPage() {
                   <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleConfirmSubscription}>Proceed to Payment</Button>
+                  <Button onClick={handleConfirmSubscription} className="bg-blue-600 hover:bg-blue-700">
+                    Proceed to Payment
+                  </Button>
                 </div>
               </div>
             )}

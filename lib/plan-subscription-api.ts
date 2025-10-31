@@ -53,7 +53,7 @@ const getAllCustomers = async () => {
 }
 
 // Plan API Functions
-export const planSubscriptionApi = {
+const planSubscriptionApi = {
   // Get all plans
   getAllPlans: async () => {
     return apiCall("/all")
@@ -139,7 +139,27 @@ export const planSubscriptionApi = {
 
   // Get active subscription for user
   getActiveSubscription: async (userId: string) => {
-    return apiCall(`/subscription/active/${userId}`)
+    try {
+      const response = await apiCall(`/subscription/active/${userId}`)
+      // API returns { subscription: {...}, plan_details: {...} }
+      if (response.subscription && response.plan_details) {
+        return {
+          subscription_id: response.subscription.subscription_id,
+          plan_id: response.subscription.plan_id,
+          status: response.subscription.status,
+          name: response.plan_details.name,
+          price: response.plan_details.price,
+          speed: response.plan_details.speed,
+          start_date: response.subscription.start_date,
+          end_date: response.subscription.end_date,
+          validity_days: response.plan_details.validity_days,
+        }
+      }
+      return null
+    } catch (error) {
+      console.error("Error fetching active subscription:", error)
+      return null
+    }
   },
 
   // Get subscription history for user
@@ -164,5 +184,63 @@ export const planSubscriptionApi = {
     return apiCall("/subscription/auto-expire", "POST")
   },
 
+  // Get subscribers by status with count
+  getSubscribersByStatus: async (status: "Active" | "Paused" | "Cancelled" | "Expired") => {
+    try {
+      const token = getAuthToken()
+      const response = await fetch(`https://nsbackend-silk.vercel.app/api/plan/subscribers/status/${status}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`)
+      }
+      return response.json()
+    } catch (error) {
+      console.error("Error fetching subscribers by status:", error)
+      return { status, total: 0, subscribers: [] }
+    }
+  },
+
+  // Get all subscriptions (for admin dashboard)
+  getAllSubscriptions: async () => {
+    try {
+      const activeData = await planSubscriptionApi.getSubscribersByStatus("Active")
+      const pausedData = await planSubscriptionApi.getSubscribersByStatus("Paused")
+      const cancelledData = await planSubscriptionApi.getSubscribersByStatus("Cancelled")
+      const expiredData = await planSubscriptionApi.getSubscribersByStatus("Expired")
+
+      const allSubscriptions = [
+        ...(activeData.subscribers || []),
+        ...(pausedData.subscribers || []),
+        ...(cancelledData.subscribers || []),
+        ...(expiredData.subscribers || []),
+      ]
+
+      return allSubscriptions
+    } catch (error) {
+      console.error("Error fetching all subscriptions:", error)
+      return []
+    }
+  },
+
+  getPlanHistory: async (userId: string) => {
+    return planSubscriptionApi.getSubscriptionHistory(userId)
+  },
+
   getAllCustomers,
 }
+
+// Helper function to calculate days left
+const getDaysLeftToExpire = (endDate: string): number => {
+  const today = new Date()
+  const end = new Date(endDate)
+  const diffTime = end.getTime() - today.getTime()
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  return Math.max(0, diffDays)
+}
+
+// Export the planSubscriptionApi object with the new function
+export { planSubscriptionApi, getDaysLeftToExpire }

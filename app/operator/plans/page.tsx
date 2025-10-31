@@ -27,6 +27,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { planSubscriptionApi } from "@/lib/plan-subscription-api"
 import { PlanAssignmentDialog } from "@/components/plan-assignment-dialog"
+import { PlanSkeletonGrid, StatsCardSkeleton } from "@/components/plan-skeleton"
 
 export default function OperatorPlansPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -139,59 +140,63 @@ export default function OperatorPlansPage() {
     <DashboardLayout title="Available Plans" description="View and manage approved subscription plans">
       <div className="space-y-6">
         {/* Plan Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Total Plans</CardTitle>
-              <div className="p-2 bg-blue-500 rounded-lg">
-                <Package className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl md:text-3xl font-bold text-gray-900">{planStats.total}</div>
-              <p className="text-sm text-gray-500 mt-2">Approved plans</p>
-            </CardContent>
-          </Card>
+        {loading ? (
+          <StatsCardSkeleton count={4} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-700">Total Plans</CardTitle>
+                <div className="p-2 bg-blue-500 rounded-lg">
+                  <Package className="h-5 w-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900">{planStats.total}</div>
+                <p className="text-sm text-gray-500 mt-2">Approved plans</p>
+              </CardContent>
+            </Card>
 
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Average Price</CardTitle>
-              <div className="p-2 bg-green-500 rounded-lg">
-                <DollarSign className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl md:text-3xl font-bold text-gray-900">₹{Math.round(planStats.avgPrice)}</div>
-              <p className="text-sm text-gray-500 mt-2">Per plan</p>
-            </CardContent>
-          </Card>
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-700">Average Price</CardTitle>
+                <div className="p-2 bg-green-500 rounded-lg">
+                  <DollarSign className="h-5 w-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900">₹{Math.round(planStats.avgPrice)}</div>
+                <p className="text-sm text-gray-500 mt-2">Per plan</p>
+              </CardContent>
+            </Card>
 
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Max Speed</CardTitle>
-              <div className="p-2 bg-purple-500 rounded-lg">
-                <Zap className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl md:text-3xl font-bold text-gray-900">{planStats.maxSpeed} Mbps</div>
-              <p className="text-sm text-gray-500 mt-2">Highest speed</p>
-            </CardContent>
-          </Card>
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-700">Max Speed</CardTitle>
+                <div className="p-2 bg-purple-500 rounded-lg">
+                  <Zap className="h-5 w-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900">{planStats.maxSpeed} Mbps</div>
+                <p className="text-sm text-gray-500 mt-2">Highest speed</p>
+              </CardContent>
+            </Card>
 
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-700">Status</CardTitle>
-              <div className="p-2 bg-orange-500 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl md:text-3xl font-bold text-gray-900">Active</div>
-              <p className="text-sm text-gray-500 mt-2">All plans</p>
-            </CardContent>
-          </Card>
-        </div>
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-700">Status</CardTitle>
+                <div className="p-2 bg-orange-500 rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl md:text-3xl font-bold text-gray-900">Active</div>
+                <p className="text-sm text-gray-500 mt-2">All plans</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Main Content */}
         <Tabs defaultValue="plans" className="space-y-6">
@@ -247,9 +252,7 @@ export default function OperatorPlansPage() {
 
             {/* Plans Grid View */}
             {loading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              </div>
+              <PlanSkeletonGrid count={9} />
             ) : displayedPlans.length === 0 ? (
               <Card className="border-0 shadow-lg">
                 <CardContent className="py-12 text-center">
