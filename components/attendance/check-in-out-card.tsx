@@ -1,4 +1,3 @@
-// components/attendance/check-in-out-card.tsx - FIXED
 "use client"
 
 import { useState, useEffect } from "react"
@@ -47,22 +46,8 @@ export function CheckInOutCard({
   const [isLoading, setIsLoading] = useState(false)
   const [elapsedTime, setElapsedTime] = useState("")
 
-  // DEBUG: Log props changes
-  useEffect(() => {
-    console.log("🎯 CheckInOutCard Props:", {
-      isCheckedIn,
-      checkInTime,
-      checkOutTime,
-      workingHours,
-      location,
-      sessionId
-    })
-  }, [isCheckedIn, checkInTime, checkOutTime, workingHours, location, sessionId])
-
-  // Calculate elapsed time when checked in
   useEffect(() => {
     if (isCheckedIn && checkInTime) {
-      console.log("⏰ Starting elapsed time calculation...")
       const updateElapsedTime = () => {
         try {
           const checkIn = new Date(checkInTime)
@@ -82,7 +67,6 @@ export function CheckInOutCard({
       const interval = setInterval(updateElapsedTime, 60000)
       return () => clearInterval(interval)
     } else {
-      console.log("⏰ Using working hours:", workingHours)
       setElapsedTime(workingHours)
     }
   }, [isCheckedIn, checkInTime, workingHours])
@@ -104,17 +88,14 @@ export function CheckInOutCard({
 
     try {
       setIsLoading(true)
-      console.log("🔄 Processing check-out...")
       const success = await onCheckOut(checkOutNotes)
       if (success) {
         setCheckOutNotes("")
-        console.log("✅ Check-out completed successfully")
       } else {
-        console.log("❌ Check-out failed, reopening dialog")
         setCheckOutDialogOpen(true)
       }
     } catch (error) {
-      console.error("🚨 Check-out error:", error)
+      console.error("Check-out error:", error)
       setCheckOutDialogOpen(true)
     } finally {
       setIsLoading(false)
@@ -133,15 +114,12 @@ export function CheckInOutCard({
 
     try {
       setIsLoading(true)
-      console.log("🔄 Processing check-in...")
       const success = await onCheckIn()
-      if (success) {
-        console.log("✅ Check-in completed successfully")
-      } else {
-        console.log("❌ Check-in failed")
+      if (!success) {
+        console.error("Check-in failed")
       }
     } catch (error) {
-      console.error("🚨 Check-in error:", error)
+      console.error("Check-in error:", error)
     } finally {
       setIsLoading(false)
     }
@@ -149,12 +127,13 @@ export function CheckInOutCard({
 
   const formatTime = (timeString: string | null) => {
     if (!timeString) return "---"
-    
+
     try {
       return new Date(timeString).toLocaleTimeString("en-IN", {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
+        timeZone: "Asia/Kolkata",
       })
     } catch (error) {
       console.error("Error formatting time:", error, timeString)
@@ -164,20 +143,21 @@ export function CheckInOutCard({
 
   const displayTime = isCheckedIn ? elapsedTime : workingHours
 
-  console.log("🎯 Rendering CheckInOutCard - isCheckedIn:", isCheckedIn)
-
   return (
     <Card className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-0 shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-6 w-6 text-blue-600" />
           Today's Attendance Status
-          {isCheckedIn && (
-            <Badge className="bg-green-100 text-green-800 ml-2">Checked In</Badge>
-          )}
+          {isCheckedIn && <Badge className="bg-green-100 text-green-800 ml-2">Checked In</Badge>}
         </CardTitle>
         <CardDescription>
-          {new Date().toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric" })}
+          {new Date().toLocaleDateString("en-IN", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            timeZone: "Asia/Kolkata",
+          })}
           {sessionId && <span className="ml-2 text-xs text-gray-500">Session: {sessionId.substring(0, 8)}...</span>}
         </CardDescription>
       </CardHeader>
@@ -189,23 +169,21 @@ export function CheckInOutCard({
             </div>
             <div>
               <p className="text-sm text-gray-600">Check-in Time</p>
-              <p className="font-bold text-lg text-gray-900">
-                {formatTime(checkInTime)}
-              </p>
+              <p className="font-bold text-lg text-gray-900">{formatTime(checkInTime)}</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3 p-4 bg-white/60 rounded-lg backdrop-blur-sm border border-red-200">
-            <div className="bg-red-100 p-3 rounded-full">
-              <XCircle className="h-6 w-6 text-red-600" />
+          {checkOutTime && (
+            <div className="flex items-center space-x-3 p-4 bg-white/60 rounded-lg backdrop-blur-sm border border-red-200">
+              <div className="bg-red-100 p-3 rounded-full">
+                <XCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Check-out Time</p>
+                <p className="font-bold text-lg text-gray-900">{formatTime(checkOutTime)}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Check-out Time</p>
-              <p className="font-bold text-lg text-gray-900">
-                {formatTime(checkOutTime)}
-              </p>
-            </div>
-          </div>
+          )}
 
           <div className="flex items-center space-x-3 p-4 bg-white/60 rounded-lg backdrop-blur-sm border border-blue-200">
             <div className="bg-blue-100 p-3 rounded-full">

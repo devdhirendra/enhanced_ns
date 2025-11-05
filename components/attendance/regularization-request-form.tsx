@@ -26,70 +26,100 @@ export function RegularizationRequestForm({ userId, onSuccess }: RegularizationR
     checkInTime: "",
     checkOutTime: "",
     reason: "",
+    minHours: 8,
   })
+  const [files, setFiles] = useState<File[]>([])
 
-// In the handleSubmit function:
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
-
-  if (!formData.date || !formData.checkInTime || !formData.checkOutTime || !formData.reason) {
-    toast({
-      title: "Missing Fields",
-      description: "Please fill in all required fields",
-      variant: "destructive",
-    })
-    return
+  const isEligibleForRegularization = () => {
+    if (!formData.checkInTime || !formData.checkOutTime) return false
+    const checkIn = Number.parseInt(formData.checkInTime.split(":")[0])
+    const checkOut = Number.parseInt(formData.checkOutTime.split(":")[0])
+    const hours = checkOut - checkIn
+    return hours < formData.minHours
   }
 
-  try {
-    setLoading(true)
-    // FIXED: Use the correct API structure
-    const response = await attendanceApi.requestRegularization({
-      userId,
-      date: formData.date,
-      checkIn: `${formData.date}T${formData.checkInTime}:00Z`,
-      checkOut: `${formData.date}T${formData.checkOutTime}:00Z`,
-      reason: formData.reason,
-    })
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
-    if (response.success) {
+    if (!formData.date || !formData.checkInTime || !formData.checkOutTime || !formData.reason) {
       toast({
-        title: "Request Submitted",
-        description: "Your regularization request has been submitted for approval",
-      })
-      setFormData({ date: "", checkInTime: "", checkOutTime: "", reason: "" })
-      onSuccess?.()
-    } else {
-      toast({
-        title: "Submission Failed",
-        description: response.error || "Failed to submit regularization request",
+        title: "Missing Fields",
+        description: "Please fill in all required fields",
         variant: "destructive",
       })
+      return
     }
-  } catch (error) {
-    toast({
-      title: "Error",
-      description: "An error occurred while submitting the request",
-      variant: "destructive",
-    })
-  } finally {
-    setLoading(false)
+
+    if (!isEligibleForRegularization()) {
+      toast({
+        title: "Not Eligible",
+        description: "You can only request regularization if your working hours are less than 8 hours",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      const istDate = new Date(formData.date)
+      const checkInIST = new Date(`${formData.date}T${formData.checkInTime}:00`)
+      const checkOutIST = new Date(`${formData.date}T${formData.checkOutTime}:00`)
+
+      const response = await attendanceApi.requestRegularization({
+        userId,
+        date: formData.date,
+        checkIn: checkInIST.toISOString(),
+        checkOut: checkOutIST.toISOString(),
+        reason: formData.reason,
+      })
+
+      if (response.success) {
+        toast({
+          title: "Request Submitted",
+          description: "Your regularization request has been submitted for approval",
+        })
+        setFormData({ date: "", checkInTime: "", checkOutTime: "", reason: "", minHours: 8 })
+        setFiles([])
+        onSuccess?.()
+      } else {
+        toast({
+          title: "Submission Failed",
+          description: response.error || "Failed to submit regularization request",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Regularization error:", error)
+      toast({
+        title: "Error",
+        description: "An error occurred while submitting the request",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
-}
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(Array.from(e.target.files))
+    }
+  }
 
   return (
     <Card className="w-full">
       <CardHeader>
         <CardTitle>Request Attendance Regularization</CardTitle>
         <CardDescription>
-          Submit a request to regularize your attendance for a missed check-in or check-out
+          Submit a request to regularize your attendance if you couldn't complete 8 hours of work
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Alert className="mb-6 border-yellow-200 bg-yellow-50">
           <AlertCircle className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
-            Regularization requests must be submitted within 30 days of the incident
+            You are eligible for regularization if your working hours are less than 8 hours
           </AlertDescription>
         </Alert>
 
@@ -107,7 +137,12 @@ const handleSubmit = async (e: React.FormEvent) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="checkInTime">Check-In Time *</Label>
+              <Label htmlFor="minHours">Minimum Hours Required</Label>
+              <Input id="minHours" type="number" value={formData.minHours} readOnly className="bg-gray-50" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="checkInTime">Check-In Time (IST) *</Label>
               <Input
                 id="checkInTime"
                 type="time"
@@ -118,7 +153,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="checkOutTime">Check-Out Time *</Label>
+              <Label htmlFor="checkOutTime">Check-Out Time (IST) *</Label>
               <Input
                 id="checkOutTime"
                 type="time"
@@ -141,7 +176,29 @@ const handleSubmit = async (e: React.FormEvent) => {
             />
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full">
+          <div className="space-y-2">
+            <Label htmlFor="documents">Supporting Documents (Optional)</Label>
+            <Input
+              id="documents"
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={handleFileChange}
+              className="cursor-pointer"
+            />
+            <p className="text-sm text-gray-500">Upload up to 5 files (PDF, JPG, PNG)</p>
+            {files.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {files.map((file, idx) => (
+                  <p key={idx} className="text-sm text-green-600">
+                    ✓ {file.name}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Button type="submit" disabled={loading || !isEligibleForRegularization()} className="w-full">
             {loading ? "Submitting..." : "Submit Regularization Request"}
           </Button>
         </form>
