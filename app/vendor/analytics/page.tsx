@@ -1,338 +1,348 @@
+// vendor/analytics/page.tsx
+
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useAuth } from "@/contexts/AuthContext"
 import DashboardLayout from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
-  BarChart3,
-  TrendingUp,
-  DollarSign,
-  Package,
-  ShoppingCart,
-  Star,
-  ArrowUpRight,
-  ArrowDownRight,
-  Calendar,
-} from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts"
+import { TrendingUp, Package, ShoppingCart, Star, RefreshCw } from "lucide-react"
+import { analyticsApi, type VendorMetrics } from "@/lib/analytics-api"
+import { toast } from "sonner"
 
-interface AnalyticsData {
-  totalRevenue: number
-  monthlyRevenue: number
-  revenueGrowth: number
-  totalOrders: number
-  orderGrowth: number
-  averageOrderValue: number
-  topProducts: Array<{
-    name: string
-    category: string
-    revenue: number
-    orders: number
-    growth: number
-  }>
-  salesByCategory: Array<{
-    category: string
-    revenue: number
-    percentage: number
-  }>
-  monthlyTrends: Array<{
-    month: string
-    revenue: number
-    orders: number
-  }>
-}
-
-const analyticsData: AnalyticsData = {
-  totalRevenue: 2450000,
-  monthlyRevenue: 185000,
-  revenueGrowth: 15.3,
-  totalOrders: 89,
-  orderGrowth: 12.5,
-  averageOrderValue: 27528,
-  topProducts: [
-    { name: "TP-Link AC1200 Router", category: "Routers", revenue: 135000, orders: 45, growth: 18.2 },
-    { name: "Fiber Optic Cable 2km", category: "Cables", revenue: 96000, orders: 32, growth: 12.8 },
-    { name: "GPON ONU Device", category: "ONUs", revenue: 84000, orders: 28, growth: 25.4 },
-    { name: "24-Port POE Switch", category: "Switches", revenue: 108000, orders: 18, growth: -5.2 },
-    { name: "Fiber Splicing Kit", category: "Tools", revenue: 75000, orders: 15, growth: 8.9 },
-  ],
-  salesByCategory: [
-    { category: "Routers", revenue: 450000, percentage: 35 },
-    { category: "Cables", revenue: 380000, percentage: 28 },
-    { category: "ONUs", revenue: 320000, percentage: 22 },
-    { category: "Switches", revenue: 200000, percentage: 10 },
-    { category: "Tools", revenue: 100000, percentage: 5 },
-  ],
-  monthlyTrends: [
-    { month: "Jan", revenue: 165000, orders: 68 },
-    { month: "Feb", revenue: 178000, orders: 72 },
-    { month: "Mar", revenue: 185000, orders: 89 },
-    { month: "Apr", revenue: 192000, orders: 95 },
-    { month: "May", revenue: 205000, orders: 102 },
-    { month: "Jun", revenue: 218000, orders: 108 },
-  ],
-}
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
 
 export default function AnalyticsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState("month")
-  const [selectedMetric, setSelectedMetric] = useState("revenue")
+  const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState("30d")
+  const [metrics, setMetrics] = useState<VendorMetrics | null>(null)
 
-  const getGrowthColor = (growth: number) => {
-    return growth >= 0 ? "text-green-600" : "text-red-600"
+  useEffect(() => {
+    loadAnalytics()
+  }, [period])
+
+  const loadAnalytics = async () => {
+    try {
+      setLoading(true)
+      if (!user?.user_id) return
+      const response = await analyticsApi.getVendorAnalytics(user.user_id, period)
+      if (response.success && response.data) {
+        setMetrics(response.data.metrics)
+      }
+    } catch (error) {
+      console.error("Failed to load analytics:", error)
+      toast.error("Failed to load analytics data")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const getGrowthIcon = (growth: number) => {
-    return growth >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />
+  const formatCurrency = (value: number) => {
+    return `₹${(value / 100000).toFixed(1)}L`
   }
+
+  const mockOrderTimeline = [
+    { date: "2026-01-05", orders: 5, revenue: 15000 },
+    { date: "2026-01-06", orders: 7, revenue: 21000 },
+    { date: "2026-01-07", orders: 4, revenue: 12000 },
+    { date: "2026-01-08", orders: 6, revenue: 18000 },
+    { date: "2026-01-09", orders: 8, revenue: 24000 },
+    { date: "2026-01-10", orders: 9, revenue: 27000 },
+  ]
+
+  const mockProductPerformance = [
+    { name: "Product 1", sold: 100, rating: 4.8 },
+    { name: "Product 2", sold: 95, rating: 4.6 },
+    { name: "Product 3", sold: 88, rating: 4.5 },
+  ]
 
   return (
-        <DashboardLayout title="Vendor Dashboard" description="Overview of your network operations">
-
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Sales Analytics</h1>
-          <p className="text-gray-600">Track your business performance and insights</p>
+    <DashboardLayout title="Vendor Analytics" description="Your sales performance and metrics" loading={loading}>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Sales Analytics</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Track your business performance and insights</p>
+          </div>
+          <div className="flex gap-3">
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 Days</SelectItem>
+                <SelectItem value="30d">Last 30 Days</SelectItem>
+                <SelectItem value="90d">Last 90 Days</SelectItem>
+                <SelectItem value="1y">Last Year</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={loadAnalytics} variant="outline" size="sm">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </div>
-        <div className="flex space-x-2">
-          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="quarter">This Quarter</SelectItem>
-              <SelectItem value="year">This Year</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline">
-            <Calendar className="h-4 w-4 mr-2" />
-            Export Report
-          </Button>
+
+        {/* Key Metrics */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-gray-200 p-6 space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-4 w-40" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          metrics && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900 dark:to-blue-800 border-0">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Total Revenue</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-blue-900 dark:text-blue-50">
+                    {formatCurrency(metrics.revenue.totalRevenue)}
+                  </p>
+                  <div className="flex items-center mt-2">
+                    <TrendingUp className="w-4 h-4 text-green-600 mr-1" />
+                    <span className="text-xs text-green-600 font-medium">{metrics.revenue.revenueGrowth}% growth</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900 dark:to-green-800 border-0">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Total Orders</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-green-900 dark:text-green-50">{metrics.orders.totalOrders}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                    {metrics.orders.completedOrders} completed
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900 dark:to-purple-800 border-0">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                    Avg Order Value
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-purple-900 dark:text-purple-50">
+                    {formatCurrency(metrics.orders.averageOrderValue)}
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">Per transaction</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900 dark:to-orange-800 border-0">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                    Vendor Rating
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-orange-900 dark:text-orange-50">
+                    {metrics.ratings.vendorRating}
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                    {metrics.ratings.totalReviews} reviews
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )
+        )}
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Order Timeline Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Order Timeline</CardTitle>
+              <CardDescription>Daily orders and revenue over time</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={mockOrderTimeline}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="orders" stroke="#3b82f6" strokeWidth={2} name="Orders" />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Revenue by Product */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Products by Revenue</CardTitle>
+              <CardDescription>Best performing products</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-64 w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={mockProductPerformance}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="sold" fill="#10b981" name="Units Sold" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Business Metrics */}
+        {metrics && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5" />
+                  Order Performance
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Fulfillment Rate</span>
+                  <span className="font-semibold">{metrics.orders.orderFulfillmentRate}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Pending Orders</span>
+                  <span className="font-semibold text-yellow-600">{metrics.orders.pendingOrders}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Cancelled Orders</span>
+                  <span className="font-semibold text-red-600">{metrics.orders.cancelledOrders}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Package className="w-5 h-5" />
+                  Inventory Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Products</span>
+                  <span className="font-semibold">{metrics.inventory.totalProducts}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Out of Stock</span>
+                  <span className="font-semibold text-red-600">{metrics.inventory.outOfStockProducts}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Low Stock</span>
+                  <span className="font-semibold text-yellow-600">{metrics.inventory.lowStockProducts}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Star className="w-5 h-5" />
+                  Shipping Metrics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">On-Time Delivery</span>
+                  <span className="font-semibold text-green-600">{metrics.shipping.onTimeDeliveryRate}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Avg Delivery Time</span>
+                  <span className="font-semibold">{metrics.shipping.averageDeliveryTime} days</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Return Rate</span>
+                  <span className="font-semibold text-orange-600">{metrics.shipping.returnRate}%</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Financial Summary */}
+        {metrics && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Financial Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Gross Profit</p>
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(metrics.revenue.grossProfit)}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Net Profit</p>
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(metrics.revenue.netProfit)}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Profit Margin</p>
+                  <p className="text-2xl font-bold">{metrics.revenue.profitMargin}%</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Customer Metrics</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Repeat Customers</p>
+                  <p className="text-2xl font-bold">{metrics.customers.repeatCustomers}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Repeat Purchase Rate</p>
+                  <p className="text-2xl font-bold text-blue-600">{metrics.customers.repeatPurchaseRate}%</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Retention Rate</p>
+                  <p className="text-2xl font-bold text-green-600">{metrics.customers.customerRetentionRate}%</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Total Revenue</CardTitle>
-            <div className="p-2 bg-blue-500 rounded-lg">
-              <DollarSign className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{formatCurrency(analyticsData.totalRevenue)}</div>
-            <div className="flex items-center mt-2">
-              <div className={`flex items-center ${getGrowthColor(analyticsData.revenueGrowth)}`}>
-                {getGrowthIcon(analyticsData.revenueGrowth)}
-                <span className="text-sm font-medium ml-1">+{analyticsData.revenueGrowth}%</span>
-              </div>
-              <span className="text-sm text-gray-500 ml-2">vs last month</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Total Orders</CardTitle>
-            <div className="p-2 bg-green-500 rounded-lg">
-              <ShoppingCart className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{analyticsData.totalOrders}</div>
-            <div className="flex items-center mt-2">
-              <div className={`flex items-center ${getGrowthColor(analyticsData.orderGrowth)}`}>
-                {getGrowthIcon(analyticsData.orderGrowth)}
-                <span className="text-sm font-medium ml-1">+{analyticsData.orderGrowth}%</span>
-              </div>
-              <span className="text-sm text-gray-500 ml-2">vs last month</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Avg Order Value</CardTitle>
-            <div className="p-2 bg-purple-500 rounded-lg">
-              <BarChart3 className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{formatCurrency(analyticsData.averageOrderValue)}</div>
-            <div className="flex items-center mt-2">
-              <div className="flex items-center text-green-600">
-                <ArrowUpRight className="h-4 w-4" />
-                <span className="text-sm font-medium ml-1">+8.2%</span>
-              </div>
-              <span className="text-sm text-gray-500 ml-2">vs last month</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">Monthly Revenue</CardTitle>
-            <div className="p-2 bg-orange-500 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-white" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">{formatCurrency(analyticsData.monthlyRevenue)}</div>
-            <div className="flex items-center mt-2">
-              <div className="flex items-center text-green-600">
-                <ArrowUpRight className="h-4 w-4" />
-                <span className="text-sm font-medium ml-1">+15.3%</span>
-              </div>
-              <span className="text-sm text-gray-500 ml-2">vs last month</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-
-      {/* Monthly Trends */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <TrendingUp className="h-5 w-5 mr-2 text-purple-600" />
-            Monthly Trends
-          </CardTitle>
-          <CardDescription>Revenue and order trends over the last 6 months</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="revenue" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="revenue">Revenue Trend</TabsTrigger>
-              <TabsTrigger value="orders">Order Trend</TabsTrigger>
-            </TabsList>
-            <TabsContent value="revenue" className="space-y-4">
-              <div className="grid grid-cols-6 gap-4">
-                {analyticsData.monthlyTrends.map((trend) => (
-                  <div key={trend.month} className="text-center">
-                    <div className="bg-blue-100 rounded-lg p-4 mb-2">
-                      <div className="text-lg font-bold text-blue-600">{formatCurrency(trend.revenue / 1000)}K</div>
-                    </div>
-                    <div className="text-sm text-gray-600">{trend.month}</div>
-                  </div>
-                ))}
-              </div>
-            </TabsContent>
-            <TabsContent value="orders" className="space-y-4">
-              <div className="grid grid-cols-6 gap-4">
-                {analyticsData.monthlyTrends.map((trend) => (
-                  <div key={trend.month} className="text-center">
-                    <div className="bg-green-100 rounded-lg p-4 mb-2">
-                      <div className="text-lg font-bold text-green-600">{trend.orders}</div>
-                    </div>
-                    <div className="text-sm text-gray-600">{trend.month}</div>
-                  </div>
-                ))}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Performance Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance Metrics</CardTitle>
-            <CardDescription>Key performance indicators for your business</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Order Fulfillment Rate</span>
-                  <span className="text-sm text-gray-600">94%</span>
-                </div>
-                <Progress value={94} className="h-2" />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Customer Satisfaction</span>
-                  <span className="text-sm text-gray-600">96%</span>
-                </div>
-                <Progress value={96} className="h-2" />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">On-time Delivery</span>
-                  <span className="text-sm text-gray-600">89%</span>
-                </div>
-                <Progress value={89} className="h-2" />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Return Rate</span>
-                  <span className="text-sm text-gray-600">3%</span>
-                </div>
-                <Progress value={3} className="h-2" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Revenue Insights</CardTitle>
-            <CardDescription>Detailed revenue analysis and projections</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-blue-600 font-medium">Projected Monthly Revenue</p>
-                    <p className="text-2xl font-bold text-blue-700">{formatCurrency(210000)}</p>
-                  </div>
-                  <div className="p-2 bg-blue-500 rounded-lg">
-                    <TrendingUp className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-green-50 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-green-600 font-medium">Best Performing Category</p>
-                    <p className="text-lg font-bold text-green-700">Routers</p>
-                    <p className="text-sm text-green-600">{formatCurrency(450000)} revenue</p>
-                  </div>
-                  <div className="p-2 bg-green-500 rounded-lg">
-                    <Package className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-purple-50 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-purple-600 font-medium">Growth Opportunity</p>
-                    <p className="text-lg font-bold text-purple-700">ONUs Category</p>
-                    <p className="text-sm text-purple-600">+25.4% growth potential</p>
-                  </div>
-                  <div className="p-2 bg-purple-500 rounded-lg">
-                    <Star className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
     </DashboardLayout>
   )
 }

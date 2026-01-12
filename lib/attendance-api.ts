@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://nsbackend-silk.vercel.app/api/attendance"
+const API_BASE_URL = "https://nsbackend-l5wc.vercel.app/attendance"
 
 const getHeaders = () => ({
   "Content-Type": "application/json",

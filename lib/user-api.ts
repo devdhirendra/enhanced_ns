@@ -1,5 +1,5 @@
 // lib/user-api.ts
-const API_BASE_URL = "https://nsbackend-silk.vercel.app/api"
+const API_BASE_URL = "https://nsbackend-l5wc.vercel.app/api"
 
 export interface User1 {
   user_id: string

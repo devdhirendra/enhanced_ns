@@ -1,7 +1,7 @@
 // lib/leave-api.ts
 "use client"
 
-const API_BASE_URL = "https://nsbackend-silk.vercel.app/api"
+const API_BASE_URL = "https://nsbackend-l5wc.vercel.app/api"
 
 // Common headers for API requests
 const getHeaders = () => ({

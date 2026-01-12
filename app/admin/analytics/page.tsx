@@ -1,900 +1,454 @@
-// "use client"
-
-// import DashboardLayout from "@/components/layout/DashboardLayout"
-// import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-// import { Button } from "@/components/ui/button"
-// import { Badge } from "@/components/ui/badge"
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-// import { Input } from "@/components/ui/input"
-// import { Label } from "@/components/ui/label"
-// import { Textarea } from "@/components/ui/textarea"
-// import {
-//   Dialog,
-//   DialogContent,
-//   DialogDescription,
-//   DialogHeader,
-//   DialogTitle,
-//   DialogTrigger,
-// } from "@/components/ui/dialog"
-// import {
-//   TrendingUp,
-//   TrendingDown,
-//   Users,
-//   DollarSign,
-//   Activity,
-//   Download,
-//   Calendar,
-//   Filter,
-//   Building2,
-//   Clock,
-//   Settings,
-//   Loader2,
-// } from "lucide-react"
-// import {
-//   Area,
-//   Bar,
-//   BarChart,
-//   Line,
-//   XAxis,
-//   YAxis,
-//   CartesianGrid,
-//   ResponsiveContainer,
-//   ComposedChart,
-//   Tooltip,
-// } from "recharts"
-// import { formatCurrency } from "@/lib/utils"
-// import { useState, useEffect } from "react"
-// import { toast } from "sonner"
-// import { analyticsApi } from "@/lib/api"
-
-// export default function AnalyticsPage() {
-//   const [selectedDateRange, setSelectedDateRange] = useState("6months")
-//   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
-//   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
-//   const [loading, setLoading] = useState(true)
-//   const [analyticsData, setAnalyticsData] = useState({
-//     overview: null,
-//     revenue: [],
-//     operators: [],
-//     technicians: [],
-//     inventory: [],
-//     complaints: [],
-//     marketplace: [],
-//   })
-//   const [scheduleForm, setScheduleForm] = useState({
-//     reportName: "",
-//     frequency: "weekly",
-//     email: "",
-//     format: "pdf",
-//     description: "",
-//   })
-
-//   useEffect(() => {
-//     loadAnalyticsData()
-//   }, [selectedDateRange])
-
-//   const loadAnalyticsData = async () => {
-//     try {
-//       setLoading(true)
-//       const [overview, revenue, operators, technicians, inventory, complaints, marketplace] = await Promise.all([
-//         analyticsApi.getOverview(),
-//         analyticsApi.getRevenue({ period: selectedDateRange }),
-//         analyticsApi.getOperators({ period: selectedDateRange }),
-//         analyticsApi.getTechnicians({ period: selectedDateRange }),
-//         analyticsApi.getInventory({ period: selectedDateRange }),
-//         analyticsApi.getComplaints({ period: selectedDateRange }),
-//         analyticsApi.getMarketplace({ period: selectedDateRange }),
-//       ])
-
-//       setAnalyticsData({
-//         overview,
-//         revenue,
-//         operators,
-//         technicians,
-//         inventory,
-//         complaints,
-//         marketplace,
-//       })
-//     } catch (error) {
-//       console.error("Failed to load analytics:", error)
-//       toast.error("Failed to load analytics data")
-//     } finally {
-//       setLoading(false)
-//     }
-//   }
-
-//   const handleExportReport = async () => {
-//     try {
-//       toast.success("Report export started! You'll receive an email when it's ready.")
-//       await analyticsApi.exportReport({
-//         type: "comprehensive",
-//         period: selectedDateRange,
-//         format: "pdf",
-//       })
-//       toast.success("Report exported successfully and sent to your email!")
-//     } catch (error) {
-//       toast.error("Failed to export report")
-//     }
-//   }
-
-//   const handleAdvancedFilters = () => {
-//     setShowAdvancedFilters(!showAdvancedFilters)
-//     toast.info("Advanced filters panel " + (showAdvancedFilters ? "closed" : "opened"))
-//   }
-
-//   const handleScheduleReport = async () => {
-//     if (!scheduleForm.reportName || !scheduleForm.email) {
-//       toast.error("Please fill in all required fields")
-//       return
-//     }
-
-//     try {
-//       await analyticsApi.scheduleReport(scheduleForm)
-//       toast.success(`Report "${scheduleForm.reportName}" scheduled successfully!`)
-//       setShowScheduleDialog(false)
-//       setScheduleForm({
-//         reportName: "",
-//         frequency: "weekly",
-//         email: "",
-//         format: "pdf",
-//         description: "",
-//       })
-//     } catch (error) {
-//       toast.error("Failed to schedule report")
-//     }
-//   }
-
-//   if (loading) {
-//     return (
-//       <DashboardLayout
-//         title="Analytics & Reports"
-//         description="Comprehensive business intelligence and performance metrics"
-//       >
-//         <div className="flex items-center justify-center h-64">
-//           <Loader2 className="h-8 w-8 animate-spin" />
-//           <span className="ml-2">Loading analytics data...</span>
-//         </div>
-//       </DashboardLayout>
-//     )
-//   }
-
-//   return (
-//     <DashboardLayout
-//       title="Analytics & Reports"
-//       description="Comprehensive business intelligence and performance metrics"
-//     >
-//       <div className="space-y-6">
-//         {/* Header Actions */}
-//         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-//           <div className="flex items-center space-x-4">
-//             <Select value={selectedDateRange} onValueChange={setSelectedDateRange}>
-//               <SelectTrigger className="w-48">
-//                 <Calendar className="h-4 w-4 mr-2" />
-//                 <SelectValue />
-//               </SelectTrigger>
-//               <SelectContent>
-//                 <SelectItem value="1month">Last Month</SelectItem>
-//                 <SelectItem value="3months">Last 3 Months</SelectItem>
-//                 <SelectItem value="6months">Last 6 Months</SelectItem>
-//                 <SelectItem value="1year">Last Year</SelectItem>
-//               </SelectContent>
-//             </Select>
-//             <Button variant="outline" size="sm" onClick={handleAdvancedFilters}>
-//               <Filter className="h-4 w-4 mr-2" />
-//               Advanced Filters
-//             </Button>
-//           </div>
-//           <div className="flex items-center space-x-2">
-//             <Button variant="outline" size="sm" onClick={handleExportReport}>
-//               <Download className="h-4 w-4 mr-2" />
-//               Export Report
-//             </Button>
-//             <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
-//               <DialogTrigger asChild>
-//                 <Button variant="outline" size="sm">
-//                   <Clock className="h-4 w-4 mr-2" />
-//                   Schedule Report
-//                 </Button>
-//               </DialogTrigger>
-//               <DialogContent className="max-w-md">
-//                 <DialogHeader>
-//                   <DialogTitle>Schedule Report</DialogTitle>
-//                   <DialogDescription>Set up automated report delivery</DialogDescription>
-//                 </DialogHeader>
-//                 <div className="space-y-4">
-//                   <div>
-//                     <Label htmlFor="reportName">Report Name *</Label>
-//                     <Input
-//                       id="reportName"
-//                       value={scheduleForm.reportName}
-//                       onChange={(e) => setScheduleForm({ ...scheduleForm, reportName: e.target.value })}
-//                       placeholder="Monthly Analytics Report"
-//                     />
-//                   </div>
-//                   <div>
-//                     <Label htmlFor="frequency">Frequency</Label>
-//                     <Select
-//                       value={scheduleForm.frequency}
-//                       onValueChange={(value) => setScheduleForm({ ...scheduleForm, frequency: value })}
-//                     >
-//                       <SelectTrigger>
-//                         <SelectValue />
-//                       </SelectTrigger>
-//                       <SelectContent>
-//                         <SelectItem value="daily">Daily</SelectItem>
-//                         <SelectItem value="weekly">Weekly</SelectItem>
-//                         <SelectItem value="monthly">Monthly</SelectItem>
-//                         <SelectItem value="quarterly">Quarterly</SelectItem>
-//                       </SelectContent>
-//                     </Select>
-//                   </div>
-//                   <div>
-//                     <Label htmlFor="email">Email Address *</Label>
-//                     <Input
-//                       id="email"
-//                       type="email"
-//                       value={scheduleForm.email}
-//                       onChange={(e) => setScheduleForm({ ...scheduleForm, email: e.target.value })}
-//                       placeholder="admin@company.com"
-//                     />
-//                   </div>
-//                   <div>
-//                     <Label htmlFor="format">Format</Label>
-//                     <Select
-//                       value={scheduleForm.format}
-//                       onValueChange={(value) => setScheduleForm({ ...scheduleForm, format: value })}
-//                     >
-//                       <SelectTrigger>
-//                         <SelectValue />
-//                       </SelectTrigger>
-//                       <SelectContent>
-//                         <SelectItem value="pdf">PDF</SelectItem>
-//                         <SelectItem value="excel">Excel</SelectItem>
-//                         <SelectItem value="csv">CSV</SelectItem>
-//                       </SelectContent>
-//                     </Select>
-//                   </div>
-//                   <div>
-//                     <Label htmlFor="description">Description</Label>
-//                     <Textarea
-//                       id="description"
-//                       value={scheduleForm.description}
-//                       onChange={(e) => setScheduleForm({ ...scheduleForm, description: e.target.value })}
-//                       placeholder="Optional description..."
-//                       rows={3}
-//                     />
-//                   </div>
-//                 </div>
-//                 <div className="flex justify-end space-x-2 pt-4">
-//                   <Button variant="outline" onClick={() => setShowScheduleDialog(false)}>
-//                     Cancel
-//                   </Button>
-//                   <Button onClick={handleScheduleReport}>Schedule Report</Button>
-//                 </div>
-//               </DialogContent>
-//             </Dialog>
-//           </div>
-//         </div>
-
-//         {/* Advanced Filters Panel */}
-//         {showAdvancedFilters && (
-//           <Card className="border-2 border-blue-200 bg-blue-50">
-//             <CardHeader>
-//               <CardTitle className="flex items-center">
-//                 <Settings className="h-5 w-5 mr-2" />
-//                 Advanced Filters
-//               </CardTitle>
-//             </CardHeader>
-//             <CardContent>
-//               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-//                 <div>
-//                   <Label>Operator Status</Label>
-//                   <Select defaultValue="all">
-//                     <SelectTrigger>
-//                       <SelectValue />
-//                     </SelectTrigger>
-//                     <SelectContent>
-//                       <SelectItem value="all">All Status</SelectItem>
-//                       <SelectItem value="active">Active</SelectItem>
-//                       <SelectItem value="suspended">Suspended</SelectItem>
-//                       <SelectItem value="expired">Expired</SelectItem>
-//                     </SelectContent>
-//                   </Select>
-//                 </div>
-//                 <div>
-//                   <Label>Revenue Range</Label>
-//                   <Select defaultValue="all">
-//                     <SelectTrigger>
-//                       <SelectValue />
-//                     </SelectTrigger>
-//                     <SelectContent>
-//                       <SelectItem value="all">All Ranges</SelectItem>
-//                       <SelectItem value="0-50k">₹0 - ₹50,000</SelectItem>
-//                       <SelectItem value="50k-100k">₹50,000 - ₹1,00,000</SelectItem>
-//                       <SelectItem value="100k+">₹1,00,000+</SelectItem>
-//                     </SelectContent>
-//                   </Select>
-//                 </div>
-//                 <div>
-//                   <Label>Geographic Region</Label>
-//                   <Select defaultValue="all">
-//                     <SelectTrigger>
-//                       <SelectValue />
-//                     </SelectTrigger>
-//                     <SelectContent>
-//                       <SelectItem value="all">All Regions</SelectItem>
-//                       <SelectItem value="north">North India</SelectItem>
-//                       <SelectItem value="south">South India</SelectItem>
-//                       <SelectItem value="east">East India</SelectItem>
-//                       <SelectItem value="west">West India</SelectItem>
-//                     </SelectContent>
-//                   </Select>
-//                 </div>
-//               </div>
-//               <div className="flex justify-end space-x-2 mt-4">
-//                 <Button variant="outline" onClick={() => setShowAdvancedFilters(false)}>
-//                   Close
-//                 </Button>
-//                 <Button onClick={() => toast.success("Filters applied successfully!")}>Apply Filters</Button>
-//               </div>
-//             </CardContent>
-//           </Card>
-//         )}
-
-//         {/* Key Performance Indicators */}
-//         {analyticsData.overview && (
-//           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-//             <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-//               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-//                 <CardTitle className="text-sm font-medium text-gray-700">Total Revenue</CardTitle>
-//                 <div className="p-2 bg-blue-500 rounded-lg">
-//                   <DollarSign className="h-5 w-5 text-white" />
-//                 </div>
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="text-3xl font-bold text-gray-900">
-//                   {formatCurrency(analyticsData.overview.totalRevenue)}
-//                 </div>
-//                 <div className="flex items-center mt-2">
-//                   {analyticsData.overview.revenueGrowth >= 0 ? (
-//                     <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-//                   ) : (
-//                     <TrendingDown className="h-4 w-4 text-red-600 mr-1" />
-//                   )}
-//                   <span
-//                     className={`text-sm font-medium ${analyticsData.overview.revenueGrowth >= 0 ? "text-green-600" : "text-red-600"}`}
-//                   >
-//                     {analyticsData.overview.revenueGrowth >= 0 ? "+" : ""}
-//                     {analyticsData.overview.revenueGrowth}%
-//                   </span>
-//                   <span className="text-sm text-gray-500 ml-1">vs last month</span>
-//                 </div>
-//               </CardContent>
-//             </Card>
-
-//             <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-//               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-//                 <CardTitle className="text-sm font-medium text-gray-700">Active Operators</CardTitle>
-//                 <div className="p-2 bg-green-500 rounded-lg">
-//                   <Building2 className="h-5 w-5 text-white" />
-//                 </div>
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="text-3xl font-bold text-gray-900">{analyticsData.overview.activeOperators}</div>
-//                 <div className="flex items-center mt-2">
-//                   <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-//                   <span className="text-sm text-green-600 font-medium">+{analyticsData.overview.newOperators} new</span>
-//                   <span className="text-sm text-gray-500 ml-1">this month</span>
-//                 </div>
-//               </CardContent>
-//             </Card>
-
-//             <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
-//               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-//                 <CardTitle className="text-sm font-medium text-gray-700">System Efficiency</CardTitle>
-//                 <div className="p-2 bg-purple-500 rounded-lg">
-//                   <Activity className="h-5 w-5 text-white" />
-//                 </div>
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="text-3xl font-bold text-gray-900">{analyticsData.overview.systemEfficiency}%</div>
-//                 <div className="flex items-center mt-2">
-//                   <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-//                   <span className="text-sm text-green-600 font-medium">
-//                     +{analyticsData.overview.efficiencyImprovement}%
-//                   </span>
-//                   <span className="text-sm text-gray-500 ml-1">improvement</span>
-//                 </div>
-//               </CardContent>
-//             </Card>
-
-//             <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
-//               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-//                 <CardTitle className="text-sm font-medium text-gray-700">Customer Satisfaction</CardTitle>
-//                 <div className="p-2 bg-orange-500 rounded-lg">
-//                   <Users className="h-5 w-5 text-white" />
-//                 </div>
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="text-3xl font-bold text-gray-900">{analyticsData.overview.customerSatisfaction}/5</div>
-//                 <div className="flex items-center mt-2">
-//                   <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
-//                   <span className="text-sm text-green-600 font-medium">
-//                     +{analyticsData.overview.satisfactionIncrease}
-//                   </span>
-//                   <span className="text-sm text-gray-500 ml-1">rating increase</span>
-//                 </div>
-//               </CardContent>
-//             </Card>
-//           </div>
-//         )}
-
-//         {/* Analytics Tabs */}
-//         <Tabs defaultValue="revenue" className="space-y-6">
-//           <TabsList className="grid w-full grid-cols-6 bg-gray-100 p-1 rounded-lg">
-//             <TabsTrigger value="revenue" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-//               Revenue
-//             </TabsTrigger>
-//             <TabsTrigger value="operators" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-//               Operators
-//             </TabsTrigger>
-//             <TabsTrigger value="technicians" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-//               Technicians
-//             </TabsTrigger>
-//             <TabsTrigger value="inventory" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-//               Inventory
-//             </TabsTrigger>
-//             <TabsTrigger value="complaints" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-//               Support
-//             </TabsTrigger>
-//             <TabsTrigger value="marketplace" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
-//               Marketplace
-//             </TabsTrigger>
-//           </TabsList>
-
-//           <TabsContent value="revenue" className="space-y-6">
-//             <div className="grid lg:grid-cols-3 gap-6">
-//               <Card className="lg:col-span-2 border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Revenue Growth Trend</CardTitle>
-//                   <CardDescription>Monthly revenue and growth rate analysis</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="max-h-96 overflow-y-auto">
-//                     <ResponsiveContainer width="100%" height={350}>
-//                       <ComposedChart data={analyticsData.revenue}>
-//                         <defs>
-//                           <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-//                             <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-//                             <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-//                           </linearGradient>
-//                         </defs>
-//                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//                         <XAxis dataKey="month" stroke="#6b7280" />
-//                         <YAxis yAxisId="left" stroke="#6b7280" />
-//                         <YAxis yAxisId="right" orientation="right" stroke="#6b7280" />
-//                         <Tooltip />
-//                         <Area
-//                           yAxisId="left"
-//                           type="monotone"
-//                           dataKey="revenue"
-//                           stroke="#3b82f6"
-//                           fillOpacity={1}
-//                           fill="url(#colorRevenue)"
-//                           strokeWidth={2}
-//                         />
-//                         <Line
-//                           yAxisId="right"
-//                           type="monotone"
-//                           dataKey="growth"
-//                           stroke="#10b981"
-//                           strokeWidth={3}
-//                           dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }}
-//                         />
-//                       </ComposedChart>
-//                     </ResponsiveContainer>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Geographic Distribution</CardTitle>
-//                   <CardDescription>Revenue by state</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="space-y-4 max-h-80 overflow-y-auto">
-//                     {analyticsData.revenue.map((item, index) => (
-//                       <div key={index} className="space-y-2">
-//                         <div className="flex justify-between text-sm">
-//                           <span className="font-medium">{item.region || `Region ${index + 1}`}</span>
-//                           <span>{formatCurrency(item.revenue)}</span>
-//                         </div>
-//                         <div className="w-full bg-gray-200 rounded-full h-2">
-//                           <div
-//                             className="bg-blue-600 h-2 rounded-full"
-//                             style={{
-//                               width: `${Math.min((item.revenue / Math.max(...analyticsData.revenue.map((r) => r.revenue))) * 100, 100)}%`,
-//                             }}
-//                           />
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             </div>
-//           </TabsContent>
-
-//           <TabsContent value="operators" className="space-y-6">
-//             <div className="grid lg:grid-cols-2 gap-6">
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Operator Performance</CardTitle>
-//                   <CardDescription>Revenue and efficiency metrics</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="max-h-96 overflow-y-auto">
-//                     <ResponsiveContainer width="100%" height={350}>
-//                       <BarChart data={analyticsData.operators}>
-//                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//                         <XAxis dataKey="name" stroke="#6b7280" angle={-45} textAnchor="end" height={80} />
-//                         <YAxis stroke="#6b7280" />
-//                         <Tooltip />
-//                         <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-//                       </BarChart>
-//                     </ResponsiveContainer>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Operator Details</CardTitle>
-//                   <CardDescription>Performance metrics</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="space-y-4 max-h-80 overflow-y-auto">
-//                     {analyticsData.operators.map((operator, index) => (
-//                       <div key={index} className="p-4 bg-gray-50 rounded-lg">
-//                         <div className="flex justify-between items-center mb-2">
-//                           <h4 className="font-medium text-gray-900">{operator.name}</h4>
-//                           <Badge
-//                             className={operator.growth > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}
-//                           >
-//                             {operator.growth > 0 ? "+" : ""}
-//                             {operator.growth}%
-//                           </Badge>
-//                         </div>
-//                         <div className="grid grid-cols-2 gap-4 text-sm">
-//                           <div>
-//                             <p className="text-gray-600">Revenue</p>
-//                             <p className="font-medium">{formatCurrency(operator.revenue)}</p>
-//                           </div>
-//                           <div>
-//                             <p className="text-gray-600">Efficiency</p>
-//                             <p className="font-medium">{operator.efficiency}%</p>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             </div>
-//           </TabsContent>
-
-//           {/* Similar updates for other tabs... */}
-//           <TabsContent value="technicians" className="space-y-6">
-//             <div className="grid lg:grid-cols-2 gap-6">
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Technician Performance</CardTitle>
-//                   <CardDescription>Active technicians and task completion</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="max-h-96 overflow-y-auto">
-//                     <ResponsiveContainer width="100%" height={350}>
-//                       <ComposedChart data={analyticsData.technicians}>
-//                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//                         <XAxis dataKey="month" stroke="#6b7280" />
-//                         <YAxis yAxisId="left" stroke="#6b7280" />
-//                         <YAxis yAxisId="right" orientation="right" stroke="#6b7280" />
-//                         <Tooltip />
-//                         <Bar yAxisId="left" dataKey="active" fill="#10b981" radius={[4, 4, 0, 0]} />
-//                         <Line
-//                           yAxisId="right"
-//                           type="monotone"
-//                           dataKey="avgTime"
-//                           stroke="#f59e0b"
-//                           strokeWidth={3}
-//                           dot={{ fill: "#f59e0b", strokeWidth: 2, r: 4 }}
-//                         />
-//                       </ComposedChart>
-//                     </ResponsiveContainer>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Service Quality Metrics</CardTitle>
-//                   <CardDescription>Key performance indicators</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="space-y-6">
-//                     {analyticsData.technicians.length > 0 && (
-//                       <>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-green-600">
-//                             {analyticsData.technicians[analyticsData.technicians.length - 1]?.avgTime || 0}h
-//                           </div>
-//                           <p className="text-sm text-gray-500">Average Task Time</p>
-//                         </div>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-blue-600">
-//                             {analyticsData.technicians[analyticsData.technicians.length - 1]?.satisfaction || 0}/5
-//                           </div>
-//                           <p className="text-sm text-gray-500">Customer Satisfaction</p>
-//                         </div>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-purple-600">
-//                             {analyticsData.technicians[analyticsData.technicians.length - 1]?.tasks || 0}
-//                           </div>
-//                           <p className="text-sm text-gray-500">Tasks Completed</p>
-//                         </div>
-//                       </>
-//                     )}
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             </div>
-//           </TabsContent>
-
-//           <TabsContent value="inventory" className="space-y-6">
-//             <div className="grid lg:grid-cols-2 gap-6">
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Inventory Overview</CardTitle>
-//                   <CardDescription>Stock levels and usage</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="max-h-96 overflow-y-auto">
-//                     <ResponsiveContainer width="100%" height={350}>
-//                       <BarChart data={analyticsData.inventory}>
-//                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//                         <XAxis dataKey="category" stroke="#6b7280" />
-//                         <YAxis stroke="#6b7280" />
-//                         <Tooltip />
-//                         <Bar dataKey="stock" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-//                         <Bar dataKey="issued" fill="#10b981" radius={[4, 4, 0, 0]} />
-//                       </BarChart>
-//                     </ResponsiveContainer>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Inventory Details</CardTitle>
-//                   <CardDescription>Stock value and metrics</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="space-y-4 max-h-80 overflow-y-auto">
-//                     {analyticsData.inventory.map((item, index) => (
-//                       <div key={index} className="p-4 bg-gray-50 rounded-lg">
-//                         <div className="flex justify-between items-center mb-2">
-//                           <h4 className="font-medium text-gray-900">{item.category}</h4>
-//                           <Badge variant="outline">{item.turnover}x turnover</Badge>
-//                         </div>
-//                         <div className="grid grid-cols-2 gap-4 text-sm">
-//                           <div>
-//                             <p className="text-gray-600">Stock</p>
-//                             <p className="font-medium">{item.stock} units</p>
-//                           </div>
-//                           <div>
-//                             <p className="text-gray-600">Value</p>
-//                             <p className="font-medium">{formatCurrency(item.value)}</p>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             </div>
-//           </TabsContent>
-
-//           <TabsContent value="complaints" className="space-y-6">
-//             <div className="grid lg:grid-cols-2 gap-6">
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Support Metrics</CardTitle>
-//                   <CardDescription>Complaint resolution trends</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="max-h-96 overflow-y-auto">
-//                     <ResponsiveContainer width="100%" height={350}>
-//                       <ComposedChart data={analyticsData.complaints}>
-//                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//                         <XAxis dataKey="month" stroke="#6b7280" />
-//                         <YAxis yAxisId="left" stroke="#6b7280" />
-//                         <YAxis yAxisId="right" orientation="right" stroke="#6b7280" />
-//                         <Tooltip />
-//                         <Bar yAxisId="left" dataKey="total" fill="#ef4444" radius={[4, 4, 0, 0]} />
-//                         <Bar yAxisId="left" dataKey="resolved" fill="#10b981" radius={[4, 4, 0, 0]} />
-//                         <Line
-//                           yAxisId="right"
-//                           type="monotone"
-//                           dataKey="avgTime"
-//                           stroke="#f59e0b"
-//                           strokeWidth={3}
-//                           dot={{ fill: "#f59e0b", strokeWidth: 2, r: 4 }}
-//                         />
-//                       </ComposedChart>
-//                     </ResponsiveContainer>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Resolution Performance</CardTitle>
-//                   <CardDescription>Key support metrics</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="space-y-6">
-//                     {analyticsData.complaints.length > 0 && (
-//                       <>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-green-600">
-//                             {Math.round(
-//                               (analyticsData.complaints[analyticsData.complaints.length - 1]?.resolved /
-//                                 analyticsData.complaints[analyticsData.complaints.length - 1]?.total) *
-//                                 100,
-//                             ) || 0}
-//                             %
-//                           </div>
-//                           <p className="text-sm text-gray-500">Resolution Rate</p>
-//                         </div>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-blue-600">
-//                             {analyticsData.complaints[analyticsData.complaints.length - 1]?.avgTime || 0}h
-//                           </div>
-//                           <p className="text-sm text-gray-500">Average Resolution Time</p>
-//                         </div>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-purple-600">
-//                             {analyticsData.complaints[analyticsData.complaints.length - 1]?.satisfaction || 0}/5
-//                           </div>
-//                           <p className="text-sm text-gray-500">Customer Satisfaction</p>
-//                         </div>
-//                       </>
-//                     )}
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             </div>
-//           </TabsContent>
-
-//           <TabsContent value="marketplace" className="space-y-6">
-//             <div className="grid lg:grid-cols-2 gap-6">
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Marketplace Growth</CardTitle>
-//                   <CardDescription>Orders and revenue trends</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="max-h-96 overflow-y-auto">
-//                     <ResponsiveContainer width="100%" height={350}>
-//                       <ComposedChart data={analyticsData.marketplace}>
-//                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-//                         <XAxis dataKey="month" stroke="#6b7280" />
-//                         <YAxis yAxisId="left" stroke="#6b7280" />
-//                         <YAxis yAxisId="right" orientation="right" stroke="#6b7280" />
-//                         <Tooltip />
-//                         <Bar yAxisId="left" dataKey="orders" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-//                         <Line
-//                           yAxisId="right"
-//                           type="monotone"
-//                           dataKey="revenue"
-//                           stroke="#10b981"
-//                           strokeWidth={3}
-//                           dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }}
-//                         />
-//                       </ComposedChart>
-//                     </ResponsiveContainer>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-
-//               <Card className="border-0 shadow-lg">
-//                 <CardHeader>
-//                   <CardTitle className="text-xl font-bold text-gray-900">Marketplace Metrics</CardTitle>
-//                   <CardDescription>Performance indicators</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="space-y-6">
-//                     {analyticsData.marketplace.length > 0 && (
-//                       <>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-green-600">
-//                             {formatCurrency(
-//                               analyticsData.marketplace[analyticsData.marketplace.length - 1]?.commission || 0,
-//                             )}
-//                           </div>
-//                           <p className="text-sm text-gray-500">Monthly Commission</p>
-//                         </div>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-blue-600">
-//                             {analyticsData.marketplace[analyticsData.marketplace.length - 1]?.orders || 0}
-//                           </div>
-//                           <p className="text-sm text-gray-500">Total Orders</p>
-//                         </div>
-//                         <div className="text-center">
-//                           <div className="text-4xl font-bold text-purple-600">
-//                             {analyticsData.marketplace[analyticsData.marketplace.length - 1]?.vendors || 0}
-//                           </div>
-//                           <p className="text-sm text-gray-500">Active Vendors</p>
-//                         </div>
-//                       </>
-//                     )}
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             </div>
-//           </TabsContent>
-//         </Tabs>
-//       </div>
-//     </DashboardLayout>
-//   )
-// }
 "use client"
 
+import { useEffect, useState } from "react"
+import { useAuth } from "@/contexts/AuthContext"
 import DashboardLayout from "@/components/layout/DashboardLayout"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { BarChart3, Bell } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
+import {
+  RefreshCw,
+  TrendingUp,
+  Users,
+  DollarSign,
+  ShoppingCart,
+  AlertCircle,
+  CheckCircle,
+  UserCheck,
+  Package,
+  Download,
+  ArrowUpRight,
+  ArrowDownRight,
+  Activity,
+} from "lucide-react"
+import { analyticsApi, type AdminMetrics, type AdminCharts } from "@/lib/analytics-api"
+import { toast } from "sonner"
 
-export default function AnalyticsPage() {
-  return (
-    <DashboardLayout
-      title="Analytics & Reports"
-      description="Comprehensive business intelligence and performance metrics"
-    >
-      <div className="min-h-[500px] flex items-center justify-center">
-        <Card className="max-w-md w-full text-center shadow-lg">
-          <CardContent className="p-12">
-            <div className="space-y-6">
-              {/* Icon */}
-              <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                <BarChart3 className="h-8 w-8 text-gray-600" />
-              </div>
+const CHART_COLORS = {
+  primary: "#6366f1",
+  success: "#10b981",
+  warning: "#f59e0b",
+  danger: "#ef4444",
+}
 
-              {/* Title */}
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                  Analytics Dashboard
-                </h1>
-                <p className="text-gray-500">
-                  Coming Soon in Next Update
-                </p>
-              </div>
+const PIE_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"]
 
-              {/* Description */}
-              <p className="text-sm text-gray-600 leading-relaxed">
-                We're building powerful analytics tools to give you insights into your business performance.
-              </p>
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white dark:bg-gray-800 p-2 rounded shadow-lg border">
+        <p className="text-xs font-medium mb-1">{label}</p>
+        {payload.map((entry: any, i: number) => (
+          <div key={i} className="flex items-center gap-1 text-xs">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-gray-600">{entry.name}:</span>
+            <span className="font-medium">{entry.value}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return null
+}
 
-              {/* CTA */}
-              <Button variant="outline" className="w-full">
-                <Bell className="h-4 w-4 mr-2" />
-                Notify Me
-              </Button>
+const StatCard = ({ title, value, change, trend, icon: Icon, color }: any) => (
+  <Card className="border">
+    <CardContent className="p-4">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-gray-500 mb-1 truncate">{title}</p>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">{value}</h3>
+          {change && (
+            <div className="flex items-center gap-1">
+              {trend === "up" ? <ArrowUpRight className="w-3 h-3 text-green-600" /> : <ArrowDownRight className="w-3 h-3 text-red-600" />}
+              <span className={`text-xs font-medium ${trend === "up" ? "text-green-600" : "text-red-600"}`}>{change}</span>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
+        <div className={`p-2 rounded-lg ${color}`}>
+          <Icon className="w-4 h-4 text-white" />
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+)
+
+export default function AdminAnalyticsPage() {
+  const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState("30d")
+  const [activeTab, setActiveTab] = useState("overview")
+  const [metrics, setMetrics] = useState<AdminMetrics | null>(null)
+  const [charts, setCharts] = useState<AdminCharts | null>(null)
+
+  useEffect(() => {
+    loadAnalytics()
+  }, [period])
+
+  const loadAnalytics = async () => {
+    try {
+      setLoading(true)
+      const response = await analyticsApi.getAdminAnalytics(period)
+      if (response.success && response.data) {
+        setMetrics(response.data.metrics)
+        setCharts(response.data.charts)
+      }
+    } catch (error) {
+      toast.error("Failed to load analytics")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatCurrency = (value: number) => {
+    if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)}Cr`
+    if (value >= 100000) return `₹${(value / 100000).toFixed(2)}L`
+    if (value >= 1000) return `₹${(value / 1000).toFixed(1)}K`
+    return `₹${value}`
+  }
+
+  const safe = {
+    system: {
+      totalUsers: metrics?.system?.totalUsers ?? 0,
+      userGrowth: metrics?.system?.userGrowth ?? 0,
+      activeRoles: {
+        operators: metrics?.system?.activeRoles?.operators ?? 0,
+        technicians: metrics?.system?.activeRoles?.technicians ?? 0,
+        staff: metrics?.system?.activeRoles?.staff ?? 0,
+        vendors: metrics?.system?.activeRoles?.vendors ?? 0,
+        customers: metrics?.system?.activeRoles?.customers ?? 0,
+      }
+    },
+    revenue: {
+      totalRevenue: metrics?.revenue?.totalRevenue ?? 0,
+      revenueGrowth: metrics?.revenue?.revenueGrowth ?? 0,
+      revenueByPlan: metrics?.revenue?.revenueByPlan ?? [],
+      revenueByOperator: metrics?.revenue?.revenueByOperator ?? [],
+    },
+    customers: {
+      activeCustomers: metrics?.customers?.activeCustomers ?? 0,
+      churnRate: metrics?.customers?.churnRate ?? "0",
+    },
+    orders: {
+      totalOrders: metrics?.orders?.totalOrders ?? 0,
+      completedOrders: metrics?.orders?.completedOrders ?? 0,
+      pendingOrders: metrics?.orders?.pendingOrders ?? 0,
+      cancelledOrders: metrics?.orders?.cancelledOrders ?? 0,
+      orderFulfillmentRate: metrics?.orders?.orderFulfillmentRate ?? "0",
+    },
+    complaints: {
+      totalComplaints: metrics?.complaints?.totalComplaints ?? 0,
+      resolvedComplaints: metrics?.complaints?.resolvedComplaints ?? 0,
+      openComplaints: metrics?.complaints?.openComplaints ?? 0,
+      resolutionRate: metrics?.complaints?.resolutionRate ?? "0",
+    },
+    operational: {
+      equipmentHealth: {
+        totalEquipment: metrics?.operational?.equipmentHealth?.totalEquipment ?? 0,
+        activeEquipment: metrics?.operational?.equipmentHealth?.activeEquipment ?? 0,
+        faultyEquipment: metrics?.operational?.equipmentHealth?.faultyEquipment ?? 0,
+        equipmentUtilization: metrics?.operational?.equipmentHealth?.equipmentUtilization ?? "0",
+      }
+    }
+  }
+
+  return (
+    <DashboardLayout title="Analytics" description="Business intelligence and performance metrics">
+      <div className="space-y-4">
+        {/* Toolbar */}
+        <div className="flex justify-between items-center">
+          <div className="flex gap-2">
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger className="w-32 h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 Days</SelectItem>
+                <SelectItem value="30d">Last 30 Days</SelectItem>
+                <SelectItem value="90d">Last 90 Days</SelectItem>
+                <SelectItem value="1y">Last Year</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={loadAnalytics} variant="outline" size="sm" className="h-8 text-xs">
+              <RefreshCw className="w-3 h-3 mr-1" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
+          </div>
+        ) : (
+          <>
+            {/* KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                title="Total Users"
+                value={safe.system.totalUsers.toLocaleString()}
+                change={`${safe.system.userGrowth}%`}
+                trend="up"
+                icon={Users}
+                color="bg-blue-500"
+              />
+              <StatCard
+                title="Revenue"
+                value={formatCurrency(safe.revenue.totalRevenue)}
+                change={`${safe.revenue.revenueGrowth}%`}
+                trend="up"
+                icon={DollarSign}
+                color="bg-green-500"
+              />
+              <StatCard
+                title="Customers"
+                value={safe.customers.activeCustomers.toLocaleString()}
+                change={safe.customers.churnRate}
+                trend="down"
+                icon={UserCheck}
+                color="bg-purple-500"
+              />
+              <StatCard
+                title="Orders"
+                value={safe.orders.totalOrders.toLocaleString()}
+                change={safe.orders.orderFulfillmentRate}
+                trend="up"
+                icon={ShoppingCart}
+                color="bg-orange-500"
+              />
+            </div>
+
+            {/* Tabs */}
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="h-8">
+                <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+                <TabsTrigger value="revenue" className="text-xs">Revenue</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview" className="space-y-4 mt-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Revenue Chart */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-green-600" />
+                        Revenue Timeline
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={charts?.revenueTimeline ?? []}>
+                          <defs>
+                            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" style={{ fontSize: "10px" }} />
+                          <YAxis style={{ fontSize: "10px" }} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#colorRevenue)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Customer Chart */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <Users className="w-4 h-4 text-blue-600" />
+                        Customer Growth
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <LineChart data={charts?.customerGrowth ?? []}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="date" style={{ fontSize: "10px" }} />
+                          <YAxis style={{ fontSize: "10px" }} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Pie Chart */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-purple-600" />
+                        Employee Distribution
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: "Operators", value: safe.system.activeRoles.operators },
+                              { name: "Technicians", value: safe.system.activeRoles.technicians },
+                              { name: "Staff", value: safe.system.activeRoles.staff },
+                              { name: "Vendors", value: safe.system.activeRoles.vendors },
+                            ]}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={60}
+                            dataKey="value"
+                            label={({ name, percent }) => `${name}: ${((percent ?? 0) * 100).toFixed(0)}%`}
+                            style={{ fontSize: "10px" }}
+                          >
+                            {PIE_COLORS.map((color, i) => <Cell key={i} fill={color} />)}
+                          </Pie>
+                          <Tooltip content={<CustomTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Top Operators */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Top Operators</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2 space-y-2">
+                      {safe.revenue.revenueByOperator.slice(0, 4).map((op, i) => (
+                        <div key={i} className="flex justify-between items-center text-xs p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                          <span className="font-medium truncate">{op.operatorName}</span>
+                          <span className="font-semibold ml-2">{formatCurrency(op.revenue)}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-3 gap-4">
+                  <Card className="border-l-4 border-l-green-500">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-medium flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        Orders
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Completed</span>
+                        <span className="font-semibold text-green-600">{safe.orders.completedOrders}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Pending</span>
+                        <span className="font-semibold text-yellow-600">{safe.orders.pendingOrders}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-l-4 border-l-orange-500">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-medium flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Complaints
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Resolved</span>
+                        <span className="font-semibold text-green-600">{safe.complaints.resolvedComplaints}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Open</span>
+                        <span className="font-semibold text-orange-600">{safe.complaints.openComplaints}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-l-4 border-l-blue-500">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-medium flex items-center gap-1">
+                        <Package className="w-3 h-3" />
+                        Equipment
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Active</span>
+                        <span className="font-semibold text-green-600">{safe.operational.equipmentHealth.activeEquipment}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Faulty</span>
+                        <span className="font-semibold text-red-600">{safe.operational.equipmentHealth.faultyEquipment}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="revenue" className="mt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Revenue by Plan</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie
+                            data={safe.revenue.revenueByPlan}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={60}
+                            dataKey="revenue"
+                            label={(e: any) => `${e.planName}`}
+                            style={{ fontSize: "10px" }}
+                          >
+                            {PIE_COLORS.map((color, i) => <Cell key={i} fill={color} />)}
+                          </Pie>
+                          <Tooltip content={<CustomTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Operator Performance</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={safe.revenue.revenueByOperator}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="operatorName" style={{ fontSize: "10px" }} />
+                          <YAxis style={{ fontSize: "10px" }} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
       </div>
     </DashboardLayout>
   )

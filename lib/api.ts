@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://nsbackend-silk.vercel.app/api"
+const API_BASE_URL = "https://nsbackend-l5wc.vercel.app/api"
 
 export interface ApiResponse<T = any> {
   success: any
